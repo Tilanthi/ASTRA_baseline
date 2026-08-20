@@ -39,10 +39,14 @@ dl = ["torch>=2.0"]
 pdf = ["reportlab>=4.0", "pillow>=10.0"]
 # Plotting, MCMC and statistics used by parts of astro_physics
 science = ["matplotlib>=3.7", "emcee>=3.1", "corner>=2.2", "statsmodels>=0.14"]
+# Morphological skeletonisation for FilamentFinder. Without it the code
+# falls back to a built-in Zhang-Suen thinning implementation.
+image = ["scikit-image>=0.22"]
 dev = ["pytest>=7.4", "pyflakes>=3.1"]
 all = [
     "astropy>=5.3", "torch>=2.0", "reportlab>=4.0", "pillow>=10.0",
     "matplotlib>=3.7", "emcee>=3.1", "corner>=2.2", "statsmodels>=0.14",
+    "scikit-image>=0.22",
 ]
 
 [project.urls]
