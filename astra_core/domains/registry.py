@@ -320,15 +320,22 @@ class DomainRegistry:
         Returns:
             Best matching domain or None if no domain meets threshold
         """
+        # FIX(audit): the comparison was `score > best_score` with
+        # `best_score` seeded to `min_confidence`, so a domain scoring exactly
+        # the documented minimum was rejected.  Keyword scores are
+        # matches/len(keywords), so a single match out of 20 keywords scores
+        # 0.05 and two score exactly 0.10 -- i.e. the default threshold sat
+        # precisely on the most common score and `process_query` answered
+        # "No suitable domain found for query" for essentially every query.
         best_domain = None
-        best_score = min_confidence
+        best_score = -1.0
 
         for domain_name, domain in self._domains.items():
             if not domain.config.enabled:
                 continue
 
             score = domain.can_handle_query(query)
-            if score > best_score:
+            if score >= min_confidence and score > best_score:
                 best_score = score
                 best_domain = domain
 

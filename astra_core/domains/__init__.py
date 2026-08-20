@@ -7,6 +7,7 @@ Enables plug-and-play domain expansion with hot-swapping capabilities.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import re
 from typing import Dict, List, Any, Optional, Callable
 import logging
 
@@ -103,6 +104,14 @@ class CrossDomainConnection:
         """Validate connection"""
         if not 0 <= self.strength <= 1:
             raise ValueError("strength must be between 0 and 1")
+
+
+def _keyword_in(keyword: str, text: str) -> bool:
+    """Word-boundary keyword test (case-insensitive, multi-word aware)."""
+    kw = keyword.strip().lower()
+    if not kw:
+        return False
+    return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", text) is not None
 
 
 class BaseDomainModule(ABC):
@@ -229,12 +238,38 @@ class BaseDomainModule(ABC):
             Confidence score (0-1) indicating how well this domain can handle the query
         """
         query_lower = query.lower()
-        keyword_matches = sum(1 for kw in self.config.keywords if kw in query_lower)
 
-        if not self.config.keywords:
+        # FIX(audit): domains declare their keywords on `get_config()`, but the
+        # registry instantiates them from `get_default_config()`, which in
+        # several modules (e.g. `ism`) omits keywords entirely -- so those
+        # domains scored 0.0 for every query and could never be selected.
+        keywords = self.config.keywords
+        if not keywords:
+            try:
+                keywords = self.get_config().keywords or []
+            except Exception:       # noqa: BLE001 - a broken config must not
+                keywords = []       # take down query routing
+        if not keywords:
             return 0.0
 
-        return keyword_matches / len(self.config.keywords)
+        # FIX(audit): the score was `matches / len(keywords)`, which divides by
+        # the domain's own vocabulary size -- so a domain that declares a rich
+        # keyword list is *penalised*.  `ism` (45 keywords) scored 0.067 on
+        # "molecular cloud filament fragmentation" (3 matches) and lost to
+        # `exoplanets` (9 keywords) on "supernova light curve" via a single
+        # incidental match.  Score by evidence found instead of vocabulary size,
+        # weighting multi-word keywords as the more specific signal they are,
+        # and saturate at 1.0.
+        # FIX(audit): matching was a bare substring test, so two-letter
+        # keywords matched inside unrelated words -- 'rv' matched "cu-rv-e",
+        # 'hi' matched "t-hi-s", 'sn' matched "de-sn-'t".  On "supernova light
+        # curve classification" the exoplanets domain therefore beat the
+        # time-domain one.  Match on word boundaries instead.
+        matched = [kw for kw in keywords if _keyword_in(kw, query_lower)]
+        if not matched:
+            return 0.0
+        evidence = sum(1 + kw.count(' ') for kw in matched)
+        return min(1.0, evidence / 3.0)
 
     def get_status(self) -> Dict[str, Any]:
         """

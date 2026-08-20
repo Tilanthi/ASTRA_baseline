@@ -22,9 +22,16 @@ ASTRA combines advanced AI techniques including:
 git clone https://github.com/Tilanthi/ASTRA.git
 cd ASTRA
 
-# Install dependencies
+# Install (core dependencies only)
 pip install -e .
+
+# Or with the optional extras: astropy, torch, reportlab, plotting, MCMC
+pip install -e ".[all]"
 ```
+
+Core requirements are numpy, scipy, scikit-learn, networkx, sympy, pandas and
+psutil. `astropy`, `torch` and `reportlab` are optional; without them the
+corresponding modules degrade to `None` and say so in the log.
 
 ### Basic Usage
 
@@ -42,7 +49,11 @@ print(result['answer'])
 ### Discovery System
 
 ```python
-from astra_core.discovery_orchestrator import create_discovery_orchestrator
+# NOTE: the module is `astra_core.scientific_discovery.discovery_orchestrator`.
+# `astra_core.discovery_orchestrator` (as previously documented here) does not exist.
+from astra_core.scientific_discovery.discovery_orchestrator import (
+    create_discovery_orchestrator,
+)
 
 # Create discovery system
 orchestrator = create_discovery_orchestrator()

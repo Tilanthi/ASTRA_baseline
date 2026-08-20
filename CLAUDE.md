@@ -6,12 +6,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **ASTRA** (Autonomous Scientific Discovery in Astrophysics) is a unified AGI-inspired framework for autonomous hypothesis generation and validation in astronomy and astrophysics. The system integrates ~317,000 lines of clean, functional code across modular cognitive capabilities.
 
-**Version**: 4.7
-**AGI Capability Estimate**: 70-75%
+**Version**: 4.0.0 (`astra_core.__version__`)
+
+> Version numbers in this tree are inconsistent: this file previously said 4.7,
+> `astra_core.__version__` says `"4.0.0"`, the base system's runtime metadata
+> reports `"3.1.0-ASTRO"`, and subpackages declare `37.0`, `41.0`, `50.0.0` and
+> `60.0`. `astra_core.__version__` is the one to trust; the rest are historical
+> labels.
+>
+> The former "AGI Capability Estimate: 70-75%" line has been removed: it was not
+> derived from any measurement in this repository. For calibration, 48 of the 75
+> "specialized astrophysics domain modules" are the same 110-line template whose
+> `process_query` returns an f-string with a hard-coded `confidence=0.7`, and 73
+> of the 75 contain no numerical computation at all.
 
 ### Codebase Integrity (August 2026 audit)
 
-A full integrity audit and rebuild was completed in August 2026: every module imports cleanly (567/567 in the runtime walk), all 17 formerly lost symbols were re-implemented with real, hand-validated physics/algorithms (including 14 rebuilt `astro_physics` modules), and ~13,500 dead lines were removed. Every declared test suite passes 100%. The authoritative record of what was found, fixed, and verified is **`User_Manual/User_Manual.md`, Appendix E (v7.2)** — consult it before any maintenance that touches imports or `astro_physics`.
+Two audits have been run. The first (recorded in **`User_Manual/User_Manual.md`,
+Appendix E**) reported 567/567 clean imports and 100% on every suite. An
+independent **re-audit** of the published tree found those numbers did not
+describe the committed code: `import astra_core` failed outright at
+`astra_core/metacognitive/monitoring/monitor.py:317`
+(`NameError: name 'np' is not defined`), so 0 of 675 modules imported and
+`comprehensive_system_test.py` scored 0/18 while still exiting 0. Appendix E's
+own re-verification recipe (E.7) fails at step 2.
+
+**Current, re-measured state** (reproduce with the commands under *Testing*):
+
+| Check | Result |
+|---|---|
+| Files parsing (AST) | 675/675 |
+| Fresh-interpreter import sweep | 664/675 — the 11 failures are `torch`/`astropy` absent (optional extras) |
+| `comprehensive_system_test.py` | 18/18, exit 0 |
+| `tests/test_all.py` / `tests/test_self_teaching.py` | 14 passed / 17 passed |
+| Top-level names resolving to `None` | 5 (was 63) |
+
+Read `BASELINE_README.md` → *Re-audit and repairs* and the *Known limitations*
+section before trusting any physics output. Anything marked `# AUDIT-FLAG:` in
+the source is known-suspect and deliberately unfixed.
 
 ### IMPORTANT: Naming Convention
 
@@ -121,7 +153,7 @@ result = mce.layer_context(query, dimensions=["temporal", "perceptual"])
 # Domain modules
 from astra_core.domains import DomainRegistry
 registry = DomainRegistry()
-registry.load_all_domains()
+registry.auto_load_domains()   # NB: `load_all_domains()` does not exist
 result = registry.process_query("pulsar timing analysis")
 
 # Physics engine
@@ -138,7 +170,7 @@ optimizer = create_maml_optimizer(model_fn, loss_fn, n_inner_steps=5)
 
 ## Testing
 
-**Run tests from the repository root with `PYTHONPATH=.`** — several suites do not fix their own import path. All suites below pass 100% as of the August 2026 audit.
+**Run tests from the repository root with `PYTHONPATH=.`** — several suites do not fix their own import path. The suites below pass as of the August 2026 re-audit. Note that three of them could not previously report a truthful result: `comprehensive_system_test.py` never called `sys.exit`, `tests/test_comprehensive_integration.py` was structurally incapable of failing, and `tests/test_installation.py` was structurally incapable of passing. All three are fixed.
 
 ### Run All Tests
 
@@ -633,7 +665,7 @@ The comprehensive test verifies:
 - **Orchestrator Integration**: create_stan_system(), answer(), process_query()
 
 After any substantial change, also confirm:
-- **Full import sweep**: every module in the `astra_core` tree imports with zero failures (567/567 as of Aug 2026)
+- **Full import sweep**: 664 of 675 modules import in a fresh interpreter; the 11 that do not are the `torch`/`astropy` optional extras (re-measured Aug 2026 — the previously quoted 567/567 was not reproducible, and the tree contains 675 Python files, not 567)
 - **Zero UserWarnings on `import astra_core.core`** — a warning here means a stale import path is silently disabling a component
 
 ### Fix-Test Loop
