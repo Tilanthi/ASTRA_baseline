@@ -84,3 +84,20 @@ def test_threshold_boundary_is_inclusive(registry):
     # threshold must still select it (pre-fix `>` made this impossible)
     assert domain is not None
     assert domain.config.domain_name == "ism"
+
+
+def test_top_level_answer_confidence_is_numeric():
+    """
+    `EnhancedUnifiedSTANSystem` put the orchestrator's boolean `success` flag
+    into the `confidence` field, so the documented top-level API returned
+    `confidence: True` instead of a number.
+    """
+    import astra_core
+
+    result = astra_core.create_stan_system().answer(
+        "What causes filament fragmentation in molecular clouds?"
+    )
+    conf = result["confidence"]
+    assert not isinstance(conf, bool), "confidence is still a bool"
+    assert isinstance(conf, (int, float))
+    assert 0.0 <= conf <= 1.0

@@ -157,6 +157,19 @@ else:
         orchestration_optimization_interval: int = 300
 
 
+def _as_confidence(orchestration_result: Dict[str, Any]) -> float:
+    """
+    Coerce an orchestrator result into a numeric confidence in [0, 1].
+
+    The orchestrator reports a boolean `success`; some backends also report a
+    numeric `confidence`. Prefer the latter, and never return a bool.
+    """
+    value = orchestration_result.get('confidence')
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(min(max(value, 0.0), 1.0))
+    return 0.7 if orchestration_result.get('success') else 0.0
+
+
 class EnhancedUnifiedSTANSystem:
     """
     Enhanced unified STAN system with all Phase 2-4 capabilities
@@ -450,7 +463,12 @@ class EnhancedUnifiedSTANSystem:
                     'query': query,
                     'mode': mode or 'orchestrated',
                     'answer': orchestration_result.get('answer'),
-                    'confidence': orchestration_result.get('success', 0.7),
+                    # FIX(audit): this put the orchestrator's boolean
+                    # `success` flag into the `confidence` field, so the
+                    # top-level API returned `confidence: True` rather than
+                    # a number. Prefer a real confidence if the orchestrator
+                    # supplies one, else map success -> 0.7 / failure -> 0.0.
+                    'confidence': _as_confidence(orchestration_result),
                     'capabilities_used': ['orchestration_system'],
                     'reasoning_trace': [{
                         'step': 'orchestration',
