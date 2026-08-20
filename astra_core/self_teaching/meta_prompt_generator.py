@@ -8,6 +8,7 @@ Version: 4.0.0
 Date: 2026-03-17
 """
 
+import time
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum

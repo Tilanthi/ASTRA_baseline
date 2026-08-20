@@ -313,7 +313,10 @@ class V92CompleteSystem:
             # Design experiment to answer question
             design_type = ExperimentalType.RANDOMIZED_CONTROLLED
             variables = [
-                ExperimentalVariable("treatment", "independent", "categorical", levels["control", "experimental"]),
+                # FIX(audit): `levels[...]` subscripted an undefined name;
+                # `levels` is a List[Any] field of ExperimentalVariable.
+                ExperimentalVariable("treatment", "independent", "categorical",
+                                     levels=["control", "experimental"]),
                 ExperimentalVariable("outcome", "dependent", "continuous")
             ]
             design = self.experiment_design.design_experiment(question, variables, design_type)

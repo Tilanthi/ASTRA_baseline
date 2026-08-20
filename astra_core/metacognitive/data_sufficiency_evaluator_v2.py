@@ -596,6 +596,5 @@ __all__ = [
     'MetaCognitiveAssessment',
     'DataSufficiencyEvaluator',
     'EnhancedDataSufficiencyEvaluator',
-    'create_data_sufficiency_evaluator',
     'create_enhanced_data_sufficiency_evaluator',
 ]

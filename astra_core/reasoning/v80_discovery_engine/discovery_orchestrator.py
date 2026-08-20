@@ -11,6 +11,19 @@ Coordinates all discovery engine components:
 """
 
 import numpy as np
+
+# FIX(audit): both flags were read when triaging test failures but were
+# never defined, so the failure-triage path raised NameError.
+try:  # pragma: no cover - trivial availability probe
+    import sklearn  # noqa: F401
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+try:  # pragma: no cover - trivial availability probe
+    import torch  # noqa: F401
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 import warnings

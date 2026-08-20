@@ -54,6 +54,12 @@ MP = 1.6726e-24  # Proton mass (g)
 MN = 1.6749e-24  # Neutron mass (g)
 MH = 1.6735e-24  # Hydrogen atom mass (g)
 C = 2.998e10  # Speed of light (cm/s)
+# FIX(audit): KB and G are used below (thermonuclear reaction rates and the
+# neutron-star central pressure) but were never defined -- both call sites
+# raised NameError. CODATA 2018 values in CGS.
+KB = 1.380649e-16  # Boltzmann constant (erg/K)
+G = 6.67430e-8  # Gravitational constant (cm^3 g^-1 s^-2)
+HBAR = 1.054572e-27  # Reduced Planck constant (erg s)
 EV_TO_ERG = 1.602e-12  # eV to erg conversion
 Q_VALUE = 1.492e-3  # MeV per amu
 

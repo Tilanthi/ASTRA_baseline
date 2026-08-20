@@ -15,6 +15,13 @@ Capabilities:
 - Emergent ability generation
 """
 
+
+# AUDIT-FLAG: the following names are referenced in this module but are
+# defined nowhere in the tree (this file was truncated by a past automated
+# edit): CognitiveArchitecture, CreativityEngine.
+# Calling the affected methods raises NameError. Deliberately NOT stubbed
+# out: a stub would silently return wrong answers instead of failing.
+
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Callable, Union
 from dataclasses import dataclass, field

@@ -541,7 +541,9 @@ class PhysicalLawDiscovery:
         elif combination_type == 'product':
             return f"d({'*'.join(var_names)})/dt = 0"
         else:
-            return f"sum({v}^2 for v in {var_names}) = constant"
+            # FIX(audit): `{v}` was interpolated from an undefined name;
+            # the intent is the literal symbol inside the summation.
+            return f"sum(v^2 for v in {var_names}) = constant"
 
 
 # =============================================================================

@@ -116,8 +116,17 @@ class SPHKernels:
 
     @staticmethod
     def gaussian(r: float, h: float) -> float:
-        """Gaussian kernel function."""
-        return (1.0 / (np.pi * h**3)) * np.exp(-q**2)
+        """
+        Gaussian SPH kernel, W(r,h) = exp(-(r/h)^2) / (pi^(3/2) h^3).
+
+        Normalised so that the 3-D volume integral is exactly 1:
+            int_0^inf 4 pi r^2 exp(-(r/h)^2) dr = pi^(3/2) h^3.
+        """
+        # FIX(audit): the body referenced an undefined `q` (the dimensionless
+        # r/h), so every call raised NameError; and the prefactor was
+        # 1/(pi h^3), which integrates to pi^(1/2) ~ 1.7725, not 1.
+        q = r / h
+        return np.exp(-q ** 2) / (np.pi ** 1.5 * h ** 3)
 
 
 class GasDynamicsSPH:

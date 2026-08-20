@@ -788,7 +788,6 @@ __all__ = [
     # Enumerations
     'TheoryType',
     'ConfidenceLevel',
-    'NovelType',
 
     # Data structures
     'Evidence',

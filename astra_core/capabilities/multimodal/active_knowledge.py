@@ -217,7 +217,6 @@ __all__ = [
     'V60KnowledgeGapType',
     'HypothesisStatus',
     'ExperimentType',
-    'V60ExperimentType',
     'CuriositySource',
     'create_active_knowledge_system',
     'create_gap_detector',

@@ -339,7 +339,12 @@ class V5DiscoveryOrchestrator:
     ) -> Optional[Any]:
         """Run baseline causal discovery (V98 FCI)"""
         try:
-            fci = create_fci_discovery()
+            # FIX(audit): `create_fci_discovery()` is defined nowhere in the
+            # tree; the class it was meant to build is FCIDiscovery. The bare
+            # NameError was swallowed by the `except (ImportError, Exception)`
+            # below, so this path silently always fell through to the mock.
+            from .capabilities.causal.fci_discovery import FCIDiscovery
+            fci = FCIDiscovery()
             return fci.discover_causal_graph(data, variable_names)
         except (ImportError, Exception):
             # Fallback: create a simple mock causal graph for testing

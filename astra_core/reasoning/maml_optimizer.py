@@ -353,7 +353,10 @@ class MAMLOptimizer:
                         self.state.meta_parameters, adapted_params, task, query_loss
                     )
             else:
-                gradients = {k: np.zeros_like(v) for k in self.state.meta_parameters.keys()}
+                # FIX(audit): iterated over .keys() but referenced an
+                # undefined `v` -> NameError on the zero-gradient path.
+                gradients = {k: np.zeros_like(v)
+                             for k, v in self.state.meta_parameters.items()}
 
             # Accumulate meta-gradients
             n_tasks = len(task_batch)

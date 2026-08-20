@@ -13,7 +13,7 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
-from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
+from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain, CrossDomainConnection
 
 logger = logging.getLogger(__name__)
 

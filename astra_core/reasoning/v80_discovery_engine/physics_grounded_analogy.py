@@ -12,6 +12,14 @@ This module validates analogies by checking:
 """
 
 import numpy as np
+
+# FIX(audit): `SKLEARN_AVAILABLE` was read by the optional-dependency guard
+# below but never defined anywhere, so the guard itself raised NameError.
+try:  # pragma: no cover - trivial availability probe
+    import sklearn  # noqa: F401
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from scipy.spatial.distance import cosine

@@ -16,6 +16,13 @@ Capabilities:
 - Mediation analysis
 """
 
+
+# AUDIT-FLAG: the following names are referenced in this module but are
+# defined nowhere in the tree (this file was truncated by a past automated
+# edit): PCAlgorithm, GESAlgorithm, FCITAlgorithm, LiNGAMAlgorithm, ANMAlgorithm, DoCalculus, BackdoorAdjustment, FrontdoorAdjustment, InstrumentalVariable.
+# Calling the affected methods raises NameError. Deliberately NOT stubbed
+# out: a stub would silently return wrong answers instead of failing.
+
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple, Set

@@ -418,7 +418,11 @@ class ScalableCausalInference:
         graphs = []
 
         # Run multiple methods
-        if n_variables := len(variables) <= self.max_variables:
+        # FIX(audit): two bugs on one line -- `variables` is undefined (the
+        # parameter is `variable_names`), and walrus precedence bound the
+        # *comparison result* to n_variables rather than the count, i.e.
+        # `n_variables := (len(...) <= max)`.
+        if (n_variables := len(variable_names)) <= self.max_variables:
             graphs.append(self._exact_discovery(data, variable_names))
 
         graphs.append(self._parallel_pc_discovery(data, variable_names))

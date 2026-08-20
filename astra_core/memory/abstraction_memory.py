@@ -9,6 +9,7 @@ Date: 2026-03-17
 """
 
 import numpy as np
+from collections import defaultdict
 from typing import Dict, List, Optional, Any, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
