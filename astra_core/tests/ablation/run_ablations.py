@@ -97,7 +97,10 @@ class AblationTestRunner:
     """Runner for ablation studies"""
 
     def __init__(self, output_dir: Optional[str] = None):
-        self.output_dir = output_dir or "astra_core/tests/ablation/results"
+        # FIX(audit): this was a repo-relative string, so running the script
+        # from its own directory (the documented way) created a nested
+        # astra_core/tests/ablation/astra_core/tests/ablation/results/ tree.
+        self.output_dir = output_dir or str(Path(__file__).resolve().parent / "results")
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
 
         self.metrics = get_all_metrics()

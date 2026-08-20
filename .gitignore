@@ -52,3 +52,7 @@ htmlcov/
 *.tmp
 *.bak
 *.backup
+
+# Ablation run artefacts (run output, not source)
+astra_core/tests/ablation/results/
+star_learn_v2_results.json
