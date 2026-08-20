@@ -22,7 +22,7 @@ This baseline archive includes:
 
 ## System Overview
 
-ASTRA is a unified AGI-inspired framework for autonomous hypothesis generation and validation in astronomy and astrophysics. The system integrates ~320,000 lines of clean, functional code across modular cognitive capabilities.
+ASTRA is a unified AGI-inspired framework for autonomous hypothesis generation and validation in astronomy and astrophysics. The system integrates ~317,000 lines of clean, functional code across modular cognitive capabilities.
 
 ### Key Capabilities
 
@@ -32,6 +32,7 @@ ASTRA is a unified AGI-inspired framework for autonomous hypothesis generation a
 - **Domain Expertise**: 75 specialized astrophysics domain modules
 - **Theory Engine**: Advanced theoretical reasoning and hypothesis generation
 - **Meta-Cognitive Systems**: Multi-layered context representation, self-improvement
+- **Astrophysics Modules**: 14 rebuilt/validated modules in `astro_physics/` (radiative transfer & LVG excitation, SPH gas dynamics, turbulence analysis, IR/submm SEDs, multiscale AMR coupling, and more)
 
 ## Quick Start
 
@@ -49,35 +50,54 @@ print(result['answer'])
 ## Architecture
 
 ```
-Entry Points → Theory Engine → Meta-Cognitive Capabilities → Domain Architecture
-                                      ↓
-                            Cross-Domain Meta-Learning
-                                      ↓
-                          Physics & Causal Engines
-                                      ↓
-                            Memory & Knowledge Systems
+Entry Points: create_stan_system() | create_v4_system() | process_query()
+                              ↓
+              V4.0 Revolutionary Capabilities
+              (MCE, ASC, CRN, Multi-Mind Orchestration)
+                              ↓
+                    Domain Architecture
+              (75 domain modules, hot-swappable)
+                              ↓
+                  Cross-Domain Meta-Learning
+                              ↓
+                  Physics & Causal Engines
+                              ↓
+                  Memory & Knowledge Systems
 ```
 
 ## Documentation
 
 - **CLAUDE.md** - Comprehensive project documentation
 - **README.md** - System overview and usage
-- **User_Manual/** - Detailed user guides
+- **User_Manual/** - Detailed user guides — **Appendix E** contains the full August 2026 codebase integrity audit record
 
 ## Baseline Information
 
-- **Archive Date**: April 2026
-- **System State**: Post stan_core → astra_core refactoring
+- **Archive Date**: August 2026 (replaces the April 2026 baseline)
+- **System State**: Post-audit rebuild — full integrity audit completed
 - **Status**: Stable baseline, fully functional
-- **Test Results**: 100% pass rate on comprehensive tests
+- **Test Results**: 100% pass rate on every declared suite
+
+| Verification | Result |
+|---|---|
+| Module imports (full tree walk) | 567/567, zero failures |
+| Comprehensive system test | 18/18 (100%) |
+| test_all.py | 14/14 |
+| test_self_teaching.py | 17/17 |
+| All other declared suites | 100% |
 
 ## Version Notes
 
-This baseline represents ASTRA after major refactoring work:
-- Renamed internal codebase from `stan_core` to `astra_core`
-- Removed version number references from documentation
-- Updated README.md to focus on capabilities rather than versions
-- All systems fully operational and tested
+This baseline represents ASTRA after the August 2026 integrity audit and rebuild:
+
+- **17 formerly lost symbols re-implemented** with real, hand-validated physics and algorithms (LVG escape-probability solver, SPH kernels normalized exactly, Bayesian swarm inference, MoE routing, self-teaching system, and more)
+- **14 `astro_physics` modules rebuilt** and validated against hand-derived or exact numerical ground truth
+- **~13,500 dead lines removed** (self-evolution duplicates, no-op stubs, 8 identical file pairs) with zero behavioural change
+- **Stale import paths repaired** across ~50 sites; `import astra_core.core` raises zero warnings
+- Three pre-existing physics bugs fixed in place (phantom `scipy.ndimage.skeletonize` import, two mis-normalized SPH kernels, a dimensional error in the modified-blackbody flux)
+- `User_Manual` v7.2 with the complete audit record in Appendix E
+
+The previous baseline (April 2026) reflected the `stan_core` → `astra_core` renaming and version-number cleanup.
 
 ## License
 
