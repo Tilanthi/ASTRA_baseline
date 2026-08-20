@@ -620,33 +620,3 @@ def verify_answer(question: str, domain: str, choices: List[str],
         initial_index=answer_index,
         initial_reasoning=reasoning
     )
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-
-
-# Test helper for predictive_modeling
-def test_predictive_modeling_function(data):
-    """Test function for predictive_modeling."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
-
-# Test helper for quantum_reasoning
-def test_quantum_reasoning_function(data):
-    """Test function for quantum_reasoning."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

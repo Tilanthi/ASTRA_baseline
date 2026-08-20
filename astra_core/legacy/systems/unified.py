@@ -38,25 +38,40 @@ The system automatically selects optimal capabilities based on the task.
 
 __version__ = "3.1.0-ASTRO"
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from typing import Dict, List, Any, Optional, Union, Tuple
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Any = Optional = Union = Tuple = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from enum import Enum
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = None  # degraded: unavailable
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     import logging
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     logging = None  # degraded: unavailable
 
 # Import all capabilities from version-specific modules
@@ -96,11 +111,13 @@ except Exception as e:
 # Import memory and intelligence systems
 try:
     from ...memory import MemoryGraph, MORKOntology, ExpandedMORK
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("...memory", _exc)
     MemoryGraph = MORKOntology = ExpandedMORK = None  # degraded: unavailable
 try:
     from ...intelligence import SwarmOrchestrator, DigitalPheromoneField
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("...intelligence", _exc)
     SwarmOrchestrator = DigitalPheromoneField = None  # degraded: unavailable
 try:
     from ...capabilities import (
@@ -108,7 +125,8 @@ try:
     SelfConsistency, ExternalKnowledge, LLMInference,
     MetaLearning, AnalogicalReasoning, ToolIntegration
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("...capabilities", _exc)
     BayesianInference = CausalDiscovery = AbductiveInference = SelfConsistency = ExternalKnowledge = LLMInference = MetaLearning = AnalogicalReasoning = ToolIntegration = None  # degraded: unavailable
 
 # Import ASTRO-specific capabilities

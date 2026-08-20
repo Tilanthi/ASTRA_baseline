@@ -1009,26 +1009,3 @@ def create_debate_reasoner(max_rounds: int = 8) -> AdversarialDebateReasoner:
 def create_debate_arena(max_rounds: int = 10) -> DebateArena:
     """Create a debate arena."""
     return DebateArena(max_rounds=max_rounds)
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-
-
-# Custom optimization variant 1
-def optimize_computation_1(func):
-    """Decorator for optimizing computation."""
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-

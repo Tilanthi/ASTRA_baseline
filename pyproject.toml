@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astra-core"
+version = "4.0.0"
+description = "ASTRA: Autonomous Scientific Discovery in Astrophysics"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "Glenn J. White", email = "glenn.white@open.ac.uk" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Intended Audience :: Science/Research",
+]
+
+# Hard requirements: the package will not import without these.
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-learn>=1.2",
+    "networkx>=3.0",
+    "sympy>=1.12",
+    "pandas>=2.0",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+# Astronomy I/O and archive access (astra_core.capabilities.safe_fits_reader,
+# astra_core.legacy.systems.v80, astra_core.astro_physics.data_interface)
+astro = ["astropy>=5.3"]
+# Deep-learning models (astra_core.astro_physics.deep_learning,
+# astra_core.reasoning.v80_discovery_engine)
+dl = ["torch>=2.0"]
+# Publication-ready PDF generation (astra_core.utils.pdf_generator)
+pdf = ["reportlab>=4.0", "pillow>=10.0"]
+# Plotting, MCMC and statistics used by parts of astro_physics
+science = ["matplotlib>=3.7", "emcee>=3.1", "corner>=2.2", "statsmodels>=0.14"]
+dev = ["pytest>=7.4", "pyflakes>=3.1"]
+all = [
+    "astropy>=5.3", "torch>=2.0", "reportlab>=4.0", "pillow>=10.0",
+    "matplotlib>=3.7", "emcee>=3.1", "corner>=2.2", "statsmodels>=0.14",
+]
+
+[project.urls]
+Homepage = "https://github.com/Tilanthi/ASTRA"
+Baseline = "https://github.com/Tilanthi/ASTRA_baseline"
+
+[tool.setuptools.packages.find]
+include = ["astra_core*"]
+
+[tool.pytest.ini_options]
+# Do not collect the repository's demo/print-based scripts as tests, and do not
+# collect the modules named `test_time_search.py`, which are beam-search
+# implementations rather than tests.
+testpaths = ["astra_core/tests"]
+python_files = ["test_*.py"]
+norecursedirs = ["astra_core/tests/ablation", "*/__pycache__"]

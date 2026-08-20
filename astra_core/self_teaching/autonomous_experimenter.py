@@ -30,6 +30,7 @@ try:
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
+    stats = None
 
 
 class ExperimentType(Enum):

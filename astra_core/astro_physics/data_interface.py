@@ -49,12 +49,14 @@ try:
     SPECTRAL_CUBE_AVAILABLE = True
 except ImportError:
     SPECTRAL_CUBE_AVAILABLE = False
+    SpectralCube = None
 
 try:
     from regions import Regions
     REGIONS_AVAILABLE = True
 except ImportError:
     REGIONS_AVAILABLE = False
+    Regions = None
 
 # Starlink NDF support (for JCMT, UKIRT data)
 try:
@@ -63,6 +65,8 @@ try:
     NDF_AVAILABLE = True
 except ImportError:
     NDF_AVAILABLE = False
+    Ast = None
+    Ndf = None
 
 
 # =============================================================================

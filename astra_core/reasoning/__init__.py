@@ -1486,6 +1486,7 @@ except ImportError:
     discover_causal_structure = None
     identify_mechanism_for_correlation = None
     LatentVariable = None
+    CausalEdge = None
 
 try:
     from .astrophysical_theory_synthesis import (
@@ -1631,6 +1632,7 @@ except ImportError:
     DifficultyEstimator = None
     DifficultySignals = None
     EarlyStoppingMonitor = None
+    create_adaptive_manager = None
 
 # V42 GPQA: Enhanced Self-Consistency
 try:
@@ -1843,6 +1845,7 @@ except ImportError:
     V50FailureAnalysis = None
     V50Strategy = None
     create_meta_learner = None
+    FailureType = None
 
 try:
     from .v50_adversarial_debate import (

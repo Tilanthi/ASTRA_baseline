@@ -24,15 +24,6 @@ import re
 import math
 
 
-# Custom optimization variant 1
-def optimize_computation_1(func):
-    """Decorator for optimizing computation."""
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-
 @dataclass
 class AnswerCluster:
     """A cluster of semantically equivalent answers"""
@@ -192,11 +183,6 @@ class SemanticAnswerClustering:
             return None
 
 
-__all__ = [
-    'SemanticClustering',
-    'AnswerCluster',
-    'ClusteringResult'
-]
 
 
 class ClusteringConsistency:
@@ -214,7 +200,6 @@ class ClusteringConsistency:
 __all__ = [
     'SemanticClustering',
     'AnswerCluster',
-    'ClusteringResult',
     'ClusteringConsistency'
 ]
 

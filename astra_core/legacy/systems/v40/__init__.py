@@ -28,6 +28,16 @@ Date: 2025-12-11
 Version: 40.0
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .multi_step_decomposition import (
     MultiStepDecomposer,
@@ -36,7 +46,8 @@ try:
     DecompositionStrategy,
     CompositionEngine
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".multi_step_decomposition", _exc)
     MultiStepDecomposer = ProblemDecomposition = SubProblem = DecompositionStrategy = CompositionEngine = None  # degraded: unavailable
 
 try:
@@ -48,7 +59,8 @@ try:
     HypothesisStatus,
     MentalExperiment
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hypothesis_engine", _exc)
     HypothesisEngine = Hypothesis = HypothesisTest = EvidenceType = HypothesisStatus = MentalExperiment = None  # degraded: unavailable
 
 try:
@@ -60,7 +72,8 @@ try:
     Constraint,
     ProofStep
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".formal_logic", _exc)
     FormalLogicEngine = Z3Solver = PrologEngine = LogicalProof = Constraint = ProofStep = None  # degraded: unavailable
 
 try:
@@ -71,7 +84,8 @@ try:
     CounterexampleSearch,
     TheoremStatus
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".theorem_prover", _exc)
     NeuralTheoremProver = ProofSketch = ProofVerifier = CounterexampleSearch = TheoremStatus = None  # degraded: unavailable
 
 try:
@@ -82,7 +96,8 @@ try:
     Counterfactual,
     CausalQuery
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".causal_world_model", _exc)
     CausalWorldModel = CausalMechanism = Intervention = Counterfactual = CausalQuery = None  # degraded: unavailable
 
 try:
@@ -93,7 +108,8 @@ try:
     ConfidenceEstimator,
     StrategySelector
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".meta_cognitive", _exc)
     MetaCognitiveController = ReasoningStrategy = ResourceBudget = ConfidenceEstimator = StrategySelector = None  # degraded: unavailable
 
 try:
@@ -104,7 +120,8 @@ try:
     FailureAnalyzer,
     CurriculumManager
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".continuous_learning", _exc)
     ContinuousLearner = LearningEvent = PatternLibrary = FailureAnalyzer = CurriculumManager = None  # degraded: unavailable
 
 try:
@@ -115,7 +132,8 @@ try:
     KnowledgeFusion,
     SourceRanker
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".enhanced_knowledge", _exc)
     EnhancedKnowledgeRetrieval = GoogleScholarAPI = StackExchangeAPI = KnowledgeFusion = SourceRanker = None  # degraded: unavailable
 
 try:
@@ -126,7 +144,8 @@ try:
     UnitConsistencyChecker,
     ConstraintValidator
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".answer_verification", _exc)
     AnswerVerifier = BackwardChainer = SymbolicMathVerifier = UnitConsistencyChecker = ConstraintValidator = None  # degraded: unavailable
 
 try:
@@ -139,7 +158,8 @@ try:
     create_v40_fast,
     create_v40_deep
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".v40_system", _exc)
     V40CompleteSystem = V40Config = V40Mode = V40Stats = create_v40_standard = create_v40_fast = create_v40_deep = None  # degraded: unavailable
 
 __all__ = [

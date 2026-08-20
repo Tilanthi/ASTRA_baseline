@@ -403,13 +403,3 @@ __all__ = [
     'StatisticalPatternEngine',
     'GridFeatures',
 ]
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-
-

@@ -5,54 +5,76 @@ This engine implements learning through real-world interaction, moving beyond
 simulation to true embodied experience and understanding.
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Tuple, Any
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Tuple = Any = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from abc import ABC, abstractmethod
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("abc", _exc)
     ABC = abstractmethod = None  # degraded: unavailable
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 try:
     import logging
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     logging = None  # degraded: unavailable
 
 try:
     from ..v80.neural_symbolic_integration import NeuralSymbolicBridge
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..v80.neural_symbolic_integration", _exc)
     NeuralSymbolicBridge = None  # degraded: unavailable
 try:
     from ..v93.self_modifying_architecture import DynamicArchitecture
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..v93.self_modifying_architecture", _exc)
     DynamicArchitecture = None  # degraded: unavailable
 try:
     from .sensorimotor_system import SensorimotorInterface, WorldAction, Experience
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sensorimotor_system", _exc)
     SensorimotorInterface = WorldAction = Experience = None  # degraded: unavailable
 try:
     from .developmental_learning import DevelopmentalLearning
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".developmental_learning", _exc)
     DevelopmentalLearning = None  # degraded: unavailable
 try:
     from .common_sense_engine import CommonSenseEngine
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".common_sense_engine", _exc)
     CommonSenseEngine = None  # degraded: unavailable
 try:
     from .language_grounding import LanguageGroundingEngine
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".language_grounding", _exc)
     LanguageGroundingEngine = None  # degraded: unavailable
 
 

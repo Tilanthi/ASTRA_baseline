@@ -535,7 +535,6 @@ class TransformationPrioritizer:
         return features
 
 
-
 def neural_symbolic_integration(neural_output: Dict[str, Any],
                                symbolic_rules: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
@@ -636,83 +635,3 @@ def symbolic_explain(neural_features: Dict[str, float],
                 )
 
     return explanations
-
-
-
-def fft_pattern_detect(data: np.ndarray, min_freq: float = 0.01, max_freq: float = 0.5) -> Dict[str, Any]:
-    """
-    Detect periodic patterns using FFT analysis.
-
-    Args:
-        data: Input signal
-        min_freq: Minimum frequency to detect
-        max_freq: Maximum frequency to detect
-
-    Returns:
-        Dictionary with detected frequencies and powers
-    """
-    import numpy as np
-
-    # Compute FFT
-    fft_result = np.fft.fft(data)
-    freqs = np.fft.fftfreq(len(data))
-    power = np.abs(fft_result)**2
-
-    # Filter to frequency range
-    mask = (np.abs(freqs) >= min_freq) & (np.abs(freqs) <= max_freq)
-    filtered_freqs = freqs[mask]
-    filtered_power = power[mask]
-
-    # Sort by power
-    sorted_indices = np.argsort(filtered_power)[::-1]
-
-    # Get top frequencies
-    top_freqs = []
-    top_powers = []
-    for idx in sorted_indices[:10]:
-        top_freqs.append(float(filtered_freqs[idx]))
-        top_powers.append(float(filtered_power[idx]))
-
-    return {
-        'frequencies': top_freqs,
-        'powers': top_powers,
-        'dominant_frequency': top_freqs[0] if top_freqs else None,
-        'total_power': float(np.sum(filtered_power))
-    }
-
-
-
-def direct_lingam(data: np.ndarray) -> Dict[str, Any]:
-    """
-    Apply DirectLiNGAM algorithm for causal discovery.
-
-    Uses non-Gaussianity to estimate causal order and structure.
-
-    Args:
-        data: Data matrix (n_samples x n_variables)
-
-    Returns:
-        Dictionary with causal matrix and causal order
-    """
-    import numpy as np
-
-    n_samples, n_vars = data.shape
-
-    # Standardize data
-    data = (data - np.mean(data, axis=0)) / (np.std(data, axis=0) + 1e-10)
-
-    # Initialize
-    causal_order = []
-    remaining_vars = list(range(n_vars))
-    B = np.zeros((n_vars, n_vars))  # Causal matrix
-
-    for _ in range(n_vars):
-        scores = []
-
-        for var in remaining_vars:
-            # Compute independence score using non-Gaussianity
-            test_vars = [v for v in remaining_vars if v != var]
-
-            if not test_vars:
-                scores.append((var, 0))
-                continue

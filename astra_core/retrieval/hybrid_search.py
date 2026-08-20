@@ -35,6 +35,8 @@ try:
     _SKLEARN_AVAILABLE = True
 except ImportError:
     _SKLEARN_AVAILABLE = False
+    TfidfVectorizer = None
+    cosine_similarity = None
 
 
 @dataclass

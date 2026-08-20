@@ -1277,20 +1277,3 @@ __all__ = [
     'learn_temporal_patterns',
     'segment_time_series'
 ]
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-
-
-# Test helper for quantum_reasoning
-def test_quantum_reasoning_function(data):
-    """Test function for quantum_reasoning."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

@@ -7,6 +7,16 @@ scientific discovery system capable of generating hypotheses, discovering
 causal relationships, applying mathematical intuition, and designing experiments.
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .v92_system import (
     V92CompleteSystem,
@@ -18,7 +28,8 @@ try:
     create_v92_mathematician,
     create_v92_experimentalist
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".v92_system", _exc)
     V92CompleteSystem = V92Config = ScientificDiscovery = create_v92_system = create_v92_explorer = create_v92_validator = create_v92_mathematician = create_v92_experimentalist = None  # degraded: unavailable
 
 try:
@@ -27,7 +38,8 @@ try:
     Hypothesis,
     HypothesisType
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hypothesis_engine", _exc)
     HypothesisGenerator = Hypothesis = HypothesisType = None  # degraded: unavailable
 
 try:
@@ -38,7 +50,8 @@ try:
     MathDomain,
     ProofStatus
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".mathematical_intuition", _exc)
     MathematicalIntuitionModule = MathematicalConjecture = Proof = MathDomain = ProofStatus = None  # degraded: unavailable
 
 try:
@@ -50,7 +63,8 @@ try:
     Counterfactual,
     DiscoveryMethod
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".causal_discovery", _exc)
     CausalDiscoveryEngine = CausalModel = CausalRelation = Intervention = Counterfactual = DiscoveryMethod = None  # degraded: unavailable
 
 try:
@@ -62,7 +76,8 @@ try:
     ExperimentalType,
     SimulationResult
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".experimental_design", _exc)
     ExperimentalDesignEngine = ExperimentalDesign = ExperimentalVariable = Treatment = ExperimentalType = SimulationResult = None  # degraded: unavailable
 
 __all__ = [

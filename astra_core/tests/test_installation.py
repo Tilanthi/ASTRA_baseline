@@ -63,6 +63,7 @@ def test_imports():
     print("✓ Reasoning components (legacy)")
 
     print("\nAll imports successful!")
+    return True
 
 
 def test_basic_functionality():
@@ -120,6 +121,7 @@ def test_basic_functionality():
     print("✓ Meta-cognitive monitoring works")
 
     print("\nAll basic functionality tests passed!")
+    return True
 
 
 def main():
@@ -131,11 +133,13 @@ def main():
 
     success = True
 
-    if not test_imports():
-        success = False
-
-    if not test_basic_functionality():
-        success = False
+    for _check in (test_imports, test_basic_functionality):
+        try:
+            if not _check():
+                success = False
+        except Exception as _exc:      # noqa: BLE001 - report, do not mask
+            print(f"\u2717 {_check.__name__} raised {type(_exc).__name__}: {_exc}")
+            success = False
 
     print()
     print("=" * 50)

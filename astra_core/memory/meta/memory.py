@@ -124,7 +124,6 @@ class MetaMemory:
 import numpy as np
 
 
-
 def encode_episodic_memory(event: Dict[str, Any],
                           context: Dict[str, Any],
                           importance: float = 0.5) -> Dict[str, Any]:
@@ -179,134 +178,6 @@ def _extract_retrieval_cues(event: Dict[str, Any],
             cues.extend(value.lower().split()[:3])
 
     return list(set(cues))
-
-
-
-def fft_pattern_detect(data: np.ndarray, min_freq: float = 0.01, max_freq: float = 0.5) -> Dict[str, Any]:
-    """
-    Detect periodic patterns using FFT analysis.
-
-    Args:
-        data: Input signal
-        min_freq: Minimum frequency to detect
-        max_freq: Maximum frequency to detect
-
-    Returns:
-        Dictionary with detected frequencies and powers
-    """
-    import numpy as np
-
-    # Compute FFT
-    fft_result = np.fft.fft(data)
-    freqs = np.fft.fftfreq(len(data))
-    power = np.abs(fft_result)**2
-
-    # Filter to frequency range
-    mask = (np.abs(freqs) >= min_freq) & (np.abs(freqs) <= max_freq)
-    filtered_freqs = freqs[mask]
-    filtered_power = power[mask]
-
-    # Sort by power
-    sorted_indices = np.argsort(filtered_power)[::-1]
-
-    # Get top frequencies
-    top_freqs = []
-    top_powers = []
-    for idx in sorted_indices[:10]:
-        top_freqs.append(float(filtered_freqs[idx]))
-        top_powers.append(float(filtered_power[idx]))
-
-    return {
-        'frequencies': top_freqs,
-        'powers': top_powers,
-        'dominant_frequency': top_freqs[0] if top_freqs else None,
-        'total_power': float(np.sum(filtered_power))
-    }
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """
-    Detect patterns using autocorrelation analysis.
-
-    Args:
-        data: Input signal
-        max_lag: Maximum lag to check (None for len(data)//4)
-
-    Returns:
-        Dictionary with autocorrelation results and detected periods
-    """
-    import numpy as np
-
-    if max_lag is None:
-        max_lag = len(data) // 4
-
-    # Compute autocorrelation
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-
-    # Normalize
-    autocorr = autocorr / autocorr[0]
-
-    # Find peaks
-    from scipy.signal import find_peaks
-    peaks, properties = find_peaks(autocorr[:max_lag], height=0.2)
-
-    # Estimate periods from peaks
-    periods = []
-    for peak in peaks:
-        if peak > 0:
-            periods.append(peak)
-
-    return {
-        'autocorrelation': autocorr[:max_lag],
-        'peaks': peaks.tolist(),
-        'periods': periods,
-        'dominant_period': periods[0] if periods else None
-    }
-
-
-
-def detect_change_points(data: np.ndarray, min_size: int = 10, penalty: float = 1.0) -> List[int]:
-    """
-    Detect change points in time series data.
-
-    Args:
-        data: Input time series
-        min_size: Minimum segment size between change points
-        penalty: Penalty for additional change points
-
-    Returns:
-        List of change point indices
-    """
-    import numpy as np
-
-    n = len(data)
-    change_points = []
-
-    # Compute cumulative statistics
-    cumsum = np.cumsum(data)
-    cumsum_sq = np.cumsum(data**2)
-
-    # Scan for change points
-    i = min_size
-    while i < n - min_size:
-        # Check if there's a significant change at position i
-        before_mean = cumsum[i] / i
-        after_mean = (cumsum[n-1] - cumsum[i]) / (n - i)
-
-        before_var = (cumsum_sq[i] / i) - before_mean**2
-        after_var = ((cumsum_sq[n-1] - cumsum_sq[i]) / (n - i)) - after_mean**2
-
-        # Test for significant change
-        if abs(before_mean - after_mean) > penalty * np.sqrt(before_var + after_var + 1e-10):
-            change_points.append(i)
-            i += min_size  # Skip ahead
-        else:
-            i += 1
-
-    return change_points
-
 
 
 def form_concept_from_examples(examples: List[Dict[str, Any]],
@@ -368,7 +239,6 @@ def form_concept_from_examples(examples: List[Dict[str, Any]],
     }
 
     return concept
-
 
 
 def organize_semantic_memory(concepts: List[Dict[str, Any]],
@@ -434,7 +304,6 @@ def organize_semantic_memory(concepts: List[Dict[str, Any]],
     }
 
 
-
 def gaussian_process_predict(X_train: np.ndarray,
                             y_train: np.ndarray,
                             X_test: np.ndarray,
@@ -483,40 +352,3 @@ def gaussian_process_predict(X_train: np.ndarray,
         'std': np.sqrt(np.maximum(y_var, 0)),
         'covariance': K_ss - v.T @ v
     }
-
-
-
-def direct_lingam(data: np.ndarray) -> Dict[str, Any]:
-    """
-    Apply DirectLiNGAM algorithm for causal discovery.
-
-    Uses non-Gaussianity to estimate causal order and structure.
-
-    Args:
-        data: Data matrix (n_samples x n_variables)
-
-    Returns:
-        Dictionary with causal matrix and causal order
-    """
-    import numpy as np
-
-    n_samples, n_vars = data.shape
-
-    # Standardize data
-    data = (data - np.mean(data, axis=0)) / (np.std(data, axis=0) + 1e-10)
-
-    # Initialize
-    causal_order = []
-    remaining_vars = list(range(n_vars))
-    B = np.zeros((n_vars, n_vars))  # Causal matrix
-
-    for _ in range(n_vars):
-        scores = []
-
-        for var in remaining_vars:
-            # Compute independence score using non-Gaussianity
-            test_vars = [v for v in remaining_vars if v != var]
-
-            if not test_vars:
-                scores.append((var, 0))
-                continue

@@ -610,12 +610,3 @@ __all__ = [
     'NodeType',
     'EdgeType'
 ]
-
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None
-
-

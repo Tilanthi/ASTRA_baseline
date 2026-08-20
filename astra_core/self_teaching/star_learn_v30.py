@@ -42,7 +42,7 @@ try:
     from .causal_discovery_engine import CausalDiscoveryEngine
     from .theory_constructor import TheoryConstructionSystem
     from .autonomous_experimenter import AutonomousExperimentSystem
-    from .meta_learning import MetaLearningSystem
+    from .meta_learning import MetaLearningSystem, LearningResult
     from .consciousness_simulator import ConsciousnessSimulator
 except ImportError:
     STARLearnV25 = None
@@ -50,7 +50,9 @@ except ImportError:
     TheoryConstructionSystem = None
     AutonomousExperimentSystem = None
     MetaLearningSystem = None
+    LearningResult = None
     ConsciousnessSimulator = None
+    STARLearnV25Config = None
 
 # Import V3.0 astronomy modules
 try:
@@ -97,6 +99,10 @@ except ImportError:
     ComponentSeparation = None
     SourceDetection = None
     CausalInferenceFusion = None
+    ChemistryCausalDiscovery = None
+    IonizingPhotonCalculator = None
+    StellarFeedback = None
+    create_gas_dynamics_simulation = None
 
 
 @dataclass

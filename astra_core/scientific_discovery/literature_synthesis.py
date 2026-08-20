@@ -21,37 +21,3 @@ class FindingAggregator:
         return []
 
 __all__ = ['LiteratureSynthesizer', 'HypothesisExtractor', 'FindingAggregator']
-
-
-
-# Test helper for predictive_modeling
-def test_predictive_modeling_function(data):
-    """Test function for predictive_modeling."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-

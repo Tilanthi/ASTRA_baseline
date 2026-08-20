@@ -580,12 +580,3 @@ __all__ = [
     'SemanticRelation',
     'SemanticRelationType'
 ]
-
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None
-
-

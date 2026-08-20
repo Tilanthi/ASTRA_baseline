@@ -33,6 +33,7 @@ Author: Claude Code (ASTRO-SWARM)
 Date: 2024-11
 """
 
+import math
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Any, Callable, Union
@@ -450,7 +451,7 @@ class SersicProfile(MassProfile):
         D_d = self.cosmo.angular_diameter_distance(z_lens) * 1e3  # kpc
         R_eff_kpc = R_eff / 206265 * D_d
         Sigma_0 = M_star / (2 * np.pi * R_eff_kpc**2 * n * np.exp(self.b_n) *
-                          self.b_n**(-2*n) * np.math.gamma(2*n))
+                          self.b_n**(-2*n) * math.gamma(2*n))
 
         # Convert to convergence
         Sigma_crit = self.cosmo.sigma_crit(z_lens, z_source)
@@ -1084,11 +1085,3 @@ __all__ = [
     'SubstructureDetector',
     'SourceReconstructor',
 ]
-
-
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}

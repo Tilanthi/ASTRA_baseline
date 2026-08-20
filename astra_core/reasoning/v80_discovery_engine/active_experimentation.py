@@ -15,6 +15,8 @@ from scipy.stats import entropy, norm
 from scipy.optimize import minimize_scalar
 import warnings
 
+from .scalable_causal_inference import CausalGraph
+
 try:
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import RBF, Matern

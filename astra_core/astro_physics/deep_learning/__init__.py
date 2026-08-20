@@ -690,11 +690,13 @@ class RadiativeTransferPINN(nn.Module):
 
         return physics_loss
 
-    def compute_boundary_loss(self, I_pred: torch.Tensor, I_surface: torch.Tensor) -> torch.Tensor:
-        """Boundary condition at τ=0"""
-        # At surface (τ=0), I should match incident radiation
-        surface_loss = torch.mean((I_pred[tau == 0] - I_surface)**2)
-        return surface_loss
+    def compute_boundary_loss(self, I_pred: torch.Tensor, I_surface: torch.Tensor,
+                              tau: torch.Tensor) -> torch.Tensor:
+        """Boundary condition at tau=0: I(tau=0) must match the incident radiation."""
+        surface = (tau == 0)
+        if not bool(surface.any()):
+            return torch.zeros((), dtype=I_pred.dtype, device=I_pred.device)
+        return torch.mean((I_pred[surface] - I_surface) ** 2)
 
 
 class StellarStructurePINN(nn.Module):
@@ -723,7 +725,7 @@ class StellarStructurePINN(nn.Module):
         self.network = nn.Sequential(
             nn.Linear(6, hidden_layers[0]),
             nn.Tanh(),
-            *[layer for _ in range(len(hidden_layers)-1) for layer in
+            *[layer for i in range(len(hidden_layers)-1) for layer in
              [nn.Linear(hidden_layers[i], hidden_layers[i+1]), nn.Tanh()]]
         )
 

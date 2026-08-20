@@ -37,6 +37,9 @@ except ImportError:
     BayesianExperimentalDesigner = None
     ScientificValueCalculator = None
     ArchiveExplorer = None
+    DatasetCollection = None
+    PredictionResult = None
+    TheorySynthesisEngine = None
 
 
 # =============================================================================

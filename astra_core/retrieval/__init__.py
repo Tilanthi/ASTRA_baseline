@@ -21,6 +21,16 @@ Version: 1.0
 Date: 2026-01-04
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .hybrid_search import (
     HybridRetriever,
@@ -30,7 +40,8 @@ try:
     create_hybrid_retriever,
     Document,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hybrid_search", _exc)
     HybridRetriever = TfidfRetriever = VectorRetriever = HybridSearchResult = create_hybrid_retriever = Document = None  # degraded: unavailable
 
 try:
@@ -41,7 +52,8 @@ try:
     create_context_distiller,
     SimpleKeywordChecker,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".context_distiller", _exc)
     ContextDistiller = RelevancyCheck = DistillationResult = create_context_distiller = SimpleKeywordChecker = None  # degraded: unavailable
 
 try:
@@ -53,7 +65,8 @@ try:
     ShardSelector,
     create_sharded_retriever,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sharded_retrieval", _exc)
     ShardedRetriever = DomainShard = ShardedRetrievalResult = ShardStrategy = ShardSelector = create_sharded_retriever = None  # degraded: unavailable
 
 try:
@@ -65,7 +78,8 @@ try:
     QueryExpansionResult,
     create_query_expander,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".query_expander", _exc)
     QueryExpander = ParallelQueryExpander = RuleBasedExpander = ExpandedQueries = QueryExpansionResult = create_query_expander = None  # degraded: unavailable
 
 try:
@@ -76,7 +90,8 @@ try:
     RetrievalMode,
     create_parallel_rag,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".parallel_rag", _exc)
     ParallelRAGOrchestrator = ParallelRAGConfig = ParallelRAGResult = RetrievalMode = create_parallel_rag = None  # degraded: unavailable
 
 __all__ = [

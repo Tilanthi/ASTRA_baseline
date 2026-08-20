@@ -1166,13 +1166,3 @@ def identify_line(frequency: float, tolerance: float = 1.0) -> List[SpectralLine
     """Identify spectral line at given frequency."""
     spl = SplatalogueInterface()
     return spl.search(frequency - tolerance, frequency + tolerance)
-
-
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

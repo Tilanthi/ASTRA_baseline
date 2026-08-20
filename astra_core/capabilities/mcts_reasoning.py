@@ -636,24 +636,3 @@ def mcts_reason(question: str, domain: str = "",
     """Convenience function for MCTS reasoning."""
     reasoner = MCTSReasoner()
     return reasoner.reason(question, domain, choices)
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-

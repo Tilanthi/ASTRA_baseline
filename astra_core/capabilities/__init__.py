@@ -1213,7 +1213,6 @@ __all__ += [
 ]
 
 
-
 # =========================================================================
 # V5.0 Discovery Enhancement System
 # =========================================================================
@@ -1454,24 +1453,3 @@ __all__ += [
     'create_streaming_alert_system',
     'monitor_streaming_data',
 ]
-
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-

@@ -533,12 +533,3 @@ def from_objects(objects: List[GridObject], height: int, width: int,
             if 0 <= r < height and 0 <= c < width:
                 grid.data[r, c] = obj.color
     return grid
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-

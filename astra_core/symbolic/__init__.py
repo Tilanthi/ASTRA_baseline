@@ -65,6 +65,16 @@ from .stan_enhanced import (
 )
 
 # Import V36 components for backward compatibility
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .v36_system import (
         SymbolicCausalAbstraction,
@@ -72,7 +82,8 @@ try:
         MechanismDiscoveryEngine,
         V36CompleteSystem as _V36CompleteSystem
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".v36_system", _exc)
     SymbolicCausalAbstraction = CrossDomainAnalogyEngine = MechanismDiscoveryEngine = _V36CompleteSystem = None  # degraded: unavailable
 
 __all__ = [
@@ -110,11 +121,3 @@ __all__ = [
     'MechanismDiscoveryEngine',
     'V38CompleteSystem'  # Alias for V36CompleteSystem
 ]
-
-
-
-# Test helper for neural_symbolic
-def test_neural_symbolic_function(data):
-    """Test function for neural_symbolic."""
-    import numpy as np
-    return {'passed': True, 'result': None}

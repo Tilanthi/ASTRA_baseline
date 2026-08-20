@@ -471,21 +471,3 @@ def explain_wrong_answers(question: str, choices: List[str],
             explanations[i] = exp.explanation
 
     return explanations
-
-
-
-# Test helper for neural_symbolic
-def test_neural_symbolic_function(data):
-    """Test function for neural_symbolic."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
-
-# Test helper for quantum_reasoning
-def test_quantum_reasoning_function(data):
-    """Test function for quantum_reasoning."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

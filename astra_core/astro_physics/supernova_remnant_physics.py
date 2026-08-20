@@ -1299,11 +1299,3 @@ def analyze_snr(energy_erg: float = 1e51, ejecta_msun: float = 3.0,
             'merger_time_years': t_merge / YR
         }
     }
-
-
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}

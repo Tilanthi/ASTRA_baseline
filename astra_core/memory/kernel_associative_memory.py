@@ -1293,7 +1293,6 @@ __all__ = [
 TemporalScale = MemoryTemporalScale
 
 
-
 def consolidate_memory(memory_store: Dict[str, Any],
                      importance_threshold: float = 0.5) -> Dict[str, Any]:
     """
@@ -1419,7 +1418,6 @@ def memory_replay(memory_store: Dict[str, Any],
     return selected
 
 
-
 def gaussian_process_predict(X_train: np.ndarray,
                             y_train: np.ndarray,
                             X_test: np.ndarray,
@@ -1468,40 +1466,3 @@ def gaussian_process_predict(X_train: np.ndarray,
         'std': np.sqrt(np.maximum(y_var, 0)),
         'covariance': K_ss - v.T @ v
     }
-
-
-
-def direct_lingam(data: np.ndarray) -> Dict[str, Any]:
-    """
-    Apply DirectLiNGAM algorithm for causal discovery.
-
-    Uses non-Gaussianity to estimate causal order and structure.
-
-    Args:
-        data: Data matrix (n_samples x n_variables)
-
-    Returns:
-        Dictionary with causal matrix and causal order
-    """
-    import numpy as np
-
-    n_samples, n_vars = data.shape
-
-    # Standardize data
-    data = (data - np.mean(data, axis=0)) / (np.std(data, axis=0) + 1e-10)
-
-    # Initialize
-    causal_order = []
-    remaining_vars = list(range(n_vars))
-    B = np.zeros((n_vars, n_vars))  # Causal matrix
-
-    for _ in range(n_vars):
-        scores = []
-
-        for var in remaining_vars:
-            # Compute independence score using non-Gaussianity
-            test_vars = [v for v in remaining_vars if v != var]
-
-            if not test_vars:
-                scores.append((var, 0))
-                continue

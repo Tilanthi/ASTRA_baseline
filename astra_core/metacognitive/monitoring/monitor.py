@@ -173,7 +173,6 @@ class CognitiveMonitor:
         }
 
 
-
 def metacognitive_monitor(task_state: Dict[str, Any],
                          confidence_threshold: float = 0.7) -> Dict[str, Any]:
     """
@@ -249,7 +248,6 @@ def update_confidence_based_on_feedback(current_confidence: float,
     return new_confidence
 
 
-
 def organize_semantic_memory(concepts: List[Dict[str, Any]],
                            similarity_threshold: float = 0.7) -> Dict[str, Any]:
     """
@@ -311,125 +309,3 @@ def organize_semantic_memory(concepts: List[Dict[str, Any]],
         'num_clusters': len(clusters),
         'similarity_threshold': similarity_threshold
     }
-
-
-
-def fft_pattern_detect(data: np.ndarray, min_freq: float = 0.01, max_freq: float = 0.5) -> Dict[str, Any]:
-    """
-    Detect periodic patterns using FFT analysis.
-
-    Args:
-        data: Input signal
-        min_freq: Minimum frequency to detect
-        max_freq: Maximum frequency to detect
-
-    Returns:
-        Dictionary with detected frequencies and powers
-    """
-    import numpy as np
-
-    # Compute FFT
-    fft_result = np.fft.fft(data)
-    freqs = np.fft.fftfreq(len(data))
-    power = np.abs(fft_result)**2
-
-    # Filter to frequency range
-    mask = (np.abs(freqs) >= min_freq) & (np.abs(freqs) <= max_freq)
-    filtered_freqs = freqs[mask]
-    filtered_power = power[mask]
-
-    # Sort by power
-    sorted_indices = np.argsort(filtered_power)[::-1]
-
-    # Get top frequencies
-    top_freqs = []
-    top_powers = []
-    for idx in sorted_indices[:10]:
-        top_freqs.append(float(filtered_freqs[idx]))
-        top_powers.append(float(filtered_power[idx]))
-
-    return {
-        'frequencies': top_freqs,
-        'powers': top_powers,
-        'dominant_frequency': top_freqs[0] if top_freqs else None,
-        'total_power': float(np.sum(filtered_power))
-    }
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """
-    Detect patterns using autocorrelation analysis.
-
-    Args:
-        data: Input signal
-        max_lag: Maximum lag to check (None for len(data)//4)
-
-    Returns:
-        Dictionary with autocorrelation results and detected periods
-    """
-    import numpy as np
-
-    if max_lag is None:
-        max_lag = len(data) // 4
-
-    # Compute autocorrelation
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-
-    # Normalize
-    autocorr = autocorr / autocorr[0]
-
-    # Find peaks
-    from scipy.signal import find_peaks
-    peaks, properties = find_peaks(autocorr[:max_lag], height=0.2)
-
-    # Estimate periods from peaks
-    periods = []
-    for peak in peaks:
-        if peak > 0:
-            periods.append(peak)
-
-    return {
-        'autocorrelation': autocorr[:max_lag],
-        'peaks': peaks.tolist(),
-        'periods': periods,
-        'dominant_period': periods[0] if periods else None
-    }
-
-
-
-def direct_lingam(data: np.ndarray) -> Dict[str, Any]:
-    """
-    Apply DirectLiNGAM algorithm for causal discovery.
-
-    Uses non-Gaussianity to estimate causal order and structure.
-
-    Args:
-        data: Data matrix (n_samples x n_variables)
-
-    Returns:
-        Dictionary with causal matrix and causal order
-    """
-    import numpy as np
-
-    n_samples, n_vars = data.shape
-
-    # Standardize data
-    data = (data - np.mean(data, axis=0)) / (np.std(data, axis=0) + 1e-10)
-
-    # Initialize
-    causal_order = []
-    remaining_vars = list(range(n_vars))
-    B = np.zeros((n_vars, n_vars))  # Causal matrix
-
-    for _ in range(n_vars):
-        scores = []
-
-        for var in remaining_vars:
-            # Compute independence score using non-Gaussianity
-            test_vars = [v for v in remaining_vars if v != var]
-
-            if not test_vars:
-                scores.append((var, 0))
-                continue

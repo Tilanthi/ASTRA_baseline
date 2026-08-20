@@ -609,13 +609,3 @@ def ensemble_answer(question: str, domain: str = "",
     """Get ensemble answer from multiple experts."""
     ensemble = MultiExpertEnsemble()
     return ensemble.answer(question, domain, choices)
-
-
-
-# Test helper for predictive_modeling
-def test_predictive_modeling_function(data):
-    """Test function for predictive_modeling."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

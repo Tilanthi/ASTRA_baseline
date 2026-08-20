@@ -113,10 +113,3 @@ class ReciprocalRankFusion:
 
         result = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
         return result
-
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None

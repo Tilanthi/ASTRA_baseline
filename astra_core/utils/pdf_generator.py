@@ -15,6 +15,8 @@ Version: 1.0
 Date: April 2026
 """
 
+from __future__ import annotations
+
 import re
 import os
 from typing import List, Tuple, Optional, Dict
@@ -46,7 +48,10 @@ except ImportError:
     cm = 28.35
     A4 = (595.27, 841.89)
     letter = (612, 792)
-    print("WARNING: reportlab not available. PDF generation disabled.")
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "reportlab not available - PDF generation disabled"
+    )
 
 
 class ASTRAPDFStyles:

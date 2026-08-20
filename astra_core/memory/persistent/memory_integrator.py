@@ -57,6 +57,9 @@ try:
 except ImportError:
     ANTI_HALLUCINATION_AVAILABLE = False
     DocumentReviewAntiHallucination = None
+    ClaimCategory = None
+    DocVerificationStatus = None
+    DocumentClaim = None
 
 
 @dataclass

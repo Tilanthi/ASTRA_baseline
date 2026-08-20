@@ -23,6 +23,11 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
+    IsolationForest = None
+    LocalOutlierFactor = None
+    RandomForestClassifier = None
+    StandardScaler = None
+    cross_val_score = None
 
 
 class SourceType(Enum):
@@ -894,11 +899,3 @@ __all__ = [
     'compute_photometric_features',
     'stellar_locus_distance',
 ]
-
-
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}

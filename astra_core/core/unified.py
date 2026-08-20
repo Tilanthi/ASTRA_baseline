@@ -39,6 +39,7 @@ The system automatically selects optimal capabilities based on the task.
 __version__ = "3.1.0-ASTRO"
 
 from typing import Dict, List, Any, Optional, Union, Tuple
+import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
@@ -580,3 +581,36 @@ class UnifiedSTANSystem:
             Dictionary with query results
         """
         return self.process_query(query, context)
+
+
+def create_unified_stan_system(config: Optional[UnifiedConfig] = None,
+                               **kwargs: Any) -> UnifiedSTANSystem:
+    """
+    Factory for :class:`UnifiedSTANSystem`.
+
+    This factory is referenced by ``astra_core/__init__.py`` (and by the
+    documented public API) but had no implementation anywhere in the tree, so
+    the whole import block silently degraded to ``None`` -- taking
+    ``UnifiedSTANSystem``, ``UnifiedConfig``, ``TaskType`` and ``TaskAnalyzer``
+    down with it.
+
+    Args:
+        config: Optional pre-built :class:`UnifiedConfig`.
+        **kwargs: Field overrides applied to ``config`` (or to a fresh default
+            config when ``config`` is None).  Unknown field names raise
+            ``TypeError`` rather than being silently ignored.
+
+    Returns:
+        A configured :class:`UnifiedSTANSystem` instance.
+    """
+    if config is None:
+        config = UnifiedConfig()
+    if kwargs:
+        valid = {f.name for f in dataclasses.fields(UnifiedConfig)}
+        unknown = set(kwargs) - valid
+        if unknown:
+            raise TypeError(
+                f"Unknown UnifiedConfig field(s): {', '.join(sorted(unknown))}"
+            )
+        config = dataclasses.replace(config, **kwargs)
+    return UnifiedSTANSystem(config=config)

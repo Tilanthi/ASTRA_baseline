@@ -20,6 +20,16 @@ Date: 2025-12-15
 Version: 1.1
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .archive_query import (
     VOQueryEngine,
@@ -35,7 +45,8 @@ try:
     ESOArchive,
     RadioArchiveManager,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".archive_query", _exc)
     VOQueryEngine = TAP_Client = AstroqueryInterface = CrossMatchEngine = ArchiveDataManager = ALMAArchive = NRAOArchive = LOFARArchive = MWAArchive = ESOArchive = RadioArchiveManager = None  # degraded: unavailable
 
 try:
@@ -47,7 +58,8 @@ try:
     KilonovaModel,
     TransientAlertBroker
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".transient_science", _exc)
     TransientClassifier = LightCurveFitter = SupernovaModels = GRBAfterglowModel = KilonovaModel = TransientAlertBroker = None  # degraded: unavailable
 
 try:
@@ -60,7 +72,8 @@ try:
     COMFormationModel,
     DeuteriumFractionation
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".astrochemistry", _exc)
     ChemicalNetwork = UMISTNetwork = KIDANetwork = GrainSurfaceChemistry = IsotopologueAnalyzer = COMFormationModel = DeuteriumFractionation = None  # degraded: unavailable
 
 try:
@@ -72,7 +85,8 @@ try:
     DiskDispersalModel,
     PlanetDiskInteraction
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".disk_physics", _exc)
     ProtoplanetaryDisk = DiskEvolutionModel = GapOpeningCriteria = DustGrainEvolution = DiskDispersalModel = PlanetDiskInteraction = None  # degraded: unavailable
 
 try:
@@ -84,7 +98,8 @@ try:
     ActionAngleCalculator,
     ClusterDissolutionModel
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".galactic_dynamics", _exc)
     GalacticPotential = OrbitIntegrator = StellarStreamFinder = ChemicalEvolutionModel = ActionAngleCalculator = ClusterDissolutionModel = None  # degraded: unavailable
 
 try:
@@ -95,7 +110,8 @@ try:
     SpectralAutoencoder,
     ActiveLearningSelector
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".ml_survey", _exc)
     AnomalyDetector = PhotometricRedshiftEstimator = SourceClassifier = SpectralAutoencoder = ActiveLearningSelector = None  # degraded: unavailable
 
 try:
@@ -106,7 +122,8 @@ try:
     CloudModel,
     ChemicalEquilibrium
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".atmospheric_retrieval", _exc)
     AtmosphericRetrieval = TransmissionSpectrum = EmissionSpectrum = CloudModel = ChemicalEquilibrium = None  # degraded: unavailable
 
 try:
@@ -117,7 +134,8 @@ try:
     CGMModel,
     ReionizationModel
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".cosmological_context", _exc)
     HaloMassFunction = GalaxyHaloConnection = EnvironmentalMetrics = CGMModel = ReionizationModel = None  # degraded: unavailable
 
 try:
@@ -128,7 +146,8 @@ try:
     AlertFilterPipeline,
     FollowUpPrioritizer
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".alert_processing", _exc)
     AlertStreamProcessor = ZTFAlertHandler = RubinAlertHandler = AlertFilterPipeline = FollowUpPrioritizer = None  # degraded: unavailable
 
 try:
@@ -151,7 +170,8 @@ try:
     freq_to_wavelength,
     wavelength_to_freq,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".radio_astronomy", _exc)
     RadioFacility = ObservingBand = RadioObservation = Visibility = RadioSource = FacilitySpecs = RadioContinuumAnalysis = RadioSpectralLine = RadioInterferometry = LowFrequencyRadio = RadioPolarization = RadioSourcePhysics = RadioArchiveInterface = jy_to_kelvin = kelvin_to_jy = freq_to_wavelength = wavelength_to_freq = None  # degraded: unavailable
 
 __all__ = [

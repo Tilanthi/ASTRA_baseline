@@ -9,6 +9,16 @@ Components:
 - AletheiaProofSystem: Basic 3-agent architecture
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .aletheia_stan_architecture import (
     AletheiaSTANSystem,
@@ -18,7 +28,8 @@ try:
     ValidationResult,
     GeneratorOutput
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".aletheia_stan_architecture", _exc)
     AletheiaSTANSystem = ProofStrategy = VerdictType = ProofAttempt = ValidationResult = GeneratorOutput = None  # degraded: unavailable
 
 __all__ = [

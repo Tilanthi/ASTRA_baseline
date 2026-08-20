@@ -1152,12 +1152,4 @@ def measure_outflow(cube: List[List[List[float]]],
     return analyzer.analyze(cube, velocities, center, v_sys, v_blue, v_red)
 
 
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
 # Custom optimization variant 46

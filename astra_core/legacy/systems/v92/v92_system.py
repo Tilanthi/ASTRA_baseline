@@ -19,65 +19,87 @@ Capabilities:
 - Automated theory building and testing
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     import pandas as pd
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     pd = None  # degraded: unavailable
 try:
     from typing import Dict, List, Any, Optional, Tuple, Set
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Any = Optional = Tuple = Set = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from enum import Enum
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = None  # degraded: unavailable
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 try:
     import json
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     json = None  # degraded: unavailable
 try:
     from collections import defaultdict
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("collections", _exc)
     defaultdict = None  # degraded: unavailable
 
 try:
     from .hypothesis_engine import (
     HypothesisGenerator, Hypothesis, HypothesisType
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hypothesis_engine", _exc)
     HypothesisGenerator = Hypothesis = HypothesisType = None  # degraded: unavailable
 try:
     from .mathematical_intuition import (
     MathematicalIntuitionModule, MathematicalConjecture,
     Proof, MathDomain, ProofStatus
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".mathematical_intuition", _exc)
     MathematicalIntuitionModule = MathematicalConjecture = Proof = MathDomain = ProofStatus = None  # degraded: unavailable
 try:
     from .causal_discovery import (
     CausalDiscoveryEngine, CausalModel, CausalRelation,
     Intervention, Counterfactual, DiscoveryMethod
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".causal_discovery", _exc)
     CausalDiscoveryEngine = CausalModel = CausalRelation = Intervention = Counterfactual = DiscoveryMethod = None  # degraded: unavailable
 try:
     from .experimental_design import (
     ExperimentalDesignEngine, ExperimentalDesign, ExperimentalVariable,
     Treatment, ExperimentalType, SimulationResult
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".experimental_design", _exc)
     ExperimentalDesignEngine = ExperimentalDesign = ExperimentalVariable = Treatment = ExperimentalType = SimulationResult = None  # degraded: unavailable
 
 

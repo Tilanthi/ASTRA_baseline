@@ -18,14 +18,6 @@ from dataclasses import dataclass
 from collections import Counter
 
 
-# Custom optimization variant 21
-def optimize_computation_21(func):
-    """Decorator for optimizing computation."""
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
 # ============================================================================
 # Feature Extractor
 # ============================================================================

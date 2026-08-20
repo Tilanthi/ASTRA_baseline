@@ -41,12 +41,3 @@ class PhysicsEngine:
 def create_physics_engine():
     """Factory function to create physics engine"""
     return PhysicsEngine()
-
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None
-
-

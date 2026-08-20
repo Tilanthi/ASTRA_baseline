@@ -11,43 +11,62 @@ The central coordinator that integrates:
 This system is designed for astronomical applications with physics-aware inference.
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import sys
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     sys = None  # degraded: unavailable
 try:
     from pathlib import Path
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("pathlib", _exc)
     Path = None  # degraded: unavailable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Any, Type
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Any = Type = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from datetime import datetime
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("datetime", _exc)
     datetime = None  # degraded: unavailable
 try:
     from enum import Enum
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = None  # degraded: unavailable
 try:
     import json
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     json = None  # degraded: unavailable
 try:
     import asyncio
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     asyncio = None  # degraded: unavailable
 
 # V36 imports
@@ -58,37 +77,43 @@ try:
     SymbolicCausalAbstraction,
     CrossDomainAnalogyEngine,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..symbolic", _exc)
     V38CompleteSystem = SymbolicCausalAbstraction = CrossDomainAnalogyEngine = None  # degraded: unavailable
 
 # MORK imports
 try:
     from ..swarm import AgentNamespace, BiologicalField, FieldType, LocalMORKStorage
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..swarm", _exc)
     AgentNamespace = BiologicalField = FieldType = LocalMORKStorage = None  # degraded: unavailable
 
 # ASTRO-SWARM components (local imports)
 try:
     from .physics import PhysicsEngine, PhysicalConstants, AstrophysicalConstraints
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".physics", _exc)
     PhysicsEngine = PhysicalConstants = AstrophysicalConstraints = None  # degraded: unavailable
 try:
     from .knowledge_graph import (
     AstronomicalKnowledgeGraph, AstroNode, AstroEdge,
     AstroNodeType, RelationType, MechanismNode, HypothesisNode
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".knowledge_graph", _exc)
     AstronomicalKnowledgeGraph = AstroNode = AstroEdge = AstroNodeType = RelationType = MechanismNode = HypothesisNode = None  # degraded: unavailable
 try:
     from .inference import BayesianSwarmInference, InferenceResult
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".inference", _exc)
     BayesianSwarmInference = InferenceResult = None  # degraded: unavailable
 try:
     from .agents import (
     AstroAgent, SpectroscopicAgent, PhotometricAgent,
     DynamicalAgent, ImagingAgent, StigmergicMemory, PheromoneTrail
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".agents", _exc)
     AstroAgent = SpectroscopicAgent = PhotometricAgent = DynamicalAgent = ImagingAgent = StigmergicMemory = PheromoneTrail = None  # degraded: unavailable
 
 

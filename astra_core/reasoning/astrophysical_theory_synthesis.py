@@ -978,12 +978,4 @@ def get_theory_builder() -> TheoryBuilder:
     return TheoryBuilder()
 
 
-
-# Test helper for predictive_modeling
-def test_predictive_modeling_function(data):
-    """Test function for predictive_modeling."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
 # Custom optimization variant 21

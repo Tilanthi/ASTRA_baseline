@@ -9,65 +9,87 @@ Integrates all advanced components:
 - Iterative refinement with error correction
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import List, Tuple, Dict, Set, Optional, Callable, Any
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     List = Tuple = Dict = Set = Optional = Callable = Any = None  # degraded: unavailable
 try:
     from dataclasses import dataclass
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = None  # degraded: unavailable
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 
 try:
     from .grid_dsl import Grid, GridObject, empty_grid
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".grid_dsl", _exc)
     Grid = GridObject = empty_grid = None  # degraded: unavailable
 try:
     from .hypothesis_engine import (
     TransformationHypothesis, TransformationType,
     HypothesisGenerator, HypothesisTester
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hypothesis_engine", _exc)
     TransformationHypothesis = TransformationType = HypothesisGenerator = HypothesisTester = None  # degraded: unavailable
 try:
     from .pattern_library import PatternDetector, PatternPrimitives, CompositeTransform
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".pattern_library", _exc)
     PatternDetector = PatternPrimitives = CompositeTransform = None  # degraded: unavailable
 try:
     from .systematic_search import (
     ConstraintPropagator, ProgramSynthesizer, BeamSearchSolver,
     AnalogicalTransfer, TaskAnalysis
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".systematic_search", _exc)
     ConstraintPropagator = ProgramSynthesizer = BeamSearchSolver = AnalogicalTransfer = TaskAnalysis = None  # degraded: unavailable
 try:
     from .extended_generators import ExtendedGenerators
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".extended_generators", _exc)
     ExtendedGenerators = None  # degraded: unavailable
 try:
     from .deep_synthesis import DeepProgramSynthesizer, EnumerativeSynthesizer
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".deep_synthesis", _exc)
     DeepProgramSynthesizer = EnumerativeSynthesizer = None  # degraded: unavailable
 try:
     from .neural_patterns import (
     GridEncoder, PatternMatcher, TransformationPrioritizer, PatternCluster
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".neural_patterns", _exc)
     GridEncoder = PatternMatcher = TransformationPrioritizer = PatternCluster = None  # degraded: unavailable
 try:
     from .iterative_refinement import (
     ErrorAnalyzer, SolutionRefiner, IterativeRefinementSolver,
     HypothesisCombiner, ConstraintBasedRepair
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".iterative_refinement", _exc)
     ErrorAnalyzer = SolutionRefiner = IterativeRefinementSolver = HypothesisCombiner = ConstraintBasedRepair = None  # degraded: unavailable
 
 

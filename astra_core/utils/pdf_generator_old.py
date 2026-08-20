@@ -43,12 +43,14 @@ try:
     FPDF_AVAILABLE = True
 except ImportError:
     FPDF_AVAILABLE = False
+    FPDF = None
 
 try:
     from reportlab.lib.utils import ImageReader
     IMAGEREADER_AVAILABLE = True
 except ImportError:
     IMAGEREADER_AVAILABLE = False
+    ImageReader = None
 
 
 class PDFFormat(Enum):

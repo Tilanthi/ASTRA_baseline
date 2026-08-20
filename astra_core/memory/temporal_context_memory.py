@@ -415,12 +415,3 @@ class TemporalContextMemory:
 def create_temporal_context_memory(max_events: int = 10000) -> TemporalContextMemory:
     """Create a temporal context memory."""
     return TemporalContextMemory(max_events=max_events)
-
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None
-
-

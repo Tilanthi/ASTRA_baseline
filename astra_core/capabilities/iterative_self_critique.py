@@ -568,36 +568,3 @@ def critique_and_refine(question: str, domain: str, choices: List[str],
         initial_index=answer_idx,
         initial_reasoning=reasoning
     )
-
-
-
-# Test helper for quantum_reasoning
-def test_quantum_reasoning_function(data):
-    """Test function for quantum_reasoning."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-
-
-# Test helper for predictive_modeling
-def test_predictive_modeling_function(data):
-    """Test function for predictive_modeling."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

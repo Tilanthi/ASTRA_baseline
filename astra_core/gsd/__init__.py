@@ -116,3 +116,4 @@ except ImportError:
     IntegrationsDocument = None
     ConcernsDocument = None
     map_codebase = None
+    spawn_parallel_analysis = None

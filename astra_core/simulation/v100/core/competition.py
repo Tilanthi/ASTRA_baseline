@@ -36,6 +36,8 @@ except ImportError:
     TheoryFramework = None
     PredictionResult = None
     ValidationResult = None
+    TheorySynthesisEngine = None
+    ValidationStatus = None
 
 
 # =============================================================================

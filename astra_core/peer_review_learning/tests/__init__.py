@@ -4,6 +4,7 @@ Tests for Peer Review Learning Architecture
 Comprehensive test suite for all peer review learning modules.
 """
 
+import sys
 import pytest
 import numpy as np
 from datetime import datetime
@@ -397,4 +398,4 @@ class TestIntegration:
 
 
 if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+    sys.exit(pytest.main([__file__, '-v']))

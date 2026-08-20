@@ -8,52 +8,72 @@ Implements program synthesis via systematic search with:
 - Analogical transfer from solved tasks
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import List, Tuple, Dict, Set, Optional, Callable, Any
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     List = Tuple = Dict = Set = Optional = Callable = Any = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from enum import Enum, auto
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = auto = None  # degraded: unavailable
 try:
     from collections import defaultdict
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("collections", _exc)
     defaultdict = None  # degraded: unavailable
 try:
     import heapq
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     heapq = None  # degraded: unavailable
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 
 try:
     from .grid_dsl import Grid, GridObject, BoundingBox, empty_grid
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".grid_dsl", _exc)
     Grid = GridObject = BoundingBox = empty_grid = None  # degraded: unavailable
 try:
     from .hypothesis_engine import (
     TransformationHypothesis, TransformationType,
     HypothesisGenerator, HypothesisTester
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hypothesis_engine", _exc)
     TransformationHypothesis = TransformationType = HypothesisGenerator = HypothesisTester = None  # degraded: unavailable
 try:
     from .pattern_library import (
     PatternDetector, PatternPrimitives, ObjectRelationships,
     CompositeTransform
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".pattern_library", _exc)
     PatternDetector = PatternPrimitives = ObjectRelationships = CompositeTransform = None  # degraded: unavailable
 
 

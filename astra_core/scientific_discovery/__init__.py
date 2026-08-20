@@ -22,6 +22,16 @@ Date: 2025-12-27
 # =============================================================================
 # Research Paper Processing
 # =============================================================================
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .research_papers import (
     PDFProcessor,
@@ -33,7 +43,8 @@ try:
     extract_paper_metadata,
     build_citation_network,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".research_papers", _exc)
     PDFProcessor = CitationNetwork = LiteratureMiner = PaperAnalyzer = Paper = CitationGraph = extract_paper_metadata = build_citation_network = None  # degraded: unavailable
 
 # =============================================================================
@@ -50,7 +61,8 @@ try:
     query_catalog,
     cross_match_catalogs,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".astro_databases", _exc)
     AstroDatabaseConnector = VizierClient = SIMBADClient = ADSClient = CatalogQuery = SourceInfo = query_catalog = cross_match_catalogs = None  # degraded: unavailable
 
 # =============================================================================
@@ -68,7 +80,8 @@ try:
     download_observation,
     query_archive,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".data_repositories", _exc)
     DataRepositoryManager = ALMAArchive = NASAArchive = ESOArchive = CADCArchive = ArxivClient = DatasetDownloader = download_observation = query_archive = None  # degraded: unavailable
 
 # =============================================================================
@@ -87,7 +100,8 @@ try:
     fit_sed,
     identify_lines,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".advanced_analysis", _exc)
     AdvancedAnalyzer = GalaxyClassifier = PhotometricRedshiftEstimator = SEDFitter = SourceExtractor = LineIdentifier = classify_galaxy = estimate_photoz = fit_sed = identify_lines = None  # degraded: unavailable
 
 # =============================================================================
@@ -105,7 +119,8 @@ try:
     solve_mhd,
     run_radiation_hydro,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".theoretical_physics", _exc)
     TheoreticalPhysicsEngine = MHDSolver = PlasmaPhysicsModule = RadiationHydrodynamics = GRMHDModule = CosmicRayTransport = MagneticReconnection = solve_mhd = run_radiation_hydro = None  # degraded: unavailable
 
 # =============================================================================
@@ -124,7 +139,8 @@ try:
     review_literature,
     propose_experiment,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".discovery_orchestrator", _exc)
     ScientificDiscoveryOrchestrator = DiscoveryTask = DiscoveryResult = Hypothesis = ExperimentProposal = LiteratureReview = create_discovery_system = autonomous_discovery = review_literature = propose_experiment = None  # degraded: unavailable
 
 __all__ = [
@@ -196,29 +212,3 @@ __all__ = [
 ]
 
 __version__ = '1.0.0-Discovery'
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-

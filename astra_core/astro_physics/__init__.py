@@ -40,25 +40,40 @@ Version: 3.1.0 (V44)
 """
 
 # Core components (using relative imports)
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .core import AstroSwarmSystem
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".core", _exc)
     AstroSwarmSystem = None  # degraded: unavailable
 try:
     from .physics import PhysicsEngine, AstrophysicalConstraints
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".physics", _exc)
     PhysicsEngine = AstrophysicalConstraints = None  # degraded: unavailable
 try:
     from .knowledge_graph import AstronomicalKnowledgeGraph
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".knowledge_graph", _exc)
     AstronomicalKnowledgeGraph = None  # degraded: unavailable
 try:
     from .inference import BayesianSwarmInference
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".inference", _exc)
     BayesianSwarmInference = None  # degraded: unavailable
 try:
     from .agents import AstroAgent, SpectroscopicAgent, PhotometricAgent, DynamicalAgent
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".agents", _exc)
     AstroAgent = SpectroscopicAgent = PhotometricAgent = DynamicalAgent = None  # degraded: unavailable
 
 # Extended capability modules
@@ -67,49 +82,56 @@ try:
     StatisticalEquilibriumSolver, LineProfileSynthesizer,
     DustContinuumRT, PDRInterface
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".radiative_transfer", _exc)
     StatisticalEquilibriumSolver = LineProfileSynthesizer = DustContinuumRT = PDRInterface = None  # degraded: unavailable
 try:
     from .data_interface import (
     FITSHandler, SpectralCubeHandler, VOTableHandler,
     RegionHandler, CASAInterface
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".data_interface", _exc)
     FITSHandler = SpectralCubeHandler = VOTableHandler = RegionHandler = CASAInterface = None  # degraded: unavailable
 try:
     from .uncertainty_quantification import (
     PriorSet, GaussianLikelihood, MetropolisHastings,
     EnsembleSampler, NestedSampler, FisherMatrix
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".uncertainty_quantification", _exc)
     PriorSet = GaussianLikelihood = MetropolisHastings = EnsembleSampler = NestedSampler = FisherMatrix = None  # degraded: unavailable
 try:
     from .sed_fitting import (
     FilterLibrary, ModifiedBlackbody, StellarPopulation,
     AGNTemplate, CompositeSED, SEDFitter
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sed_fitting", _exc)
     FilterLibrary = ModifiedBlackbody = StellarPopulation = AGNTemplate = CompositeSED = SEDFitter = None  # degraded: unavailable
 try:
     from .chemical_networks import (
     ReactionNetwork, ChemistrySolver, PDRChemistry,
     GrainChemistry, HotCoreChemistry
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".chemical_networks", _exc)
     ReactionNetwork = ChemistrySolver = PDRChemistry = GrainChemistry = HotCoreChemistry = None  # degraded: unavailable
 try:
     from .interferometry import (
     ArrayConfiguration, UVSimulator, Imager,
     CLEANDeconvolver, SelfCalibrator, VisibilityModeler
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".interferometry", _exc)
     ArrayConfiguration = UVSimulator = Imager = CLEANDeconvolver = SelfCalibrator = VisibilityModeler = None  # degraded: unavailable
 try:
     from .advanced_lensing import (
     Cosmology, SIEProfile, NFWProfile, CompositeLensModel,
     TimeDelayCosmography, SubstructureDetector
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".advanced_lensing", _exc)
     Cosmology = SIEProfile = NFWProfile = CompositeLensModel = TimeDelayCosmography = SubstructureDetector = None  # degraded: unavailable
 try:
     from .turbulence_analysis import (
@@ -117,7 +139,8 @@ try:
     VelocityAnalysis, SpectralPCA, DavisChandrasekharFermi,
     HistogramRelativeOrientations, TurbulenceStatistics
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".turbulence_analysis", _exc)
     StructureFunctionAnalysis = PowerSpectrumAnalysis = VelocityAnalysis = SpectralPCA = DavisChandrasekharFermi = HistogramRelativeOrientations = TurbulenceStatistics = None  # degraded: unavailable
 try:
     from .spectroscopic_databases import (
@@ -125,7 +148,8 @@ try:
     SplatalogueInterface, HITRANDatabase, UnifiedSpectroscopyQuery,
     SpectralLine, MoleculeData, CollisionPartner
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".spectroscopic_databases", _exc)
     CDMSDatabase = JPLDatabase = LAMDADatabase = SplatalogueInterface = HITRANDatabase = UnifiedSpectroscopyQuery = SpectralLine = MoleculeData = CollisionPartner = None  # degraded: unavailable
 try:
     from .multiscale_coupling import (
@@ -134,7 +158,8 @@ try:
     StellarFeedbackModel, AGNFeedbackModel,
     CoolingFunction, HierarchicalRefinement
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".multiscale_coupling", _exc)
     MultiScaleSimulation = ZoomRegion = ScaleCoupler = TurbulentPressureModel = StarFormationModel = StellarFeedbackModel = AGNFeedbackModel = CoolingFunction = HierarchicalRefinement = None  # degraded: unavailable
 
 # V43: Core ISM Physics
@@ -144,14 +169,16 @@ try:
     FragmentationCriterion, AccretionRates,
     get_jeans_analyzer, get_virial_analyzer
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".gravitational_collapse", _exc)
     JeansAnalysis = VirialAnalysis = FreefallCollapse = FragmentationCriterion = AccretionRates = get_jeans_analyzer = get_virial_analyzer = None  # degraded: unavailable
 try:
     from .shock_physics import (
     RankineHugoniot, JShock, CShock, ShockChemistry,
     OutflowShockAnalysis, get_shock_chemistry
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".shock_physics", _exc)
     RankineHugoniot = JShock = CShock = ShockChemistry = OutflowShockAnalysis = get_shock_chemistry = None  # degraded: unavailable
 try:
     from .hii_region_physics import (
@@ -159,14 +186,16 @@ try:
     RecombinationLines, FreeFreeEmission,
     stromgren_radius, get_diagnostics_calculator
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hii_region_physics", _exc)
     StromgrenSphere = NebularDiagnosticsCalculator = RecombinationLines = FreeFreeEmission = stromgren_radius = get_diagnostics_calculator = None  # degraded: unavailable
 try:
     from .supernova_remnant_physics import (
     SedovTaylorBlastwave, SNREvolution, SynchrotronEmission,
     XRayThermalEmission, get_snr_evolution
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".supernova_remnant_physics", _exc)
     SedovTaylorBlastwave = SNREvolution = SynchrotronEmission = XRayThermalEmission = get_snr_evolution = None  # degraded: unavailable
 
 # V43: Data Analysis Infrastructure
@@ -176,7 +205,8 @@ try:
     LineIdentifier, OpticalDepthCorrector, ColumnDensityCalculator,
     fit_gaussian_line, identify_line
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".spectral_line_analysis", _exc)
     GaussianLineFitter = VoigtProfileFitter = HyperfineStructureFitter = LineIdentifier = OpticalDepthCorrector = ColumnDensityCalculator = fit_gaussian_line = identify_line = None  # degraded: unavailable
 try:
     from .source_extraction import (
@@ -184,7 +214,8 @@ try:
     DendrogramExtractor, FilamentFinder, CoreCatalogBuilder,
     detect_sources, extract_dendrogram, find_filaments
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".source_extraction", _exc)
     SourceDetector = AperturePhotometry = PSFPhotometry = DendrogramExtractor = FilamentFinder = CoreCatalogBuilder = detect_sources = extract_dendrogram = find_filaments = None  # degraded: unavailable
 try:
     from .kinematic_analysis import (
@@ -192,7 +223,8 @@ try:
     InfallSignatureDetector, OutflowAnalyzer, TurbulentFieldDecomposer,
     make_moment_maps, extract_pv_diagram, detect_infall
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".kinematic_analysis", _exc)
     MomentMapGenerator = PVDiagramExtractor = RotationCurveAnalyzer = InfallSignatureDetector = OutflowAnalyzer = TurbulentFieldDecomposer = make_moment_maps = extract_pv_diagram = detect_infall = None  # degraded: unavailable
 
 # V44: Extended Astrophysics Capabilities
@@ -202,7 +234,8 @@ try:
     RadioSurveyAnalyzer, VariabilityAnalyzer,
     create_analyzer, get_cross_match_tolerance, load_survey_catalog, estimate_luminosity
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".radio_surveys", _exc)
     RadioSource = SurveyCatalog = RadioSourceType = SurveyType = RadioSurveyAnalyzer = VariabilityAnalyzer = create_analyzer = get_cross_match_tolerance = load_survey_catalog = estimate_luminosity = None  # degraded: unavailable
 try:
     from .star_formation import (
@@ -212,7 +245,8 @@ try:
     StellarEvolution, SupernovaFeedback,
     create_stellar_population, sample_masses_from_imf, calculate_sfr_from_luminosity
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".star_formation", _exc)
     StellarPhase = RemnantType = SFTRindicator = StellarPopulation = Star = InitialMassFunction = StarFormationLaw = StarFormationRateTracer = StellarEvolution = SupernovaFeedback = create_stellar_population = sample_masses_from_imf = calculate_sfr_from_luminosity = None  # degraded: unavailable
 try:
     from .sph_gas_dynamics import (
@@ -221,7 +255,8 @@ try:
     TurbulentDriver, GravitySolver,
     create_sph_simulation, find_filaments_in_data, get_h2_fraction
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sph_gas_dynamics", _exc)
     SPHParticle = SPHKernel = KernelType = Filament = SPHSimulation = FilamentFinder = MolecularCloudFormation = TurbulentDriver = GravitySolver = create_sph_simulation = find_filaments_in_data = get_h2_fraction = None  # degraded: unavailable
 try:
     from .infrared_submm import (
@@ -230,7 +265,8 @@ try:
     ModifiedBlackbody, IRColorAnalysis, SubmillimeterAnalysis, LineCooling,
     fit_dust_sed, calculate_gas_mass, get_ir_color
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".infrared_submm", _exc)
     IRBand = PAHFeature = IRPhotometry = PAHSpectrum = DustProperties = ModifiedBlackbody = IRColorAnalysis = SubmillimeterAnalysis = LineCooling = fit_dust_sed = calculate_gas_mass = get_ir_color = None  # degraded: unavailable
 try:
     from .time_series_analysis import (
@@ -239,7 +275,8 @@ try:
     CrossCorrelationAnalyzer, BurstDetector,
     analyze_power_spectrum, detect_periodicity, compute_structure_function, cross_correlate_series
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".time_series_analysis", _exc)
     SignalType = TimeSeries = PeriodogramResult = PowerSpectrumAnalyzer = VariabilityDetector = WaveletAnalyzer = CrossCorrelationAnalyzer = BurstDetector = analyze_power_spectrum = detect_periodicity = compute_structure_function = cross_correlate_series = None  # degraded: unavailable
 try:
     from .data_visualization import (
@@ -247,7 +284,8 @@ try:
     CubeVisualizer, SpectrumVisualizer, MultiPanelFigure,
     create_moment_map_cube, plot_spectrum
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".data_visualization", _exc)
     VisualizationType = DataCube = Spectrum = CubeVisualizer = SpectrumVisualizer = MultiPanelFigure = create_moment_map_cube = plot_spectrum = None  # degraded: unavailable
 
 # V45: Deep Learning Integration (Phase 1)
@@ -266,7 +304,8 @@ try:
     SpectralDataset,
     ImageDataset
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".deep_learning", _exc)
     DLConfig = GalaxyMorphologyCNN = ISMStructureCNN = SpectralAutoencoder = LightCurveAutoencoder = TimeSeriesTransformer = RadiativeTransferPINN = StellarStructurePINN = CrossModalMatcher = train_autoencoder = SpectralDataset = ImageDataset = None  # degraded: unavailable
 try:
     from .deep_learning.filament_detector import (
@@ -277,7 +316,8 @@ try:
     FilamentEncoder,
     train_filament_detector
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".deep_learning.filament_detector", _exc)
     FilamentDetector = VelocityCoherentFilamentDetector = FilamentProperties = FilamentDetectionHead = FilamentEncoder = train_filament_detector = None  # degraded: unavailable
 try:
     from .deep_learning.molecular_cloud_segmenter import (
@@ -288,7 +328,8 @@ try:
     MaskRCNNBackbone,
     train_cloud_segmenter
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".deep_learning.molecular_cloud_segmenter", _exc)
     MolecularCloudSegmenter = VelocityCubeSegmenter = CloudProperties = CloudPropertyHead = MaskRCNNBackbone = train_cloud_segmenter = None  # degraded: unavailable
 try:
     from .deep_learning.shock_detector import (
@@ -300,7 +341,8 @@ try:
     ShockParameterRegressor,
     train_shock_detector
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".deep_learning.shock_detector", _exc)
     InterstellarShockDetector = SpectralLineShockDetector = TemporalShockDetector = ShockProperties = ShockTypeClassifier = ShockParameterRegressor = train_shock_detector = None  # degraded: unavailable
 
 # V45: Real-Time Processing (Phase 2)
@@ -315,7 +357,8 @@ try:
     TransientType,
     create_alert_processor
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".streaming.streaming_alert_processor", _exc)
     StreamingAlertProcessor = AlertClassifier = AlertPrioritizer = AlertMetadata = ProcessedAlert = AlertSource = TransientType = create_alert_processor = None  # degraded: unavailable
 try:
     from .streaming.real_time_anomaly_detection import (
@@ -327,7 +370,8 @@ try:
     OnlineStandardScaler,
     create_anomaly_detector
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".streaming.real_time_anomaly_detection", _exc)
     RealTimeAnomalyDetector = LightCurveAnomalyDetector = SpectralAnomalyDetector = AnomalyReport = IsolationForestOnline = OnlineStandardScaler = create_anomaly_detector = None  # degraded: unavailable
 
 # V45: Multi-Messenger Joint Inference (Phase 3)
@@ -344,7 +388,8 @@ try:
     JointGWEMDetection,
     create_gw_em_correlator
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".multi_messenger.gw_em_correlation", _exc)
     GWEMCorrelator = TemporalCorrelation = SpatialCorrelation = DistanceConsistency = KilonovaModel = MultiEpochCorrelation = GWTrigger = EMCounterpart = JointGWEMDetection = create_gw_em_correlator = None  # degraded: unavailable
 try:
     from .multi_messenger.joint_lightcurve_modeling import (
@@ -358,7 +403,8 @@ try:
     PhysicalParameters,
     create_joint_fitter
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".multi_messenger.joint_lightcurve_modeling", _exc)
     JointLightCurveFitter = GWStrainModel = KilonovaLightCurveModel = GRBAfterglowModel = NeutrinoFluenceModel = JointLikelihood = MultiMessengerData = PhysicalParameters = create_joint_fitter = None  # degraded: unavailable
 
 # V45: Causal Discovery for Astronomy (Phase 4)
@@ -371,7 +417,8 @@ try:
     create_astro_fci,
     create_temporal_discovery
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..causal.discovery.astro_causal_discovery", _exc)
     AstroFCI = TemporalCausalDiscovery = AstronomicalConditionalIndependence = CausalGraph = create_astro_fci = create_temporal_discovery = None  # degraded: unavailable
 
 __version__ = "4.0.0"  # V45 - Deep Learning & Multi-Messenger Integration

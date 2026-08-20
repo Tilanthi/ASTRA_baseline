@@ -172,6 +172,23 @@ try:
     )
 except ImportError:
     MORKOntology = None
+    DistanceMetric = None
+    EdgeType = None
+    ExpandedMORK = None
+    GraphEdge = None
+    GraphNode = None
+    InMemoryVectorIndex = None
+    MORKConcept = None
+    MemoryGraph = None
+    MilvusVectorStore = None
+    NodeType = None
+    OntologyNode = None
+    RRFResult = None
+    ScientificDomain = None
+    SemanticRelation = None
+    SemanticRelationType = None
+    ThreeWayRRF = None
+    VectorBackend = None
 # =============================================================================
 # PHASE 2-4 ENHANCEMENTS: Domain Expansion, Physics Integration, Validation
 # =============================================================================
@@ -349,18 +366,29 @@ create_stan_system = create_enhanced_stan_system
 # PDF Generator (Publication-Ready Paper Generation)
 # =============================================================================
 try:
-    from .utils.pdf_generator import (
+    # The public PDF surface lives on the `utils` package, which selects between the
+    # new ASTRAPDFGenerator and the legacy generator.  Importing straight from
+    # `.utils.pdf_generator` silently nulled the whole API (those names live in
+    # `pdf_generator_old`), so import from the package facade instead.
+    from .utils import (
         PDFGenerator,
         PDFFormat,
         TextAlign,
         PDFSection,
         PDFTable,
         PDFCodeBlock,
-        generate_stan_paper_with_figures,
-        create_publication_pdf_from_markdown,
-        REPORTLAB_AVAILABLE,
-        FPDF_AVAILABLE,
     )
+    from .utils.pdf_generator import REPORTLAB_AVAILABLE
+    try:
+        from .utils.pdf_generator_old import (
+            generate_stan_paper_with_figures,
+            create_publication_pdf_from_markdown,
+            FPDF_AVAILABLE,
+        )
+    except ImportError:
+        generate_stan_paper_with_figures = None
+        create_publication_pdf_from_markdown = None
+        FPDF_AVAILABLE = False
 except ImportError:
     PDFGenerator = None
     PDFFormat = None
@@ -442,7 +470,7 @@ except ImportError:
 # =============================================================================
 # Transformative enhancement: Full autonomous research cycle capability
 try:
-    from .v7_autonomous_research import (
+    from .autonomous_research import (
         # Main autonomous scientist system
         V7AutonomousScientist,
         create_v7_scientist,

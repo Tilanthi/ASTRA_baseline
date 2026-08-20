@@ -101,16 +101,43 @@ except ImportError:
     _KERNEL_MEMORY_AVAILABLE = False
     MemoryTemporalScale = None
     TemporalScale = None
+    CausalAwareMemory = None
+    CausalMemoryMode = None
+    CausalMemoryTrace = None
+    FullyIntegratedMemorySystem = None
+    ImportancePredictor = None
+    IntegratedPersistentMemory = None
+    KernelAssociativeMemory = None
+    KernelType = None
+    MemoryItem = None
+    MemoryState = None
+    MetacognitiveMemory = None
+    MultiScaleTemporalMemory = None
+    SwarmMemoryIntegration = None
+    create_causal_aware_memory = None
+    create_importance_predictor = None
+    create_integrated_memory = None
+    create_kernel_memory = None
+    create_metacognitive_memory = None
+    create_persistent_memory = None
+    create_swarm_integrated_memory = None
+    create_temporal_memory = None
 
 # Legacy Memory Components (V36-V39)
 try:
     from .mork_ontology import MORKOntology, OntologyNode, SemanticRelation, SemanticRelationType
-    from .memory_graph import MemoryGraph, NodeType, EdgeType
-    from .milvus_store import MilvusVectorStore, VectorBackend
+    from .memory_graph import MemoryGraph, GraphNode, GraphEdge, NodeType, EdgeType
+    from .milvus_store import (
+        MilvusVectorStore, VectorBackend, DistanceMetric, InMemoryVectorIndex,
+    )
     from .mork_expanded import ExpandedMORK, MORKConcept, ScientificDomain
-    from .rrf_fusion import ThreeWayRRF, RankingConfig
+    from .rrf_fusion import ThreeWayRRF, RRFResult, RankingConfig
     _LEGACY_MEMORY_AVAILABLE = True
-except ImportError:
+except ImportError as _exc:  # pragma: no cover - optional legacy surface
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "Legacy memory components unavailable: %s: %s", type(_exc).__name__, _exc
+    )
     _LEGACY_MEMORY_AVAILABLE = False
 
 __all__ = [
@@ -200,10 +227,3 @@ if _LEGACY_MEMORY_AVAILABLE:
         "ThreeWayRRF",
         "RankingConfig",
     ])
-
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None

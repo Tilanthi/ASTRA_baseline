@@ -33,6 +33,11 @@ try:
     ASTROPY_AVAILABLE = True
 except ImportError:
     ASTROPY_AVAILABLE = False
+    SkyCoord = None
+    Table = None
+    Time = None
+    u = None
+    vstack = None
 
 try:
     from astroquery.vizier import Vizier
@@ -45,6 +50,13 @@ try:
     ASTROQUERY_AVAILABLE = True
 except ImportError:
     ASTROQUERY_AVAILABLE = False
+    Eso = None
+    Gaia = None
+    Irsa = None
+    MASTObs = None
+    Ned = None
+    Simbad = None
+    Vizier = None
 
 
 class ArchiveType(Enum):

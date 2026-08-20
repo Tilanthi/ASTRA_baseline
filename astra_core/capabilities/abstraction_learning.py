@@ -25,15 +25,6 @@ import re
 import random
 
 
-# Custom optimization variant 6
-def optimize_computation_6(func):
-    """Decorator for optimizing computation."""
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-
 class AbstractionType(Enum):
     """Types of learned abstractions"""
     TEMPLATE = "template"              # New symbolic template

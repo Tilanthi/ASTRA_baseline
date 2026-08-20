@@ -27,37 +27,55 @@ Version: 1.0.0
 Date: 2025-12-27
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 try:
     import uuid
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     uuid = None  # degraded: unavailable
 try:
     import logging
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     logging = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Any, Tuple
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Any = Tuple = None  # degraded: unavailable
 try:
     from enum import Enum
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = None  # degraded: unavailable
 try:
     from pathlib import Path
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("pathlib", _exc)
     Path = None  # degraded: unavailable
 try:
     import json
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     json = None  # degraded: unavailable
 
 # Import discovery components
@@ -66,14 +84,16 @@ try:
     AdaptiveReasoningController, DiscoveryPhase,
     get_adaptive_reasoning_controller
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".adaptive_reasoning", _exc)
     AdaptiveReasoningController = DiscoveryPhase = get_adaptive_reasoning_controller = None  # degraded: unavailable
 try:
     from .feasibility_checker import (
     FeasibilityAssessor, SafetyLimits, FeasibilityResult,
     create_feasibility_assessor
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".feasibility_checker", _exc)
     FeasibilityAssessor = SafetyLimits = FeasibilityResult = create_feasibility_assessor = None  # degraded: unavailable
 
 # Import V41, V50, V92 components (try both relative and absolute imports)

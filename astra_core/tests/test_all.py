@@ -4,6 +4,7 @@ STAN-CORE V4.0 Tests
 Run all tests with: python -m pytest tests/
 """
 
+import sys
 import pytest
 import numpy as np
 import pandas as pd
@@ -276,4 +277,4 @@ class TestIntegration:
 
 
 if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+    sys.exit(pytest.main([__file__, '-v']))

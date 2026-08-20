@@ -30,6 +30,8 @@ try:
     _LLM_AVAILABLE = True
 except ImportError:
     _LLM_AVAILABLE = False
+    LLMConfig = None
+    LLMInference = None
 
 # STAN advanced capabilities
 _V36_AVAILABLE = False  # V36 not available in STAN_IX_ASTRO (uses different structure)

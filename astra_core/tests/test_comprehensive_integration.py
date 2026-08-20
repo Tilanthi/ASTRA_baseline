@@ -604,11 +604,19 @@ def run_all_tests():
     passed = 0
     failed = 0
 
+    # NOTE: `wrapper()` (see `test_section`) never re-raises -- it returns
+    # True/False.  The old loop wrapped it in try/except and counted every call
+    # as a pass, so `failed` was structurally always 0 and the suite reported
+    # "N/N passed" even when every single section printed FAILED.  Count the
+    # returned value instead.
     for test_func in test_functions:
         try:
-            test_func()
-            passed += 1
+            ok = test_func()
         except Exception:
+            ok = False
+        if ok:
+            passed += 1
+        else:
             failed += 1
 
     # Print summary

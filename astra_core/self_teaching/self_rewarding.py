@@ -33,6 +33,7 @@ try:
     EMBEDDING_AVAILABLE = True
 except ImportError:
     EMBEDDING_AVAILABLE = False
+    EnhancedRewardCalculator = None
 
 try:
     from .scientific_data import (
@@ -42,6 +43,9 @@ try:
     SCIENTIFIC_DATA_AVAILABLE = True
 except ImportError:
     SCIENTIFIC_DATA_AVAILABLE = False
+    PhysicalLawDiscovery = None
+    PhysicsDataLibrary = None
+    get_scientific_discovery_reward = None
 
 try:
     from .arxiv_integration import (
@@ -51,12 +55,15 @@ try:
     ARXIV_AVAILABLE = True
 except ImportError:
     ARXIV_AVAILABLE = False
+    ContinuousLearningSystem = None
+    get_literature_learning_reward = None
 
 try:
     from .multi_agent_swarm import MultiAgentSwarm
     SWARM_AVAILABLE = True
 except ImportError:
     SWARM_AVAILABLE = False
+    MultiAgentSwarm = None
 
 
 class RewardComponent(Enum):

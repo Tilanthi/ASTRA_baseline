@@ -6,65 +6,89 @@ with previous STAN versions, representing the paradigm shift from simulated
 intelligence to experienced intelligence.
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Any, Union, Callable
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Any = Union = Callable = None  # degraded: unavailable
 try:
     import logging
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     logging = None  # degraded: unavailable
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 
 # Import V94 components
 try:
     from .embodied_learning_engine import EmbodiedLearningEngine, LearningState
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".embodied_learning_engine", _exc)
     EmbodiedLearningEngine = LearningState = None  # degraded: unavailable
 try:
     from .sensorimotor_system import SensorimotorInterface, WorldAction, Experience
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sensorimotor_system", _exc)
     SensorimotorInterface = WorldAction = Experience = None  # degraded: unavailable
 try:
     from .developmental_learning import DevelopmentalLearning, DevelopmentalStage
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".developmental_learning", _exc)
     DevelopmentalLearning = DevelopmentalStage = None  # degraded: unavailable
 try:
     from .common_sense_engine import CommonSenseEngine
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".common_sense_engine", _exc)
     CommonSenseEngine = None  # degraded: unavailable
 try:
     from .language_grounding import LanguageGroundingEngine
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".language_grounding", _exc)
     LanguageGroundingEngine = None  # degraded: unavailable
 
 # Import previous versions for integration
 try:
     from ..v80 import V80CompleteSystem
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..v80", _exc)
     V80CompleteSystem = None  # degraded: unavailable
 try:
     from ..v91 import V91CompleteSystem
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..v91", _exc)
     V91CompleteSystem = None  # degraded: unavailable
 try:
     from ..v92 import V92CompleteSystem
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..v92", _exc)
     V92CompleteSystem = None  # degraded: unavailable
 try:
     from ..v93 import V93CompleteSystem
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..v93", _exc)
     V93CompleteSystem = None  # degraded: unavailable
 
 

@@ -18,25 +18,40 @@ Date: 2025-12-11
 Version: 40.0
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import os
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     os = None  # degraded: unavailable
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Any, Tuple, Callable
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Any = Tuple = Callable = None  # degraded: unavailable
 try:
     from enum import Enum
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = None  # degraded: unavailable
 
 # Import V40 components
@@ -48,7 +63,8 @@ try:
     SubProblem,
     DecompositionStrategy
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".multi_step_decomposition", _exc)
     MultiStepDecomposer = CompositionEngine = ProblemDecomposition = SubProblem = DecompositionStrategy = None  # degraded: unavailable
 
 try:
@@ -57,7 +73,8 @@ try:
     Hypothesis,
     HypothesisStatus
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hypothesis_engine", _exc)
     HypothesisEngine = Hypothesis = HypothesisStatus = None  # degraded: unavailable
 
 try:
@@ -67,7 +84,8 @@ try:
     PrologEngine,
     LogicalProof
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".formal_logic", _exc)
     FormalLogicEngine = Z3Solver = PrologEngine = LogicalProof = None  # degraded: unavailable
 
 try:
@@ -76,7 +94,8 @@ try:
     TheoremStatus,
     ProofSketch
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".theorem_prover", _exc)
     NeuralTheoremProver = TheoremStatus = ProofSketch = None  # degraded: unavailable
 
 try:
@@ -85,7 +104,8 @@ try:
     Counterfactual,
     CausalQuery
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".causal_world_model", _exc)
     CausalWorldModel = Counterfactual = CausalQuery = None  # degraded: unavailable
 
 try:
@@ -96,7 +116,8 @@ try:
     StrategyResult,
     ProblemCharacteristics
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".meta_cognitive", _exc)
     MetaCognitiveController = ReasoningStrategy = ResourceBudget = StrategyResult = ProblemCharacteristics = None  # degraded: unavailable
 
 try:
@@ -105,7 +126,8 @@ try:
     LearningEvent,
     LearningEventType
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".continuous_learning", _exc)
     ContinuousLearner = LearningEvent = LearningEventType = None  # degraded: unavailable
 
 try:
@@ -113,7 +135,8 @@ try:
     EnhancedKnowledgeRetrieval,
     KnowledgeSourceType
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".enhanced_knowledge", _exc)
     EnhancedKnowledgeRetrieval = KnowledgeSourceType = None  # degraded: unavailable
 
 try:
@@ -121,7 +144,8 @@ try:
     AnswerVerifier,
     VerificationStatus
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".answer_verification", _exc)
     AnswerVerifier = VerificationStatus = None  # degraded: unavailable
 
 

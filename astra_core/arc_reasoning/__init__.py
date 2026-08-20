@@ -102,3 +102,6 @@ except ImportError:
     NeuroSymbolicHybridSolver = None
     HybridSolution = None
     FeatureExtractor = None
+    DiscoveryEngine = None
+    PatternMemory = None
+    SymbolicReasoner = None

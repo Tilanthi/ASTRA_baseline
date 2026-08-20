@@ -28,17 +28,30 @@ Date: 2025-12-10
 Version: 38.0
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import sys
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     sys = None  # degraded: unavailable
 try:
     from pathlib import Path
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("pathlib", _exc)
     Path = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Any, Callable, Tuple
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Any = Callable = Tuple = None  # degraded: unavailable
 
 # Add parent to path for imports
@@ -47,7 +60,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # V37 imports (includes V36)
 try:
     from ..v37 import V37CompleteSystem
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..v37", _exc)
     V37CompleteSystem = None  # degraded: unavailable
 
 # Swarm memory imports (updated for V38)
@@ -57,7 +71,8 @@ try:
     MORKConcept,
     ScientificDomain
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("....memory", _exc)
     ExpandedMORK = MORKConcept = ScientificDomain = None  # degraded: unavailable
 
 # Advanced capabilities imports
@@ -89,7 +104,8 @@ try:
     RetrievalResult,
     KnowledgeBaseBuilder
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("....capabilities", _exc)
     BayesianInference = Prior = Likelihood = Posterior = OnlineUpdater = BayesFactorComparison = SelfConsistencyEngine = EnhancedSelfConsistency = ConsistencyResult = ToolIntegration = WikipediaAPI = ArXivAPI = MathTool = PythonExecutor = ToolResult = LocalRAG = RetrievalResult = KnowledgeBaseBuilder = None  # degraded: unavailable
 
 # STAN Enhanced unified system
@@ -99,7 +115,8 @@ try:
     EnhancedAnswer,
     ReasoningType
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("....capabilities.stan_enhanced", _exc)
     STANEnhanced = EnhancedAnswer = ReasoningType = None  # degraded: unavailable
 
 

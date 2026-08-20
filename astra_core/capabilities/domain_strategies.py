@@ -666,28 +666,3 @@ __all__ = [
     'ENGINEERING_STRATEGY',
     'OTHER_TRIVIA_STRATEGY',
 ]
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-
-
-# Test helper for quantum_reasoning
-def test_quantum_reasoning_function(data):
-    """Test function for quantum_reasoning."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
-
-# Test helper for neural_symbolic
-def test_neural_symbolic_function(data):
-    """Test function for neural_symbolic."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

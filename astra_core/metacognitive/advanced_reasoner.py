@@ -39,24 +39,28 @@ try:
     GPQA_AVAILABLE = True
 except ImportError:
     GPQA_AVAILABLE = False
+    GPQAReasoning = None
 
 try:
     from ..capabilities.causal_discovery import CausalDiscovery
     CAUSAL_AVAILABLE = True
 except ImportError:
     CAUSAL_AVAILABLE = False
+    CausalDiscovery = None
 
 try:
     from ..capabilities.analogical_reasoning import AnalogicalReasoner
     ANALOGICAL_AVAILABLE = True
 except ImportError:
     ANALOGICAL_AVAILABLE = False
+    AnalogicalReasoner = None
 
 try:
     from ..capabilities.self_consistency import SelfConsistency
     SELF_CONSISTENCY_AVAILABLE = True
 except ImportError:
     SELF_CONSISTENCY_AVAILABLE = False
+    SelfConsistency = None
 
 
 @dataclass

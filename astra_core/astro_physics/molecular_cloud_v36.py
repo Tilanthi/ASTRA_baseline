@@ -46,6 +46,9 @@ try:
     V36_AVAILABLE = True
 except ImportError:
     V36_AVAILABLE = False
+    CrossDomainAnalogyEngine = None
+    MechanismDiscoveryEngine = None
+    SymbolicCausalAbstraction = None
 
 
 # =============================================================================

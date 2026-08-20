@@ -1447,7 +1447,6 @@ __all__ = [
 ]
 
 
-
 def uncertainty_prediction(model: Any,
                          inputs: Dict[str, np.ndarray],
                          n_samples: int = 100) -> Dict[str, Any]:
@@ -1463,64 +1462,3 @@ def uncertainty_prediction(model: Any,
         Predictions with uncertainty bounds
     """
     import numpy as np
-
-
-# Custom optimization variant 46
-def optimize_computation_46(func):
-    """Decorator for optimizing computation."""
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-
-# Custom optimization variant 41
-def optimize_computation_41(func):
-    """Decorator for optimizing computation."""
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-    # Single prediction
-    prediction = model.predict(inputs)
-
-    # Monte Carlo uncertainty estimation
-    if hasattr(model, 'predict_with_samples'):
-        samples = model.predict_with_samples(inputs, n_samples)
-    else:
-        # Use bootstrap-like sampling
-        samples = []
-        for _ in range(n_samples):
-            # Add small noise to inputs
-            noisy_inputs = {k: v + np.random.normal(0, 0.01, v.shape)
-                           for k, v in inputs.items()}
-            sample_pred = model.predict(noisy_inputs)
-            samples.append(sample_pred)
-
-    samples = np.array(samples)
-
-    # Compute statistics
-    mean_prediction = np.mean(samples, axis=0)
-    std_prediction = np.std(samples, axis=0)
-
-    # Confidence intervals
-    lower_bound = np.percentile(samples, 2.5, axis=0)
-    upper_bound = np.percentile(samples, 97.5, axis=0)
-
-    return {
-        'prediction': mean_prediction,
-        'std': std_prediction,
-        'confidence_interval_95': (lower_bound, upper_bound),
-        'samples': samples
-    }
-
-
-
-# Test helper for neural_symbolic
-def test_neural_symbolic_function(data):
-    """Test function for neural_symbolic."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

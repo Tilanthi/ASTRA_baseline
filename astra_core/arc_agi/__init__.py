@@ -13,13 +13,24 @@ A comprehensive solver for the ARC-AGI benchmark using:
 - Analogical transfer from solved tasks
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     from .grid_dsl import (
     Grid, GridObject, BoundingBox,
     Color, Direction, Symmetry,
     empty_grid, from_objects
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".grid_dsl", _exc)
     Grid = GridObject = BoundingBox = Color = Direction = Symmetry = empty_grid = from_objects = None  # degraded: unavailable
 
 try:
@@ -27,7 +38,8 @@ try:
     TransformationHypothesis, TransformationType,
     HypothesisGenerator, HypothesisTester
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hypothesis_engine", _exc)
     TransformationHypothesis = TransformationType = HypothesisGenerator = HypothesisTester = None  # degraded: unavailable
 
 try:
@@ -36,7 +48,8 @@ try:
     PatternDetector, PatternPrimitives,
     ObjectRelationships, CompositeTransform
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".pattern_library", _exc)
     Pattern = PatternType = PatternDetector = PatternPrimitives = ObjectRelationships = CompositeTransform = None  # degraded: unavailable
 
 try:
@@ -46,12 +59,14 @@ try:
     BeamSearchSolver, AnalogicalTransfer,
     ARCSolver
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".systematic_search", _exc)
     SearchState = TaskAnalysis = ConstraintPropagator = ProgramSynthesizer = BeamSearchSolver = AnalogicalTransfer = ARCSolver = None  # degraded: unavailable
 
 try:
     from .extended_generators import ExtendedGenerators
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".extended_generators", _exc)
     ExtendedGenerators = None  # degraded: unavailable
 
 try:
@@ -59,7 +74,8 @@ try:
     DeepProgramSynthesizer, EnumerativeSynthesizer,
     ProgramNode, TypedPrimitive
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".deep_synthesis", _exc)
     DeepProgramSynthesizer = EnumerativeSynthesizer = ProgramNode = TypedPrimitive = None  # degraded: unavailable
 
 try:
@@ -68,7 +84,8 @@ try:
     TransformationEmbedding, PatternMatcher,
     PatternCluster, TransformationPrioritizer
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".neural_patterns", _exc)
     GridEmbedding = GridEncoder = TransformationEmbedding = PatternMatcher = PatternCluster = TransformationPrioritizer = None  # degraded: unavailable
 
 try:
@@ -78,12 +95,14 @@ try:
     IterativeRefinementSolver, HypothesisCombiner,
     ConstraintBasedRepair
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".iterative_refinement", _exc)
     SolutionAttempt = ErrorAnalysis = ErrorAnalyzer = SolutionRefiner = IterativeRefinementSolver = HypothesisCombiner = ConstraintBasedRepair = None  # degraded: unavailable
 
 try:
     from .enhanced_solver import EnhancedARCSolver, SolveResult
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".enhanced_solver", _exc)
     EnhancedARCSolver = SolveResult = None  # degraded: unavailable
 
 __all__ = [
@@ -130,36 +149,3 @@ __all__ = [
 ]
 
 __version__ = '2.0.0'
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-

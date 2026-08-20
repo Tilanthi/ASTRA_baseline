@@ -449,7 +449,6 @@ def estimate_difficulty(question: str, domain: str = "") -> DifficultyLevel:
     return level
 
 
-
 def adaptive_resource_allocation(tasks: List[Dict[str, Any]],
                                 available_resources: Dict[str, float]) -> Dict[str, Any]:
     """
@@ -544,7 +543,6 @@ def adaptive_algorithm_selection(problem_characteristics: Dict[str, Any],
     return algorithm_scores[0][0]
 
 
-
 def organize_semantic_memory(concepts: List[Dict[str, Any]],
                            similarity_threshold: float = 0.7) -> Dict[str, Any]:
     """
@@ -606,7 +604,6 @@ def organize_semantic_memory(concepts: List[Dict[str, Any]],
         'num_clusters': len(clusters),
         'similarity_threshold': similarity_threshold
     }
-
 
 
 def predict_next_in_sequence(sequence: List[Any],
@@ -678,50 +675,6 @@ def predict_next_in_sequence(sequence: List[Any],
             }
 
     return {'prediction': None, 'confidence': 0.0}
-
-
-
-def fft_pattern_detect(data: np.ndarray, min_freq: float = 0.01, max_freq: float = 0.5) -> Dict[str, Any]:
-    """
-    Detect periodic patterns using FFT analysis.
-
-    Args:
-        data: Input signal
-        min_freq: Minimum frequency to detect
-        max_freq: Maximum frequency to detect
-
-    Returns:
-        Dictionary with detected frequencies and powers
-    """
-    import numpy as np
-
-    # Compute FFT
-    fft_result = np.fft.fft(data)
-    freqs = np.fft.fftfreq(len(data))
-    power = np.abs(fft_result)**2
-
-    # Filter to frequency range
-    mask = (np.abs(freqs) >= min_freq) & (np.abs(freqs) <= max_freq)
-    filtered_freqs = freqs[mask]
-    filtered_power = power[mask]
-
-    # Sort by power
-    sorted_indices = np.argsort(filtered_power)[::-1]
-
-    # Get top frequencies
-    top_freqs = []
-    top_powers = []
-    for idx in sorted_indices[:10]:
-        top_freqs.append(float(filtered_freqs[idx]))
-        top_powers.append(float(filtered_power[idx]))
-
-    return {
-        'frequencies': top_freqs,
-        'powers': top_powers,
-        'dominant_frequency': top_freqs[0] if top_freqs else None,
-        'total_power': float(np.sum(filtered_power))
-    }
-
 
 
 def bootstrap_uncertainty(data: np.ndarray,

@@ -6,30 +6,46 @@ enabling the system to develop intuitive understanding of cosmic phenomena
 through simulated "embodied" interaction with astronomical environments.
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Tuple, Any, Union
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Tuple = Any = Union = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 try:
     import logging
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     logging = None  # degraded: unavailable
 
 try:
     from .sensorimotor_system import VirtualEnvironment, WorldAction, Experience, ActionResult, SensoryInput, ModalityType
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sensorimotor_system", _exc)
     VirtualEnvironment = WorldAction = Experience = ActionResult = SensoryInput = ModalityType = None  # degraded: unavailable
 
 # Keep subclass definitions importable when the sensorimotor system was hollowed
@@ -37,11 +53,13 @@ if VirtualEnvironment is None:
     VirtualEnvironment = object
 try:
     from .embodied_learning_engine import EmbodiedLearningEngine
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".embodied_learning_engine", _exc)
     EmbodiedLearningEngine = None  # degraded: unavailable
 try:
     from .common_sense_engine import PhysicsIntuitionModule, WorldScenario
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".common_sense_engine", _exc)
     PhysicsIntuitionModule = WorldScenario = None  # degraded: unavailable
 
 

@@ -39,48 +39,65 @@ try:
     V101_AVAILABLE = True
 except ImportError:
     V101_AVAILABLE = False
+    TemporalFCIDiscovery = None
+    create_granger_fci_hybrid = None
+    create_temporal_fci_discovery = None
 
 try:
     from astra_core.capabilities.synthesis.counterfactual_engine import create_counterfactual_engine, CounterfactualEngine
     V102_AVAILABLE = True
 except ImportError:
     V102_AVAILABLE = False
+    CounterfactualEngine = None
+    create_counterfactual_engine = None
 
 try:
     from astra_core.capabilities.multimodal.multimodal_evidence import create_multimodal_evidence_fusion, MultiModalEvidenceFusion
     V103_AVAILABLE = True
 except ImportError:
     V103_AVAILABLE = False
+    MultiModalEvidenceFusion = None
+    create_multimodal_evidence_fusion = None
 
 try:
     from astra_core.capabilities.discovery.adversarial_discovery import create_adversarial_discovery_system, AdversarialDiscoverySystem
     V104_AVAILABLE = True
 except ImportError:
     V104_AVAILABLE = False
+    AdversarialDiscoverySystem = None
+    create_adversarial_discovery_system = None
 
 try:
     from astra_core.capabilities.discovery.meta_discovery import create_meta_discovery_transfer_engine, MetaDiscoveryTransferEngine
     V105_AVAILABLE = True
 except ImportError:
     V105_AVAILABLE = False
+    MetaDiscoveryTransferEngine = None
+    create_meta_discovery_transfer_engine = None
 
 try:
     from astra_core.capabilities.causal.explainable_causal import create_explainable_causal_reasoner, ExplainableCausalReasoner
     V106_AVAILABLE = True
 except ImportError:
     V106_AVAILABLE = False
+    ExplainableCausalReasoner = None
+    create_explainable_causal_reasoner = None
 
 try:
     from astra_core.capabilities.discovery.discovery_triage import create_discovery_triage_system, DiscoveryTriageSystem
     V107_AVAILABLE = True
 except ImportError:
     V107_AVAILABLE = False
+    DiscoveryTriageSystem = None
+    create_discovery_triage_system = None
 
 try:
     from astra_core.capabilities.discovery.streaming_discovery import create_streaming_discovery_engine, StreamingDiscoveryEngine
     V108_AVAILABLE = True
 except ImportError:
     V108_AVAILABLE = False
+    StreamingDiscoveryEngine = None
+    create_streaming_discovery_engine = None
 
 
 class DiscoveryWorkflow(Enum):

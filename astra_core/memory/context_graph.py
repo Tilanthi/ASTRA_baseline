@@ -387,10 +387,3 @@ class ContextGraph:
                 strength=edge_data["strength"],
                 metadata=edge_data.get("metadata", {})
             )
-
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None

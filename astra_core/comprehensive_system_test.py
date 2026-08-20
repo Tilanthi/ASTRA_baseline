@@ -308,11 +308,18 @@ class ComprehensiveSystemTest:
             print("  - Unified Orchestrator")
 
 
-def main():
-    """Run comprehensive system test"""
+def main() -> int:
+    """Run comprehensive system test.
+
+    Returns a POSIX exit status so that CI can tell success from failure -- the
+    previous version always exited 0, including when it printed
+    "Passed: 0 (0.0%) / Failed: 18".
+    """
     test_suite = ComprehensiveSystemTest()
     test_suite.test_all()
+    failed = sum(1 for r in test_suite.test_results.values() if not r.is_success())
+    return 1 if failed else 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

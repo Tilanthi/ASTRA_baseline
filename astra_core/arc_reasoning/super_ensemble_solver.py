@@ -4,21 +4,35 @@ Super Ensemble ARC Solver - Combines ALL approaches with intelligent voting.
 This is the ultimate solver integrating every technique we've built.
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import List, Tuple, Dict, Set, Optional, Any
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     List = Tuple = Dict = Set = Optional = Any = None  # degraded: unavailable
 try:
     from dataclasses import dataclass
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = None  # degraded: unavailable
 try:
     from collections import defaultdict, Counter
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("collections", _exc)
     defaultdict = Counter = None  # degraded: unavailable
 
 # Import geometric operations
@@ -30,7 +44,8 @@ try:
     apply_color_map,
     subsample, crop, pad,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".improved_solver", _exc)
     rotate_90 = rotate_180 = rotate_270 = reflect_h = reflect_v = transpose = learn_color_mapping = apply_color_map = subsample = crop = pad = None  # degraded: unavailable
 
 

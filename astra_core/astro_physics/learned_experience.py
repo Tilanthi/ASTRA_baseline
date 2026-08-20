@@ -1366,12 +1366,4 @@ __all__ = [
 ]
 
 
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
 # Custom optimization variant 6

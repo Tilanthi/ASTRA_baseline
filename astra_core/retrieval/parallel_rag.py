@@ -29,21 +29,35 @@ Example Use:
     result = rag.query("What are our power saving efforts?")
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import time
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     time = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from typing import List, Dict, Any, Optional, Callable
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     List = Dict = Any = Optional = Callable = None  # degraded: unavailable
 try:
     from enum import Enum
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = None  # degraded: unavailable
 
 try:
@@ -51,36 +65,42 @@ try:
     HybridRetriever, Document, TfidfRetriever, VectorRetriever,
     HybridSearchResult
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".hybrid_search", _exc)
     HybridRetriever = Document = TfidfRetriever = VectorRetriever = HybridSearchResult = None  # degraded: unavailable
 try:
     from .context_distiller import (
     ContextDistiller, RelevancyCheck, DistillationResult,
     SimpleKeywordChecker
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".context_distiller", _exc)
     ContextDistiller = RelevancyCheck = DistillationResult = SimpleKeywordChecker = None  # degraded: unavailable
 try:
     from .sharded_retrieval import ShardStrategy
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sharded_retrieval", _exc)
     ShardStrategy = None  # degraded: unavailable
 try:
     from .sharded_retrieval import (
     ShardedRetriever, DomainShard,
     ShardedRetrievalResult
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".sharded_retrieval", _exc)
     ShardedRetriever = DomainShard = ShardedRetrievalResult = None  # degraded: unavailable
 try:
     from .query_expander import (
     QueryExpander, RuleBasedExpander, ParallelQueryExpander,
     ExpandedQueries
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".query_expander", _exc)
     QueryExpander = RuleBasedExpander = ParallelQueryExpander = ExpandedQueries = None  # degraded: unavailable
 try:
     from ..intelligence.redundant_executor import RedundantExecutor, ExecutionResult
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("..intelligence.redundant_executor", _exc)
     RedundantExecutor = ExecutionResult = None  # degraded: unavailable
 
 

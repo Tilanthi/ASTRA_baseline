@@ -13,6 +13,7 @@ This is the main entry point for the enhanced STAN-XI-ASTRO system.
 
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, field
+from collections.abc import Mapping
 import logging
 import numpy as np
 
@@ -1033,6 +1034,20 @@ def create_enhanced_stan_system(
             logger.warning(
                 f"V4 revolutionary system unavailable ({e}); "
                 "falling back to enhanced unified system")
+
+    # Accept a plain mapping as well as an EnhancedUnifiedConfig.  Several
+    # in-tree callers (e.g. tests/ablation/run_ablations.py) build a dict and
+    # previously died with "'dict' object has no attribute 'auto_optimize'".
+    if isinstance(config, Mapping):
+        import dataclasses as _dc
+        valid = {f.name for f in _dc.fields(EnhancedUnifiedConfig)}
+        unknown = sorted(set(config) - valid)
+        if unknown:
+            logger.warning(
+                "Ignoring unknown EnhancedUnifiedConfig field(s): %s",
+                ", ".join(unknown),
+            )
+        config = EnhancedUnifiedConfig(**{k: v for k, v in config.items() if k in valid})
 
     system = EnhancedUnifiedSTANSystem(config)
 

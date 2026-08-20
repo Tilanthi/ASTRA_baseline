@@ -28,36 +28,53 @@ Author: Claude Code (ASTRO-SWARM)
 Date: 2024-11
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import Dict, List, Optional, Any, Tuple
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     Dict = List = Optional = Any = Tuple = None  # degraded: unavailable
 try:
     from dataclasses import dataclass, field
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = field = None  # degraded: unavailable
 try:
     from datetime import datetime
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("datetime", _exc)
     datetime = None  # degraded: unavailable
 try:
     from enum import Enum
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("enum", _exc)
     Enum = None  # degraded: unavailable
 try:
     import uuid
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     uuid = None  # degraded: unavailable
 
 try:
     from .agents import (
     AstroAgent, PheromoneTrail, StigmergicMemory
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".agents", _exc)
     AstroAgent = PheromoneTrail = StigmergicMemory = None  # degraded: unavailable
 
 # Keep subclass definitions importable when the agent framework was hollowed
@@ -67,14 +84,16 @@ if PheromoneTrail is None:
     PheromoneTrail = object
 try:
     from .physics import PhysicsEngine
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".physics", _exc)
     PhysicsEngine = None  # degraded: unavailable
 try:
     from .knowledge_graph import (
     AstronomicalKnowledgeGraph, AstroNode, AstroEdge,
     AstroNodeType, RelationType
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".knowledge_graph", _exc)
     AstronomicalKnowledgeGraph = AstroNode = AstroEdge = AstroNodeType = RelationType = None  # degraded: unavailable
 try:
     from .molecular_cloud_physics import (
@@ -82,7 +101,8 @@ try:
     DustModelLibrary, DustModel, CloudSpectralLine, DustSED,
     MolecularCloudProperties
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".molecular_cloud_physics", _exc)
     MolecularCloudPhysicsEngine = MolecularLineDatabase = DustModelLibrary = DustModel = CloudSpectralLine = DustSED = MolecularCloudProperties = None  # degraded: unavailable
 
 

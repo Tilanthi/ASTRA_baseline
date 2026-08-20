@@ -33,6 +33,9 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
     plt = None
+    Circle = None
+    GridSpec = None
+    Rectangle = None
 
 
 class VisualizationType(Enum):
@@ -493,13 +496,3 @@ def plot_spectrum(wavelength: np.ndarray, flux: np.ndarray,
                        flux_err=flux_err)
     viz = SpectrumVisualizer(spectrum)
     return viz.plot(title=title)
-
-
-
-# Test helper for uncertainty_quantification
-def test_uncertainty_quantification_function(data):
-    """Test function for uncertainty_quantification."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-

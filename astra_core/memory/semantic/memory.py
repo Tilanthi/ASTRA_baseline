@@ -234,9 +234,3 @@ class TieredMemoryCache:
         self.l1_cache.clear()
         self.l2_cache.clear()
         self.access_counts.clear()
-
-
-# Utility: Data Import
-def import_data(*args, **kwargs):
-    """Utility function for import_data."""
-    return None

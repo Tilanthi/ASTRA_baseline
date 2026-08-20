@@ -10,6 +10,8 @@ This module implements scalable methods for large variable sets:
 - Parallel constraint-based discovery
 - Sparse regression methods (PC algorithm with improvements)
 """
+from __future__ import annotations
+
 
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Set, Any
@@ -364,6 +366,7 @@ class ScalableCausalInference:
                         except:
                             # Fallback
                             p_value = 1.0
+                            partial_corr = None
 
                     # Remove edge if independent
                     if p_value > self.significance_level:

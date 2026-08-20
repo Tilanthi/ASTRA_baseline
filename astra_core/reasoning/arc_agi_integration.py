@@ -48,6 +48,33 @@ try:
     ARC_AVAILABLE = True
 except ImportError:
     ARC_AVAILABLE = False
+    ARCSolver = None
+    AnalogicalTransfer = None
+    BeamSearchSolver = None
+    BoundingBox = None
+    CompositeTransform = None
+    ConstraintPropagator = None
+    DeepProgramSynthesizer = None
+    EnhancedARCSolver = None
+    EnumerativeSynthesizer = None
+    ErrorAnalyzer = None
+    ExtendedGenerators = None
+    Grid = None
+    GridEmbedding = None
+    GridObject = None
+    HypothesisGenerator = None
+    HypothesisTester = None
+    IterativeRefinementSolver = None
+    ObjectRelationships = None
+    PatternDetector = None
+    PatternMatcher = None
+    PatternPrimitives = None
+    SolutionRefiner = None
+    TaskAnalysis = None
+    TransformationHypothesis = None
+    TransformationPrioritizer = None
+    TransformationType = None
+    empty_grid = None
 
 
 class ARCTaskType(Enum):

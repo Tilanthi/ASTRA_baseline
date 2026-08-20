@@ -105,3 +105,7 @@ try:
     )
 except ImportError:
     EnhancedRewardCalculator = None
+    EmbeddingVector = None
+    ScientificKnowledgeGraph = None
+    SimpleEmbeddingModel = None
+    create_enhanced_reward_calculator = None

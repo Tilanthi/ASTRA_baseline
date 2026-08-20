@@ -51,6 +51,9 @@ except ImportError:
     CausalDiscoveryEngine = None
     create_causal_discovery_engine = None
     get_causal_discovery_reward = None
+    CausalGraph = None
+    CounterfactualResult = None
+    InterventionResult = None
 
 try:
     from .theory_constructor import (
@@ -62,6 +65,10 @@ except ImportError:
     TheoryConstructionSystem = None
     create_theory_construction_system = None
     get_theory_construction_reward = None
+    Hypothesis = None
+    ScientificTheory = None
+    TheoryComparator = None
+    TheoryValidator = None
 
 try:
     from .autonomous_experimenter import (
@@ -74,17 +81,26 @@ except ImportError:
     AutonomousExperimentSystem = None
     create_autonomous_experiment_system = None
     get_experimental_discovery_reward = None
+    ExperimentDesign = None
+    ExperimentHypothesis = None
+    ExperimentResult = None
+    Variable = None
 
 try:
     from .meta_learning import (
         MetaLearningSystem, LearningTask, LearningStrategy,
-        MAMLMetaLearner, ContinualLearningSystem,
+        MAMLMetaLearner, ContinualLearningSystem, LearningResult,
         create_meta_learning_system, get_meta_learning_reward
     )
 except ImportError:
     MetaLearningSystem = None
+    LearningResult = None
     create_meta_learning_system = None
     get_meta_learning_reward = None
+    ContinualLearningSystem = None
+    LearningStrategy = None
+    LearningTask = None
+    MAMLMetaLearner = None
 
 try:
     from .consciousness_simulator import (
@@ -96,6 +112,10 @@ except ImportError:
     ConsciousnessSimulator = None
     create_consciousness_simulator = None
     get_consciousness_reward = None
+    IntrospectiveReport = None
+    MetacognitiveState = None
+    TheoryOfMindModel = None
+    Thought = None
 
 # Import V2.0 modules
 try:
@@ -108,6 +128,7 @@ except ImportError:
     PhysicsDataLibrary = None
     MultiAgentSwarm = None
     ContinuousLearningSystem = None
+    PhysicalLawDiscovery = None
 
 
 @dataclass

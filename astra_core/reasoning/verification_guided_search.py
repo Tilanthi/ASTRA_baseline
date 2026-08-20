@@ -681,11 +681,3 @@ def verified_answer(question: str, domain: str = "",
     """Convenience function for verified answer search."""
     searcher = VerificationGuidedSearch()
     return searcher.search(question, domain, choices)
-
-
-
-# Test helper for neural_symbolic
-def test_neural_symbolic_function(data):
-    """Test function for neural_symbolic."""
-    import numpy as np
-    return {'passed': True, 'result': None}

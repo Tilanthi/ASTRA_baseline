@@ -14,9 +14,20 @@ from datetime import datetime
 from pathlib import Path
 
 # Add parent directory to path to import astra_core
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# repo root is four levels up: astra_core/tests/ablation/run_ablations.py
+# (the old three-level walk landed on astra_core/ itself, which made
+# `import astra_core` resolve to an empty namespace package)
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from configurations import (
+try:
+    from .configurations import (
+    AblationConfig,
+    get_all_ablations,
+    get_critical_ablations,
+    get_ablation_by_name
+)
+except ImportError:  # executed as a script from inside tests/ablation/
+    from configurations import (
     AblationConfig,
     get_all_ablations,
     get_critical_ablations,
@@ -428,7 +439,7 @@ def main():
 
     else:
         # Run all ablations
-        runner.run_all_ablations(queries)
+        runner.run_all_ablations(queries=queries)
 
 
 if __name__ == "__main__":

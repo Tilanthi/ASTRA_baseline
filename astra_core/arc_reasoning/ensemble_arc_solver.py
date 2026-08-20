@@ -4,25 +4,40 @@ Ensemble ARC Solver - Combines multiple approaches for better coverage.
 Uses lenient acceptance to allow more transformations to be tried.
 """
 
+
+def _degraded_warn(_module: str, _exc: BaseException) -> None:
+    """Log why an optional import degraded instead of failing silently."""
+    import logging
+    logging.getLogger(__name__).warning(
+        "%s unavailable (%s: %s) - dependent names set to None",
+        _module, type(_exc).__name__, _exc,
+    )
+
+
 try:
     import numpy as np
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     np = None  # degraded: unavailable
 try:
     from typing import List, Tuple, Dict, Set, Optional, Any
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("typing", _exc)
     List = Tuple = Dict = Set = Optional = Any = None  # degraded: unavailable
 try:
     from dataclasses import dataclass
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("dataclasses", _exc)
     dataclass = None  # degraded: unavailable
 try:
     from collections import defaultdict
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("collections", _exc)
     defaultdict = None  # degraded: unavailable
 try:
     import copy
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn("<unknown>", _exc)
     copy = None  # degraded: unavailable
 
 # Import geometric transformations
@@ -34,7 +49,8 @@ try:
     learn_color_mapping,
     apply_color_map,
     )
-except Exception:
+except Exception as _exc:  # pragma: no cover - optional surface
+    _degraded_warn(".improved_solver", _exc)
     rotate_90 = rotate_180 = rotate_270 = reflect_h = reflect_v = transpose = crop = pad = subsample = learn_color_mapping = apply_color_map = None  # degraded: unavailable
 
 
@@ -280,36 +296,3 @@ __all__ = [
     'SolverPrediction',
     'TRANSFORMATION_LIBRARY',
 ]
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-
-
-# Utility: Computation Logging
-def log_computation(*args, **kwargs):
-    """Utility function for log_computation."""
-    return None
-
-
-
-def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
-    """Detect patterns using autocorrelation analysis."""
-    import numpy as np
-    if max_lag is None:
-        max_lag = len(data) // 4
-    autocorr = np.correlate(data, data, mode='full')
-    autocorr = autocorr[len(autocorr)//2:]
-    autocorr = autocorr / autocorr[0]
-    return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-

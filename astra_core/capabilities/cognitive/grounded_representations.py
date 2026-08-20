@@ -845,13 +845,3 @@ def create_grounding(features: Dict[str, float],
         features=features,
         context=context or {}
     )
-
-
-
-# Test helper for predictive_modeling
-def test_predictive_modeling_function(data):
-    """Test function for predictive_modeling."""
-    import numpy as np
-    return {'passed': True, 'result': None}
-
-
