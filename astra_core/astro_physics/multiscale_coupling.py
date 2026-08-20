@@ -300,6 +300,15 @@ class StellarFeedbackModel(SubGridModel):
         # Energy injection rate
         E_dot_sn = eta * sn_rate * E_sn / YR  # erg/s
 
+        # AUDIT-FLAG (H3, NOT FIXED - outside this worker's scope):
+        # p_dot_sn below is PER YEAR (sn_rate is /yr) while p_dot_wind
+        # and p_dot_rad are PER SECOND, and the three are summed.  With
+        # SFR = 1 Msun/yr, n_H = 43: p_dot_sn = 3.663e41 vs
+        # p_dot_wind = 5.672e31 and p_dot_rad = 2.555e33, so the SN term
+        # is overstated by 3.156e7 and the sum is 100% SN.  The
+        # `heating_rate` two lines further down is also dimensionally
+        # meaningless (a global photon rate times a local number
+        # density times two magic constants).
         # Momentum injection (Sedov-Taylor terminal momentum)
         n_H = rho / (1.4 * M_PROTON)
         p_terminal = 3e5 * M_SUN * 1e5 * (E_sn / 1e51)**0.93 * (n_H / 1.0)**(-0.13)
@@ -952,6 +961,11 @@ class MultiScaleSimulation:
             src_sum = self.fields[0].sum()
             new_sum = coarse_from_fine.sum()
             if new_sum > 0:
+                # AUDIT-FLAG (H2, NOT FIXED - outside this worker's
+                # scope): this explicit rescale FORCES the reported
+                # `mass_error` to ~1e-16.  It is an algebraic identity,
+                # not a property of the scheme, and must not be quoted
+                # as validation of conservation (Appendix E does).
                 coarse_from_fine *= src_sum / new_sum
             self.fields[0] = coarse_from_fine
 

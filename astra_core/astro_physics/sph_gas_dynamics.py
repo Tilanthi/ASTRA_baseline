@@ -19,6 +19,7 @@ Date: 2025-12-22
 Version: 1.0
 """
 
+import math
 import numpy as np
 from typing import List, Dict, Optional, Any, Tuple, Union, Callable
 from dataclasses import dataclass, field
@@ -175,13 +176,43 @@ class SPHKernel:
 
         return sigma * w
 
+    # Normalisation of a 3-D Gaussian truncated at q = r/h = 2:
+    #   int_0^2h W 4 pi r^2 dr = erf(2) - (4/sqrt(pi)) exp(-4) = 0.9539882943
+    # (analytic; see SPHKernel.gaussian). Evaluated rather than hardcoded.
+    GAUSSIAN_TRUNCATION_NORM = math.erf(2.0) - 4.0 / math.sqrt(math.pi) * math.exp(-4.0)
+
+    @staticmethod
+    def wendland_c4_derivative(r: np.ndarray, h: float) -> np.ndarray:
+        """
+        Radial derivative dW/dr of `wendland_c4` (in fact Wendland C2):
+
+        W  = (21/(16 pi h^3)) (1 - q/2)^4 (1 + 2q)
+        dW/dq = (21/(16 pi h^3)) * [-2(1-q/2)^3 (1+2q) + 2(1-q/2)^4]
+              = -(21/(16 pi h^3)) * 5 q (1 - q/2)^3
+        dW/dr = (1/h) dW/dq                                     (0 <= q <= 2)
+        """
+        q = np.asarray(r, dtype=float) / h
+        dw = np.zeros_like(q)
+        sigma = 21.0 / (16.0 * np.pi * h ** 4)
+        mask = q <= 2.0
+        dw[mask] = -5.0 * q[mask] * (1.0 - 0.5 * q[mask]) ** 3
+        return sigma * dw
+
     @staticmethod
     def gaussian(r: np.ndarray, h: float) -> np.ndarray:
         """
-        Gaussian kernel.
+        Gaussian kernel, truncated at the 2h neighbour-search radius and
+        renormalised so that it still integrates to 1 over its support:
 
-        W(q) = (1/(pi*h^3)^(3/2)) * exp(-q^2)
-        where q = r/h
+            W(q) = exp(-q^2) / (pi^{3/2} h^3 * C),  q = r/h <= 2,   W = 0 above
+            C = int_0^2 (4/sqrt(pi)) q^2 exp(-q^2) dq
+              = erf(2) - (4/sqrt(pi)) exp(-4) = 0.9539883845
+
+        FIX(audit H10): the kernel was normalised over infinite support while
+        `compute_density` only sums neighbours within 2h, so the recovered
+        density on a uniform lattice was 0.952325 of the true value (the cubic
+        spline gives 0.999972). Truncating explicitly and dividing by C makes
+        the truncated kernel exactly normalised.
 
         Args:
             r: Distance array (cm)
@@ -190,10 +221,22 @@ class SPHKernel:
         Returns:
             Kernel values
         """
-        q = r / h
-        sigma = 1.0 / ((np.pi * h**2) ** 1.5)  # 3D normalization
-        w = sigma * np.exp(-q**2)
+        q = np.asarray(r, dtype=float) / h
+        sigma = 1.0 / ((np.pi * h**2) ** 1.5 * SPHKernel.GAUSSIAN_TRUNCATION_NORM)
+        w = np.zeros_like(q)
+        mask = q <= 2.0
+        w[mask] = sigma * np.exp(-q[mask]**2)
         return w
+
+    @staticmethod
+    def gaussian_derivative(r: np.ndarray, h: float) -> np.ndarray:
+        """dW/dr of the truncated, renormalised Gaussian: -2q/h * W(q)."""
+        q = np.asarray(r, dtype=float) / h
+        sigma = 1.0 / ((np.pi * h**2) ** 1.5 * SPHKernel.GAUSSIAN_TRUNCATION_NORM)
+        dw = np.zeros_like(q)
+        mask = q <= 2.0
+        dw[mask] = sigma * (-2.0 * q[mask] / h) * np.exp(-q[mask]**2)
+        return dw
 
     @staticmethod
     def get_kernel(kernel_type: KernelType) -> Callable:
@@ -204,8 +247,32 @@ class SPHKernel:
             return SPHKernel.wendland_c4
         elif kernel_type == KernelType.GAUSSIAN:
             return SPHKernel.gaussian
-        else:
-            return SPHKernel.cubic_spline  # Default
+        # FIX(audit H9): KernelType.QUARTIC_SPLINE used to fall through to the
+        # cubic spline silently, so a run "with the quartic spline" was really a
+        # cubic-spline run. There is no quartic kernel in this module.
+        raise NotImplementedError(
+            f"no kernel implementation for {kernel_type}; available: "
+            f"CUBIC_SPLINE, WENDLAND, GAUSSIAN")
+
+    @staticmethod
+    def get_kernel_derivative(kernel_type: KernelType) -> Callable:
+        """
+        Get the radial kernel derivative dW/dr matching `get_kernel`.
+
+        FIX(audit H9): `SPHSimulation.compute_forces` hardcoded
+        `cubic_spline_derivative` for every kernel type, so selecting WENDLAND
+        or GAUSSIAN gave densities from one kernel and pressure gradients from
+        another and broke the conservative SPH formulation.
+        """
+        if kernel_type == KernelType.CUBIC_SPLINE:
+            return SPHKernel.cubic_spline_derivative
+        elif kernel_type == KernelType.WENDLAND:
+            return SPHKernel.wendland_c4_derivative
+        elif kernel_type == KernelType.GAUSSIAN:
+            return SPHKernel.gaussian_derivative
+        raise NotImplementedError(
+            f"no kernel derivative for {kernel_type}; available: "
+            f"CUBIC_SPLINE, WENDLAND, GAUSSIAN")
 
 
 class SPHSimulation:
@@ -233,6 +300,9 @@ class SPHSimulation:
         self.n_particles = len(particles)
         self.kernel_type = kernel_type
         self.kernel = SPHKernel.get_kernel(kernel_type)
+        # FIX(audit H9): the force kernel must be the derivative of the density
+        # kernel, not always the cubic spline.
+        self.kernel_derivative = SPHKernel.get_kernel_derivative(kernel_type)
         self.time = 0.0
 
     def compute_density(self) -> np.ndarray:
@@ -297,11 +367,20 @@ class SPHSimulation:
         Compute hydrodynamical forces.
 
         Includes:
-        - Pressure gradient forces
-        - Artificial viscosity (shock capturing)
+        - Pressure gradient forces (symmetric P_i/rho_i^2 + P_j/rho_j^2 form)
+
+        NOT included -- AUDIT-FLAG (audit H9): the docstring previously
+        advertised "artificial viscosity (shock capturing)"; none is
+        implemented, and `du_dt` is returned as zeros unconditionally. Both are
+        now stated honestly rather than implied. A second, separate defect is
+        left in place: the kernel gradient uses h[i] only rather than a
+        symmetrised h_ij, so momentum is not exactly conserved pairwise.
+        Implementing Monaghan (1992) artificial viscosity and the matching
+        energy equation is a feature addition, not a bug fix, and is left to
+        whoever can validate it against a Sod shock tube.
 
         Returns:
-            (acceleration, du/dt) arrays
+            (acceleration, du/dt) arrays; du/dt is identically zero.
         """
         pos = np.array([p.pos for p in self.particles])
         vel = np.array([p.vel for p in self.particles])
@@ -328,8 +407,10 @@ class SPHSimulation:
                 if r < 1e-10:
                     continue
 
-                # Kernel gradient
-                dw_dr = SPHKernel.cubic_spline_derivative(np.array([r]), h[i])[0]
+                # Kernel gradient -- FIX(audit H9): use the derivative of the
+                # kernel actually used for the density, not always the cubic
+                # spline.
+                dw_dr = self.kernel_derivative(np.array([r]), h[i])[0]
                 grad_w = dw_dr * rij / r
 
                 # Pressure force
@@ -404,16 +485,27 @@ class FilamentFinder:
 
     def find_filaments(self, data: np.ndarray, threshold: float = None) -> List[Filament]:
         """
-        Find filaments in 2D/3D data cube.
+        Find filaments in a 2-D map.
 
         Args:
-            data: Density/Intensity data (nD array)
-            threshold: Detection threshold
+            data: Density/Intensity data (2-D array)
+            threshold: Detection threshold (default mean + 2 sigma)
 
         Returns:
-            List of filaments
+            List of filaments, one per connected skeleton component.
+
+        FIX(audit H13): this used to (i) merge *all* skeleton pixels into a
+        single Filament -- four well-separated parallel filaments were returned
+        as one object with length 5406.7 -- and (ii) fall back to
+        `skeleton = mask` when scikit-image is absent, i.e. no thinning at all,
+        which made the length 18.8x too long (1504.5 for an 80-px filament) and
+        the width identically 1.0. Connected components are now labelled, and a
+        Zhang-Suen thinning fallback is used when scikit-image is unavailable.
         """
-        filaments = []
+        from scipy.ndimage import label as cc_label
+
+        data = np.asarray(data, dtype=float)
+        filaments: List[Filament] = []
 
         # Simple thresholding + skeletonization
         if threshold is None:
@@ -421,31 +513,42 @@ class FilamentFinder:
 
         # Binary mask
         mask = data > threshold
+        if not mask.any():
+            return filaments
 
-        # Morphological skeletonization (scikit-image; scipy.ndimage
-        # has never exported skeletonize)
-        try:
-            from skimage.morphology import skeletonize
-        except ImportError:
-            from scipy.ndimage import binary_erosion, label as cc_label
-            skeleton = mask  # fallback: full mask, no thinning
-        else:
-            skeleton = skeletonize(mask)
+        skeleton = self._skeletonize(mask)
 
-        # Extract skeleton points
-        points = np.argwhere(skeleton)
+        # One filament per connected skeleton component (8-connectivity).
+        connectivity = np.ones((3,) * data.ndim, dtype=int)
+        skel_labels, n_skel = cc_label(skeleton, structure=connectivity)
+        mask_labels, _ = cc_label(mask, structure=connectivity)
 
-        if len(points) > 0:
-            # Create filament from skeleton
-            fil = self._create_filament_from_skeleton(points, data)
+        for k in range(1, n_skel + 1):
+            points = np.argwhere(skel_labels == k)
+            if len(points) < 2:
+                continue
+            # The mask region this skeleton was thinned from
+            region_id = mask_labels[tuple(points[0])]
+            region_mask = (mask_labels == region_id)
+            fil = self._create_filament_from_skeleton(points, data, region_mask)
             if fil and fil.length >= self.min_length:
                 filaments.append(fil)
 
         return filaments
 
     def _create_filament_from_skeleton(self, points: np.ndarray,
-                                       data: np.ndarray) -> Optional[Filament]:
-        """Create filament object from skeleton points"""
+                                       data: np.ndarray,
+                                       region_mask: Optional[np.ndarray] = None
+                                       ) -> Optional[Filament]:
+        """Create filament object from the skeleton points of ONE component.
+
+        Args:
+            points: (N, ndim) integer skeleton pixel coordinates
+            data: the full map
+            region_mask: boolean mask of the thresholded region this skeleton
+                belongs to. If None, the global mean+2sigma mask is used (the
+                old, whole-image behaviour).
+        """
         if len(points) < 2:
             return None
 
@@ -455,23 +558,30 @@ class FilamentFinder:
         pca = PCA(n_components=min(2, points.shape[1]))
         pca.fit(points)
 
-        # Order the skeleton points along the principal axis
+        # Order the skeleton points along the principal axis (used only for the
+        # reported spine ordering, no longer for the length).
         proj = points @ pca.components_[0]
         order = np.argsort(proj)
         spine = points[order]
 
-        # Length: path integral along the ordered spine (grid units,
-        # assumed to be pc - FilamentFinder has no WCS information)
-        seg = np.diff(spine, axis=0)
-        length = float(np.sum(np.linalg.norm(seg, axis=1)))
+        # FIX(audit H13): length is now the geodesic longest path *through the
+        # skeleton graph* (8-connected, step weights 1 and sqrt(2)), not the
+        # path integral over PCA-ordered points. The old estimator zig-zagged
+        # across the ridge whenever the "skeleton" was more than one pixel wide
+        # (always, in the no-skimage fallback): an 80-px straight filament came
+        # out at 1504.5 px. NOTE: an 8-connected digital straight line
+        # overestimates the true length by at most
+        # max_theta(cos t + (sqrt2-1) sin t) = 1.0824, i.e. <= 8.2%.
+        length = self._geodesic_length(points)
         if length < 1e-12:
             return None
 
-        # Effective width: mask area / spine length, the standard
-        # "area over length" filament width (grid units = pc)
-        threshold = np.mean(data) + 2 * np.std(data)
-        mask = data > threshold
-        effective_width = float(np.sum(mask) / max(len(spine), 1))
+        # Effective width: region area / length, the standard "area over
+        # length" filament width (grid units = pc)
+        if region_mask is None:
+            region_mask = data > (np.mean(data) + 2 * np.std(data))
+        mask = np.asarray(region_mask, dtype=bool)
+        effective_width = float(np.sum(mask)) / length
         width = max(effective_width, 1e-3)
 
         # Mass and mean density, interpreting data as H2 column
@@ -513,6 +623,121 @@ class FilamentFinder:
             n_cores=n_cores,
             cores=cores,
         )
+
+    # ------------------------------------------------------------------ tools
+    @staticmethod
+    def _skeletonize(mask: np.ndarray) -> np.ndarray:
+        """
+        Morphological thinning of a binary mask to a 1-pixel-wide skeleton.
+
+        Uses scikit-image when available; otherwise falls back to a Zhang-Suen
+        (1984, CACM 27, 236) thinning implemented here.
+
+        FIX(audit H13): the previous fallback was `skeleton = mask` -- no
+        thinning at all -- which silently made every downstream length, width
+        and aspect ratio meaningless. 3-D input has no fallback and now raises
+        instead of returning the un-thinned mask.
+        """
+        mask = np.asarray(mask, dtype=bool)
+        try:
+            from skimage.morphology import skeletonize as _sk
+        except ImportError:
+            if mask.ndim != 2:
+                raise NotImplementedError(
+                    "skeletonization of a >2-D mask requires scikit-image; "
+                    "the built-in Zhang-Suen fallback is 2-D only. Install "
+                    "scikit-image or pass a 2-D map.")
+            return FilamentFinder._zhang_suen(mask)
+        return np.asarray(_sk(mask), dtype=bool)
+
+    @staticmethod
+    def _zhang_suen(mask: np.ndarray) -> np.ndarray:
+        """
+        Zhang-Suen parallel thinning of a 2-D binary image.
+
+        Reference: T. Y. Zhang & C. Y. Suen, "A fast parallel algorithm for
+        thinning digital patterns", Commun. ACM 27, 236 (1984).
+
+        Each iteration has two sub-passes; a foreground pixel P1 is deleted when
+            (a) 2 <= B(P1) <= 6           (B = number of foreground neighbours)
+            (b) A(P1) == 1                (A = 0->1 transitions around P2..P9,P2)
+            (c) P2*P4*P6 == 0             (sub-pass 1) / P2*P4*P8 == 0 (2)
+            (d) P4*P6*P8 == 0             (sub-pass 1) / P2*P6*P8 == 0 (2)
+        with the neighbours numbered clockwise from north.
+        """
+        img = np.asarray(mask, dtype=bool).copy()
+        while True:
+            changed = False
+            for sub_pass in (0, 1):
+                p = np.pad(img, 1, mode='constant', constant_values=False)
+                # clockwise from north: P2..P9
+                P2 = p[:-2, 1:-1]    # N
+                P3 = p[:-2, 2:]      # NE
+                P4 = p[1:-1, 2:]     # E
+                P5 = p[2:, 2:]       # SE
+                P6 = p[2:, 1:-1]     # S
+                P7 = p[2:, :-2]      # SW
+                P8 = p[1:-1, :-2]    # W
+                P9 = p[:-2, :-2]     # NW
+                seq = [P2, P3, P4, P5, P6, P7, P8, P9]
+                B = sum(x.astype(np.int8) for x in seq)
+                A = sum(((~seq[k]) & seq[(k + 1) % 8]).astype(np.int8)
+                        for k in range(8))
+                if sub_pass == 0:
+                    cond_c = ~(P2 & P4 & P6)
+                    cond_d = ~(P4 & P6 & P8)
+                else:
+                    cond_c = ~(P2 & P4 & P8)
+                    cond_d = ~(P2 & P6 & P8)
+                to_delete = img & (B >= 2) & (B <= 6) & (A == 1) & cond_c & cond_d
+                if to_delete.any():
+                    img[to_delete] = False
+                    changed = True
+            if not changed:
+                return img
+
+    @staticmethod
+    def _geodesic_length(points: np.ndarray) -> float:
+        """
+        Longest geodesic path through a set of skeleton pixels.
+
+        The skeleton pixels form a graph (8-connectivity in 2-D, 26 in 3-D) with
+        Euclidean step weights; the filament length is the largest
+        shortest-path distance between any two pixels, found with the standard
+        double-sweep (Dijkstra from an arbitrary node to the farthest node A,
+        then Dijkstra from A). This is exact for tree-like skeletons.
+        """
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import dijkstra
+
+        pts = np.asarray(points)
+        n = len(pts)
+        if n < 2:
+            return 0.0
+        index = {tuple(p): i for i, p in enumerate(pts)}
+
+        offsets = np.array(np.meshgrid(*([[-1, 0, 1]] * pts.shape[1]),
+                                       indexing='ij')).reshape(pts.shape[1], -1).T
+        offsets = [o for o in offsets if np.any(o)]
+
+        rows, cols, wts = [], [], []
+        for i, p in enumerate(pts):
+            for o in offsets:
+                j = index.get(tuple(p + o))
+                if j is not None and j > i:
+                    rows.append(i)
+                    cols.append(j)
+                    wts.append(float(np.linalg.norm(o)))
+        if not rows:
+            return 0.0
+        graph = coo_matrix((wts, (rows, cols)), shape=(n, n)).tocsr()
+
+        d0 = dijkstra(graph, directed=False, indices=0)
+        d0[~np.isfinite(d0)] = -1.0
+        far = int(np.argmax(d0))
+        d1 = dijkstra(graph, directed=False, indices=far)
+        d1[~np.isfinite(d1)] = -1.0
+        return float(np.max(d1))
 
 
 # =============================================================================

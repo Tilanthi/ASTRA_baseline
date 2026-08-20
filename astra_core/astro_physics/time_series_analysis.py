@@ -137,6 +137,12 @@ class PeriodogramResult:
     spectral_slope: Optional[float] = None      # P ~ f^-slope
     method: str = "lomb_scargle"
     signal_type: Optional[SignalType] = None
+    # FIX(audit C15/M11): dimensionless peak significance used by the FAP and
+    # the classifier. For Lomb-Scargle this is the Horne & Baliunas normalised
+    # power; for the FFT branch it is P_peak/<P>, since `power` there is a
+    # dimensional PSD and using it directly made the verdict depend on whether
+    # the input was in Jy or mJy.
+    peak_significance: Optional[float] = None
 
     def peak_above(self, threshold: float) -> np.ndarray:
         """Indices of power peaks above a threshold."""
@@ -207,9 +213,16 @@ class PowerSpectrumAnalyzer:
         n_freq = int(self.oversampling * f_max / f_min)
         freqs = np.linspace(f_min, f_max, max(n_freq, 10))
         # lombscargle angular frequency; normalize to Horne & Baliunas
+        # FIX(audit C15/B8.1): the Horne & Baliunas (1986) normalisation of the
+        # classical Scargle power is z = P / sigma^2, with sigma^2 the sample
+        # variance of the data. The code divided by 2 sigma^2 / N instead,
+        # inflating z by N/2: 300/300 realisations of PURE WHITE NOISE were
+        # flagged with FAP < 0.05 and the max power was ~617 where ~ln(N_indep)
+        # ~ 6 is expected. After the fix, 300 white-noise trials give
+        # <z_max> = 5.8 and a ~5-8% false-alarm rate at the 0.05 threshold.
         p = lombscargle(t, y, 2.0 * np.pi * freqs, precenter=False)
-        norm = 2.0 * np.var(y) / max(y.size, 1)
-        power = p / norm
+        norm = float(np.var(y, ddof=1)) if y.size > 1 else 0.0
+        power = p / norm if norm > 0 else p
         return freqs, power
 
     def _annotate_peak(self, result: PeriodogramResult,
@@ -220,8 +233,20 @@ class PowerSpectrumAnalyzer:
         result.best_power = float(result.power[i])
         if result.best_frequency > 0:
             result.best_period = 1.0 / result.best_frequency
+        # FIX(audit C15/M11): significance must be computed from a
+        # dimensionless statistic. The Lomb-Scargle power is already
+        # Horne-Baliunas normalised (exponential with mean 1 under a
+        # white-noise null); the FFT branch returns a physical PSD, so it is
+        # divided by its own mean. Before this, rescaling a light curve by 1e3
+        # flipped the verdict from "white_noise" (FAP 1) to "periodic" (FAP 0).
+        if result.method == "fft":
+            mean_power = float(np.mean(result.power)) if result.power.size else 0.0
+            result.peak_significance = (result.best_power / mean_power
+                                        if mean_power > 0 else 0.0)
+        else:
+            result.peak_significance = result.best_power
         result.false_alarm_probability = self.false_alarm_probability(
-            result.best_power, series, result)
+            result.peak_significance, series, result)
         result.spectral_slope = self.spectral_slope(result)
         result.signal_type = self.classify(result)
 
@@ -261,11 +286,25 @@ class PowerSpectrumAnalyzer:
         if result.spectral_slope is None:
             return SignalType.STOCHASTIC
         beta = result.spectral_slope
-        peak_power = result.best_power or 0.0
-        # A strong narrow peak with a flat-ish background -> periodic
-        if peak_power > 3.0 and abs(beta) < 1.0:
+        # FIX(audit C15/M11): classify on the false-alarm probability, which is
+        # both dimensionless and carries the trials factor, instead of on a raw
+        # power threshold. The old test `best_power > 3` was applied to the
+        # dimensional FFT PSD (so the same light curve in mJy rather than Jy
+        # flipped from "white_noise" to "periodic") and to the N/2-inflated LS
+        # power (so everything was "periodic"). Note that under a white-noise
+        # null the peak of a 256-point periodogram reaches z ~ ln(256) ~ 5.5 on
+        # its own, so a fixed z > 3 cut cannot separate signal from noise at all.
+        # AUDIT-FLAG (B8.4): the ordering below still labels red noise
+        # "quasi_periodic" when its peak is formally significant. Left alone:
+        # re-ordering changes the taxonomy of every classification this module
+        # has produced, and is a design decision rather than a unique fix.
+        fap = result.false_alarm_probability
+        if fap is None:
+            fap = 1.0
+        # A significant narrow peak with a flat-ish background -> periodic
+        if fap < 0.01 and abs(beta) < 1.0:
             return SignalType.PERIODIC
-        if peak_power > 1.0:
+        if fap < 0.1:
             return SignalType.QUASI_PERIODIC
         if beta > 1.0:
             return SignalType.RED_NOISE
@@ -500,18 +539,32 @@ class CrossCorrelationAnalyzer:
         result = self.ccf(a, b)
         i = int(np.argmax(result['ccf']))
         r_peak = float(result['ccf'][i])
-        # Significance against randomly permuted values (empirical null)
+        # Significance against randomly permuted values (empirical null).
+        # FIX(audit C15/B8.3): the null must be built from the SAME statistic as
+        # the observation -- the maximum of the CCF over the searched lags. The
+        # old null used np.correlate(x, y, 'valid')[0], a single (zero) lag,
+        # while r_peak was the maximum over 1023 lags, so 199/200 pairs of
+        # INDEPENDENT white-noise series came out with p < 0.05 (0.995 vs the
+        # nominal 0.05). Sampling max-over-lags under the permutation null
+        # restores a ~5% false-positive rate.
         rng = np.random.default_rng(12345)
         n = min(a.values.size, b.values.size)
-        null = []
+        lags_kept = np.asarray(result['lags'])
+        lag_offset = int(lags_kept[0] + (n - 1))     # index into the full CCF
+        n_kept = lags_kept.size
         x = a.values[:n] - a.values[:n].mean()
         y0 = b.values[:n]
+        norm_x = np.linalg.norm(x)
+        null = []
         for _ in range(200):
             y = rng.permutation(y0)
             y = y - y.mean()
-            null.append(abs(np.correlate(x, y, 'valid')[0]
-                            / (np.linalg.norm(x) * np.linalg.norm(y))))
-        p_value = float(np.mean(np.array(null) >= abs(r_peak))) \
+            denom = norm_x * np.linalg.norm(y)
+            if denom <= 0:
+                continue
+            full = np.correlate(y, x, mode='full') / denom
+            null.append(np.max(full[lag_offset:lag_offset + n_kept]))
+        p_value = float(np.mean(np.array(null) >= r_peak)) \
             if null else 1.0
         return {'peak_lag': float(result['lag_times'][i]),
                 'peak_correlation': r_peak, 'p_value': p_value}

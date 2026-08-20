@@ -19,9 +19,12 @@ Author: STAN V43 Astrophysics Module
 """
 
 import math
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional, Tuple, Callable
+
+import numpy as np
 
 
 # Physical constants (CGS)
@@ -137,6 +140,94 @@ class XRaySpectrum:
     luminosity_2_10kev: float    # Hard X-ray luminosity (erg/s)
     ionization_age: float        # n_e * t (cm^-3 s)
     dominant_lines: List[str]    # Prominent emission lines
+
+
+# =============================================================================
+# EXACT SEDOV-TAYLOR SIMILARITY PROFILES        FIX(audit B-SNR-1, B-SNR-2)
+# =============================================================================
+
+_SEDOV_PROFILE_CACHE: Dict[float, Dict[str, object]] = {}
+
+
+def sedov_similarity_profiles(gamma: float = 5.0 / 3.0,
+                              n_points: int = 4001) -> Dict[str, object]:
+    """
+    Exact self-similar interior structure of a spherical Sedov-Taylor
+    blast wave, obtained by integrating the similarity equations
+    inward from the shock.
+
+    With xi = r/R, v = R_dot V(xi), rho = rho_0 G(xi),
+    p = rho_0 R_dot^2 P(xi) and R ~ t^(2/5), the Euler equations reduce
+    to (Landau & Lifshitz, Fluid Mechanics, sec. 106; Sedov 1959)
+
+        G'(V - xi) + G (V' + 2V/xi) = 0                  (continuity)
+        V'(V - xi) - (3/2) V = -P'/G                     (momentum)
+        (P/G^gamma)' (V - xi) = 3 (P/G^gamma)            (entropy)
+
+    with strong-shock boundary values at xi = 1
+
+        G(1) = (gamma+1)/(gamma-1),  V(1) = P(1) = 2/(gamma+1).
+
+    Returns a dict with the xi grid and the profiles normalised to
+    their immediate post-shock values, plus the energy partition.
+
+    Validation (gamma = 5/3): the dimensionless energy integral
+    Int_0^1 (G V^2/2 + P/(gamma-1)) xi^2 dxi comes out 0.2454918
+    against the value 25/(16 pi xi_0^5) = 0.2454878 required by
+    E = const with xi_0 = 1.15167 (1.6e-5 relative), and the resulting
+    partition is E_kin/E = 0.2828, E_th/E = 0.7173 - the standard
+    Sedov values 0.283/0.717.
+    """
+    key = round(float(gamma), 12)
+    if key in _SEDOV_PROFILE_CACHE:
+        return _SEDOV_PROFILE_CACHE[key]
+
+    from scipy.integrate import solve_ivp
+
+    g = float(gamma)
+
+    def rhs(xi, y):
+        V, G, P = y
+        d = V - xi
+        # Eliminate G' and P' to get an explicit V'
+        a = -G * d * d + g * P
+        b = 3.0 * P - 1.5 * G * V * d - 2.0 * g * P * V / xi
+        v_p = b / a
+        p_p = -G * (v_p * d - 1.5 * V)
+        g_p = -G * (v_p + 2.0 * V / xi) / d
+        return [v_p, g_p, p_p]
+
+    v_ps = 2.0 / (g + 1.0)
+    g_ps = (g + 1.0) / (g - 1.0)
+    p_ps = 2.0 / (g + 1.0)
+
+    xi_min = 1e-4
+    sol = solve_ivp(rhs, [1.0, xi_min], [v_ps, g_ps, p_ps],
+                    method='LSODA', rtol=1e-10, atol=1e-14,
+                    dense_output=True)
+    if not sol.success:                              # pragma: no cover
+        raise RuntimeError(f"Sedov similarity integration failed: {sol.message}")
+
+    xi = np.linspace(xi_min, 1.0, n_points)
+    V, G, P = sol.sol(xi)
+
+    # Energy partition (dimensionless integrals over the interior)
+    i_kin = float(np.trapezoid(0.5 * G * V ** 2 * xi ** 2, xi))
+    i_th = float(np.trapezoid(P / (g - 1.0) * xi ** 2, xi))
+    i_tot = i_kin + i_th
+
+    out = {
+        'gamma': g,
+        'xi': xi,
+        'V_over_Vps': V / v_ps,
+        'G_over_Gps': G / g_ps,
+        'P_over_Pps': P / p_ps,
+        'energy_integral': i_tot,
+        'f_kinetic': i_kin / i_tot,
+        'f_thermal': i_th / i_tot,
+    }
+    _SEDOV_PROFILE_CACHE[key] = out
+    return out
 
 
 class SedovTaylorBlastwave:
@@ -269,45 +360,58 @@ class SedovTaylorBlastwave:
         T_ps = self.post_shock_temperature(v)
         P_ps = self.post_shock_pressure(rho_ambient, v)
 
-        # Central values (from Sedov similarity solution)
-        # For gamma = 5/3, central density ~ 0 (evacuated)
-        # Central temperature diverges, but pressure is finite
-        rho_central = rho_ps * 0.01  # Approximate
-        P_central = P_ps * 0.31      # From Sedov solution for gamma=5/3
+        # ------------------------------------------------------------------
+        # FIX(audit B-SNR-1): the radial profiles were hand-made
+        # approximations and the density one was INVERTED - it returned
+        # 0 at the shock and its maximum (3.238) at the centre, i.e.
+        # exactly the opposite of the Sedov solution, plus a 324x
+        # discontinuity at the eta = 0.01 guard.  All four profiles are
+        # now interpolated from the exact similarity solution
+        # (`sedov_similarity_profiles`), which is validated against the
+        # energy integral to 1.6e-5.
+        # ------------------------------------------------------------------
+        prof = sedov_similarity_profiles(self.gamma)
+        xi_grid = prof['xi']
+        g_grid = prof['G_over_Gps']
+        p_grid = prof['P_over_Pps']
+        # velocity_profile keeps its original normalisation: fluid
+        # speed divided by the SHOCK speed, hence the 2/(gamma+1)
+        # factor (0.75 at the shock for gamma = 5/3).
+        v_grid = prof['V_over_Vps'] * (2.0 / (self.gamma + 1.0))
+        # T/T_ps = (P/P_ps)/(rho/rho_ps); floor rho to keep it finite
+        t_grid = p_grid / np.maximum(g_grid, 1e-12)
+
+        def _interp(grid, eta: float, below: float) -> float:
+            if eta > 1.0:
+                return 0.0
+            if eta < xi_grid[0]:
+                return below
+            return float(np.interp(eta, xi_grid, grid))
+
+        # Central values (from the Sedov similarity solution).
+        # For gamma = 5/3 the centre is evacuated (rho -> 0) and the
+        # temperature formally diverges; rho_central is regularised at
+        # the innermost solved radius so T_central stays finite.
+        rho_central = rho_ps * float(g_grid[0])
+        P_central = P_ps * float(p_grid[0])   # -> 0.3062 P_ps for gamma=5/3
         T_central = P_central / (rho_central * K_BOLTZMANN / (MU_IONIZED * M_PROTON))
 
         # Create radial profiles (normalized radius eta = r/R)
         def density_profile(eta: float) -> float:
             """Density profile normalized to post-shock value."""
-            if eta > 1.0:
-                return 0.0
-            if eta < 0.01:
-                return 0.01  # Avoid singularity at center
-            # Approximate Sedov profile
-            return ((1.0 - eta**2) / (1.0 - 0.99**2))**0.3
+            return _interp(g_grid, eta, float(g_grid[0]))
 
         def temperature_profile(eta: float) -> float:
             """Temperature profile normalized to post-shock value."""
-            if eta > 1.0:
-                return 0.0
-            if eta < 0.01:
-                return 10.0  # Central temperature enhancement
-            # Approximate Sedov profile
-            return 1.0 + 9.0 * (1.0 - eta)**2
+            return _interp(t_grid, eta, float(t_grid[0]))
 
         def pressure_profile(eta: float) -> float:
             """Pressure profile normalized to post-shock value."""
-            if eta > 1.0:
-                return 0.0
-            # Pressure is more uniform in Sedov solution
-            return 0.31 + 0.69 * eta**2
+            return _interp(p_grid, eta, float(p_grid[0]))
 
         def velocity_profile(eta: float) -> float:
             """Velocity profile normalized to shock velocity."""
-            if eta > 1.0:
-                return 0.0
-            # Linear velocity profile in Sedov solution
-            return 0.75 * eta  # Post-shock velocity is 3/4 of shock velocity
+            return _interp(v_grid, eta, float(v_grid[0]))
 
         return SedovSolution(
             radius=R,
@@ -489,31 +593,76 @@ class SNREvolution:
         rho = n_ambient * MU_NEUTRAL * M_PROTON
         return (4.0/3.0) * math.pi * radius**3 * rho
 
-    def transition_free_to_sedov(self, ejecta_mass: float,
-                                  n_ambient: float) -> Tuple[float, float]:
+    @staticmethod
+    def ejecta_velocity(energy: float, ejecta_mass: float) -> float:
         """
-        Calculate transition from free expansion to Sedov phase.
+        Characteristic (mean) ejecta velocity, v_ej = sqrt(2E/M_ej).
 
-        Occurs when swept mass ≈ ejecta mass.
+        FIX(audit B-SNR-3): `transition_free_to_sedov` used to hardcode
+        v_ej = 1e9 cm/s for the transition time while `evolve` used
+        sqrt(2E/M_ej) (and then multiplied by an ad-hoc 0.5).  The two
+        disagreed, so the radius jumped by 3.74x across the
+        free-expansion / Sedov boundary (0.787 pc -> 2.946 pc for
+        E = 1e51, M_ej = 3 Msun, n = 1).  Both call sites now use this
+        one definition.
+        """
+        return math.sqrt(2.0 * energy / ejecta_mass)
+
+    def transition_free_to_sedov(self, ejecta_mass: float,
+                                  n_ambient: float,
+                                  energy: float = 1e51) -> Tuple[float, float]:
+        """
+        Transition from free expansion to the Sedov-Taylor phase.
+
+        Taken as the point where the decelerating Sedov solution
+        catches down to the ballistic ejecta trajectory,
+
+            v_ej t = xi_0 (E t^2 / rho)^(1/5)
+            =>  t_ST = [xi_0 (E/rho)^(1/5) / v_ej]^(5/3)
+
+        so that R(t) = min(v_ej t, R_Sedov(t)) is CONTINUOUS at the
+        phase boundary.
+
+        FIX(audit B-SNR-3): the old version returned the swept-mass
+        radius R(M_swept = M_ej) with a time built from a hardcoded
+        v_ej = 1e9 cm/s, while `evolve` propagated free expansion as
+        0.5 sqrt(2E/M_ej) t and then jumped to the Sedov branch.  The
+        radius jumped x3.74 (0.787 -> 2.946 pc for E = 1e51,
+        M_ej = 3 Msun, n = 1) and so did the velocity.  Note that the
+        swept-mass criterion marks the *onset* of deceleration, not its
+        completion (Truelove & McKee 1999 place the true Sedov
+        transition later); for that example it gives 464 yr / 2.75 pc
+        against 751 yr / 4.44 pc here.
 
         Args:
             ejecta_mass: Ejecta mass (g)
             n_ambient: Ambient density (cm^-3)
+            energy: Explosion energy (erg), used for v_ej = sqrt(2E/M_ej)
 
         Returns:
             (transition_radius, transition_time) in (cm, s)
         """
         rho = n_ambient * MU_NEUTRAL * M_PROTON
 
-        # R when M_swept = M_ejecta
-        R_trans = (3.0 * ejecta_mass / (4.0 * math.pi * rho))**(1.0/3.0)
+        v_ejecta = self.ejecta_velocity(energy, ejecta_mass)
 
-        # In free expansion, v ≈ constant, so t ≈ R/v
-        # Typical ejecta velocity ~ 10^9 cm/s
-        v_ejecta = 1e9  # cm/s
-        t_trans = R_trans / v_ejecta
+        # Ballistic / Sedov crossing
+        t_trans = (self.sedov.xi_0 * (energy / rho) ** 0.2
+                   / v_ejecta) ** (5.0 / 3.0)
+        R_trans = v_ejecta * t_trans
 
         return R_trans, t_trans
+
+    def swept_mass_radius(self, ejecta_mass: float,
+                          n_ambient: float) -> float:
+        """
+        Radius at which the swept ISM mass equals the ejecta mass -
+        the traditional (earlier) marker of the end of free expansion.
+        Kept as a diagnostic; `transition_free_to_sedov` now uses the
+        continuity criterion instead.
+        """
+        rho = n_ambient * MU_NEUTRAL * M_PROTON
+        return (3.0 * ejecta_mass / (4.0 * math.pi * rho)) ** (1.0 / 3.0)
 
     def transition_sedov_to_snowplow(self, energy: float,
                                       n_ambient: float) -> Tuple[float, float]:
@@ -583,7 +732,7 @@ class SNREvolution:
         t = params.age
 
         # Get transition times
-        _, t_sedov = self.transition_free_to_sedov(M_ej, n)
+        _, t_sedov = self.transition_free_to_sedov(M_ej, n, E)
         _, t_pds = self.transition_sedov_to_snowplow(E, n)
         _, t_merge = self.transition_snowplow_to_merger(E, n)
 
@@ -617,10 +766,16 @@ class SNREvolution:
         rho = n * MU_NEUTRAL * M_PROTON
 
         if phase == SNRPhase.FREE_EXPANSION:
-            # Free expansion: R ~ v_ej * t
-            v = math.sqrt(2.0 * E / M_ej)  # Ejecta velocity
-            R = v * t * 0.5  # Approximate deceleration
-            v_shock = v * 0.8  # Shock slightly slower than ejecta
+            # Free expansion: R = v_ej * t, undecelerated by definition.
+            # FIX(audit B-SNR-3): the ad-hoc 0.5 and 0.8 factors made
+            # R(t_trans) = 0.787 pc where `transition_free_to_sedov`
+            # says the phase ends at R_trans = 2.745 pc, a 3.74x jump
+            # into the Sedov branch (and the velocity jumped too).
+            # With v_ej = sqrt(2E/M_ej) used consistently in both
+            # places, R(t_trans) = R_trans exactly.
+            v = self.ejecta_velocity(E, M_ej)
+            R = v * t
+            v_shock = v
 
         elif phase == SNRPhase.SEDOV_TAYLOR:
             # Use Sedov solution
@@ -663,12 +818,26 @@ class SNREvolution:
             t_cool = 1e8 / n_shell  # Faster cooling at lower T
 
         # Energy budget
-        E_kin = 0.5 * M_swept * v_shock**2
-
-        if phase in [SNRPhase.FREE_EXPANSION, SNRPhase.SEDOV_TAYLOR]:
-            E_th = E - E_kin  # Energy conservation
+        #
+        # FIX(audit B-SNR-2): `E_kin = 0.5 M_swept v_shock^2` assigns
+        # the POST-SHOCK velocity to all the swept mass and ignores the
+        # interior velocity profile.  For E = 1e51, n = 1, t = 1000 yr
+        # it gave E_kin = 0.679 E and E_th = 0.321 E - essentially the
+        # exact Sedov partition (0.283 / 0.717) swapped.  In the Sedov
+        # phase the split is a property of the similarity solution, so
+        # take it from there.
+        if phase == SNRPhase.SEDOV_TAYLOR:
+            prof = sedov_similarity_profiles(self.sedov.gamma)
+            E_kin = float(prof['f_kinetic']) * E
+            E_th = float(prof['f_thermal']) * E
+        elif phase == SNRPhase.FREE_EXPANSION:
+            # Ballistic ejecta: essentially all the energy is kinetic.
+            E_kin = 0.5 * M_ej * v_shock ** 2
+            E_th = max(E - E_kin, 0.0)
         else:
-            E_th = 0.1 * E  # Most energy radiated
+            # Radiative phases: crude budget, unchanged from before.
+            E_kin = 0.5 * M_swept * v_shock ** 2
+            E_th = 0.1 * E
 
         return SNRState(
             phase=phase,
@@ -825,12 +994,23 @@ class SynchrotronEmission:
         """
         # Use empirical Sigma-D relation
         # Sigma_1GHz ~ 10^-21 * D_pc^(-17/5) W/m^2/Hz/sr
+        #
+        # FIX(audit B-SNR-4), two independent errors:
+        #  (i) W m^-2 Hz^-1 sr^-1 -> erg s^-1 cm^-2 Hz^-1 sr^-1 is
+        #      x1e7 (erg per J) / 1e4 (cm^2 per m^2) = x1e3, not x1e7.
+        #  (ii) the luminosity of a uniformly bright sphere of surface
+        #      brightness Sigma is L = 4 pi R^2 * pi Sigma (the pi comes
+        #      from integrating cos(theta) over the outward hemisphere);
+        #      the code had an extra factor 4 pi instead of pi.
+        # Together these made L 4.00e4 too large, and `analyze_snr()`
+        # reported 1326 Jy for a generic 1 kpc, 5 pc remnant - brighter
+        # than Cas A.
 
         D_pc = state.radius / PC
-        Sigma = 1e-21 * D_pc**(-17.0/5.0) * 1e7  # Convert to CGS
+        Sigma = 1e-21 * D_pc**(-17.0/5.0) * 1e3  # W/m^2/Hz/sr -> CGS
 
-        # L = 4 * pi * R^2 * Sigma
-        L = 4.0 * math.pi * state.radius**2 * Sigma * 4.0 * math.pi
+        # L_nu = 4 pi R^2 * pi Sigma
+        L = 4.0 * math.pi * state.radius**2 * math.pi * Sigma
 
         return L
 
@@ -947,26 +1127,54 @@ class XRayThermalEmission:
         Returns:
             Cooling function (erg cm^3/s)
         """
-        # Approximate cooling curve for collisional ionization equilibrium
-        log_T = math.log10(temperature)
+        # Approximate cooling curve for collisional ionization
+        # equilibrium.
+        #
+        # FIX(audit B-SNR-6): every branch boundary was discontinuous -
+        # x3162 at 1e4 K, x3.16 at 1e5 K, x0.095 at 1e6 K and x2.7 at
+        # 10^7.5 K (the last because the metallicity factor changed
+        # form across the boundary).  The segments are now chained so
+        # that the curve is continuous at every T and for every Z:
+        # a single metallicity factor (0.3 + 0.7 Z) is applied
+        # throughout - appropriate because the 1e4-1e5 K regime is
+        # dominated by H/He line cooling, which survives at Z = 0 - and
+        # each power law is anchored to the previous segment's endpoint
+        # starting from the module's own peak value Lambda(1e5) = 1e-22.
+        # Below 1e4 K the curve falls off with the Lyman-alpha
+        # Boltzmann factor exp(-1.184e5/T) (10.2 eV / k = 118 400 K),
+        # which is what actually shuts CIE cooling off there.
+        #
+        # AUDIT-FLAG: only the CONTINUITY has been repaired.  The
+        # absolute normalisation and the +/-0.5 log-log slopes are the
+        # module's original heuristic and were NOT re-fitted to a
+        # tabulated CIE curve (Sutherland & Dopita 1993; Gnat &
+        # Sternberg 2007) - no such table is available offline here.
+        # Expect factor-of-several errors against real CIE cooling,
+        # especially near 1e7 K.  Do not use quantitatively.
+        f_z = 0.3 + 0.7 * metallicity
+        lambda_peak = 1e-22          # at T = 1e5 K
+        lambda_1e4 = lambda_peak * (1e4 / 1e5) ** 0.5    # 3.162e-23
+        lambda_1e6 = lambda_peak * (1e6 / 1e5) ** (-0.5)  # 3.162e-23
 
-        if log_T < 4.0:
-            # Low T: forbidden line cooling
-            Lambda = 1e-26 * metallicity
-        elif log_T < 5.0:
-            # Peak cooling from metal lines
-            Lambda = 1e-22 * metallicity * (temperature / 1e5)**0.5
-        elif log_T < 6.0:
-            # Fe L-shell, O lines
-            Lambda = 1e-22 * metallicity * (temperature / 1e6)**(-0.5)
-        elif log_T < 7.5:
-            # Fe K-shell, bremsstrahlung
-            Lambda = 3e-23 * (temperature / 1e7)**0.5 * (0.3 + 0.7 * metallicity)
+        T = float(temperature)
+        if T <= 0:
+            return 0.0
+
+        if T < 1e4:
+            # Lyman-alpha excitation cutoff, continuous at 1e4 K
+            T_LYA = 1.184e5  # K, 10.2 eV / k_B
+            Lambda = lambda_1e4 * math.exp(-T_LYA / T + T_LYA / 1e4)
+        elif T < 1e5:
+            # Rise towards the CIE peak
+            Lambda = lambda_peak * (T / 1e5) ** 0.5
+        elif T < 1e6:
+            # Fe L-shell, O lines: decline above the peak
+            Lambda = lambda_peak * (T / 1e5) ** (-0.5)
         else:
-            # Pure bremsstrahlung
-            Lambda = 3e-23 * (temperature / 1e7)**0.5
+            # Fe K-shell + bremsstrahlung, rising as T^0.5
+            Lambda = lambda_1e6 * (T / 1e6) ** 0.5
 
-        return Lambda
+        return Lambda * f_z
 
     def x_ray_luminosity(self, state: SNRState, n_ambient: float,
                          energy_band: str = 'soft') -> float:
@@ -1262,7 +1470,8 @@ def analyze_snr(energy_erg: float = 1e51, ejecta_msun: float = 3.0,
     xray_spec = xray.spectrum(state, n_ambient)
 
     # Phase transitions
-    _, t_sedov = evolution.transition_free_to_sedov(params.ejecta_mass, n_ambient)
+    _, t_sedov = evolution.transition_free_to_sedov(
+        params.ejecta_mass, n_ambient, params.explosion_energy)
     _, t_pds = evolution.transition_sedov_to_snowplow(energy_erg, n_ambient)
     _, t_merge = evolution.transition_snowplow_to_merger(energy_erg, n_ambient)
 

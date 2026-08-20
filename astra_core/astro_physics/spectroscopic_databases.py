@@ -22,6 +22,7 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 from enum import Enum
 import json
 import os
+import warnings
 from abc import ABC, abstractmethod
 
 
@@ -30,6 +31,146 @@ H_PLANCK = 6.62607015e-27  # erg s
 K_BOLTZMANN = 1.380649e-16  # erg/K
 C_LIGHT = 2.99792458e10  # cm/s
 AMU = 1.6605390666e-24  # g
+DEBYE = 1.0e-18  # esu cm per Debye
+
+
+# =============================================================================
+# Linear-rotor spectroscopy helpers        FIX(audit C3)
+# =============================================================================
+#
+# Einstein A coefficient for an electric-dipole rotational transition
+# J -> J-1 of a linear molecule in its ground vibrational state:
+#
+#     A_{J,J-1} = 64 pi^4 nu^3 / (3 h c^3) * |mu_{J,J-1}|^2
+#     |mu_{J,J-1}|^2 = mu^2 * S(J -> J-1) / g_u = mu^2 * J / (2J + 1)
+#
+# with the Hoenl-London line strength S(J -> J-1) = J and g_u = 2J+1
+# (Townes & Schawlow 1955, ch. 1 & 4; Mangum & Shirley 2015, PASP 127,
+# 266, eqs. 10-11).  Evaluated with nu in Hz and mu in esu cm the
+# prefactor 64 pi^4 / (3 h c^3) = 1.16397e-2, i.e. the familiar
+# practical form  A = 1.1640e-11 nu_GHz^3 mu_D^2 J/(2J+1).
+#
+# The pre-audit code used  A = 3.497e-8 * nu_MHz^3 * J/(J+1), which is
+# both dimensionally meaningless (nu in MHz) and uses the wrong
+# degeneracy factor J/(J+1); it gave A(CO 1-0) = 2.678e7 s^-1 against
+# the true 7.203e-8 s^-1 (3.7e14 too large).  The generators for
+# HCN/HCO+/N2H+ used A0*(J/3)**3, which places the *literature 1-0*
+# value at J = 3 and therefore makes A(1-0) 27x too small.
+
+_EINSTEIN_A_PREFACTOR = 64.0 * np.pi ** 4 / (3.0 * H_PLANCK * C_LIGHT ** 3)
+
+
+def linear_rotor_einstein_a(frequency_mhz: float, dipole_debye: float,
+                            j_upper: int) -> float:
+    """
+    Einstein A coefficient (s^-1) for the J -> J-1 transition of a
+    linear molecule with permanent dipole moment `dipole_debye`.
+
+    Validated against LAMDA/CDMS reference values:
+        CO   1-0  7.205e-8  (LAMDA 7.203e-8)
+        CO   3-2  2.501e-6  (LAMDA 2.497e-6)
+        HCN  1-0  2.407e-5  (LAMDA 2.407e-5)
+        HCO+ 1-0  4.187e-5  (LAMDA 4.187e-5)
+        N2H+ 1-0  3.628e-5  (LAMDA 3.628e-5)
+    """
+    nu_hz = float(frequency_mhz) * 1.0e6
+    mu_esu = float(dipole_debye) * DEBYE
+    j = float(j_upper)
+    return (_EINSTEIN_A_PREFACTOR * nu_hz ** 3 * mu_esu ** 2
+            * j / (2.0 * j + 1.0))
+
+
+def linear_rotor_frequency(j_upper: int, b_const: float, d_const: float,
+                           h_const: float = 0.0) -> float:
+    """
+    Rest frequency (MHz) of the J -> J-1 transition of a linear rotor,
+
+        E(J)/h = B J(J+1) - D [J(J+1)]^2 + H [J(J+1)]^3
+        nu(J -> J-1) = 2 B J - 4 D J^3 + H {[J(J+1)]^3 - [(J-1)J]^3}
+
+    All constants in MHz.  Omitting the centrifugal-distortion term
+    (the pre-audit behaviour for HCN/HCO+/N2H+) shifts the lines by
+    1.1 km/s already at J = 1 and by up to ~96 km/s at J = 9.
+    """
+    j = float(j_upper)
+    x_u = j * (j + 1.0)
+    x_l = (j - 1.0) * j
+    return (2.0 * b_const * j - 4.0 * d_const * j ** 3
+            + h_const * (x_u ** 3 - x_l ** 3))
+
+
+# Effective rotational constants (MHz) and permanent dipole moments (D).
+#
+# B, D, H were obtained by an unweighted least-squares fit of the
+# expression above to the *measured* CDMS catalogue line lists
+# (https://cdms.astro.uni-koeln.de/classic/entries/, tags c028503 CO,
+# c027501 HCN, c029507 HCO+, c029506 N2H+, hyperfine-collapsed line
+# centres) over exactly the J range each generator emits.  `freq_rms`
+# is the resulting maximum |model - CDMS| deviation over that range and
+# is used as the reported frequency uncertainty - these frequencies are
+# *computed*, not retrieved, and the uncertainty must say so.
+#
+# Dipole moments: CO 0.11011 D (Muenter 1975, J. Mol. Spectrosc. 55,
+# 490), HCN 2.985 D (Ebenstein & Muenter 1984, JCP 80, 3989),
+# HCO+ 3.90 D and N2H+ 3.40 D (values adopted by LAMDA / Botschwina
+# ab-initio).  Each reproduces the tabulated LAMDA A(1-0) to <0.5%.
+LINEAR_ROTOR_CONSTANTS: Dict[str, Dict[str, float]] = {
+    "CO":   {"B": 57635.9681,  "D": 0.18350435, "H": 1.7057e-07,
+             "mu": 0.11011, "j_max": 14, "freq_rms": 0.0064},
+    "HCN":  {"B": 44315.97554, "D": 0.08722134, "H": 1.1567e-07,
+             "mu": 2.985,   "j_max": 9,  "freq_rms": 0.0048},
+    "HCO+": {"B": 44594.42819, "D": 0.08282424, "H": 1.6751e-08,
+             "mu": 3.90,    "j_max": 9,  "freq_rms": 0.0061},
+    "N2H+": {"B": 46586.87449, "D": 0.08793416, "H": -2.7383e-07,
+             "mu": 3.40,    "j_max": 7,  "freq_rms": 0.0044},
+}
+
+# Provenance label for every line/rate this module *computes* rather
+# than retrieves.  FIX(audit rule 3): the previous code stamped
+# database="CDMS"/"LAMDA" on invented A-values and collision rates.
+SYNTHETIC_PROVENANCE = "synthetic"
+
+
+def linear_rotor_partition_function(temperature: float, b_const: float,
+                                    j_max: int = 200) -> float:
+    """
+    Rotational partition function of a linear molecule,
+
+        Q_rot(T) = sum_J (2J+1) exp(-h B J(J+1) / k T)
+
+    with `b_const` in MHz.  No nuclear-spin degeneracy factor is
+    included, so this is consistent with the g_u = 2J+1 convention used
+    for the transitions in this module (any spin factor cancels between
+    Q and g_u in a column density).  Reproduces the classical limit
+    kT/(hB) + 1/3 to <0.1% for kT >> hB.
+
+    FIX(audit C4b): the hardcoded `Qrot` tables previously returned by
+    `_get_molecule_properties` were wrong by -15% to +43% (CO: 156 at
+    300 K against the correct 108.8) and directly scaled every LTE
+    column density.
+    """
+    j = np.arange(0, int(j_max) + 1, dtype=float)
+    e_k = (H_PLANCK * b_const * 1e6 / K_BOLTZMANN) * j * (j + 1.0)  # K
+    return float(np.sum((2.0 * j + 1.0) * np.exp(-e_k / float(temperature))))
+
+
+def _synthetic_freq_uncertainty(j_upper: int,
+                                consts: Dict[str, float]) -> float:
+    """
+    Honest uncertainty (MHz) on a *computed* rotational frequency.
+
+    Inside the J range the constants were fitted over this is the
+    measured max |model - CDMS| residual.  Beyond it the leading
+    neglected higher-order distortion term grows roughly as J^6, so the
+    residual is scaled by (J/J_fit)^6 - a deliberately conservative
+    bound (verified >= the actual CDMS deviation for CO up to J = 40,
+    0.49 MHz, and HCN up to J = 29, 3.15 MHz).
+    """
+    j_fit = float(consts["j_max"])
+    base = float(consts["freq_rms"])
+    if j_upper <= j_fit:
+        return base
+    return base * (float(j_upper) / j_fit) ** 6
 
 
 class DatabaseType(Enum):
@@ -135,26 +276,53 @@ class MoleculeData:
 
     def column_density_from_line(self, line: SpectralLine,
                                   integrated_intensity: float,
-                                  temperature: float) -> float:
+                                  temperature: float,
+                                  t_background: float = 0.0) -> float:
         """
-        Calculate column density from integrated line intensity.
+        LTE column density from an optically thin integrated intensity.
+
+        Derivation (Goldsmith & Langer 1999, ApJ 517, 209, eq. 2;
+        Mangum & Shirley 2015, PASP 127, 266, eq. 80).  For an
+        optically thin line the emergent intensity integrates to
+
+            Int I_nu dnu = (h nu / 4 pi) A_ul N_u
+
+        and, with the Rayleigh-Jeans brightness temperature
+        T_R = (c^2 / 2 k nu^2) I_nu and dnu = (nu/c) dv,
+
+            Int I_nu dnu = (2 k nu^3 / c^3) Int T_R dv
+
+        so that
+
+            N_u = 8 pi k nu^2 / (h c^3 A_ul) * Int T_R dv          (*)
+
+        and N_tot = N_u (Q/g_u) exp(E_u / k T_ex).
+
+        FIX(audit C4): the pre-audit code used
+        `8 pi nu^3 / (c^3 A) * W * 1e5`, i.e. it was missing the factor
+        k/(h nu) = 1/5.532 at 115 GHz and left a residual unit of K.
 
         Parameters
         ----------
         line : SpectralLine
             The spectral line used
         integrated_intensity : float
-            Integrated intensity in K km/s
+            Integrated intensity Int T_R dv in K km/s
         temperature : float
             Excitation temperature in K
+        t_background : float, optional
+            Background temperature in K.  If > 0, the input intensity
+            is taken to be background-subtracted, i.e.
+            T_R = (J(T_ex) - J(T_bg))(1 - exp(-tau)), and (*) is
+            multiplied by J(T_ex)/(J(T_ex) - J(T_bg)).  Default 0
+            corresponds to the plain form (*).  Pass 2.725 for the
+            usual observer (CMB-subtracted) convention.
 
         Returns
         -------
         float
-            Column density in cm^-2
+            Total column density in cm^-2
         """
-        # Convert K km/s to erg/cm^2/s/sr/Hz * Hz
-        # Using standard radio astronomy conventions
         nu = line.frequency * 1e6  # Hz
         Q = self.partition_function(temperature)
 
@@ -162,8 +330,22 @@ class MoleculeData:
         g_u = line.upper_degeneracy
         E_u = line.upper_energy  # cm^-1
 
-        # Column density formula
-        N_u = 8 * np.pi * nu**3 / (C_LIGHT**3 * line.einstein_a) * integrated_intensity * 1e5
+        w_cgs = integrated_intensity * 1e5  # K km/s -> K cm/s
+
+        # FIX(audit C4): N_u = 8 pi k nu^2 W / (h c^3 A)
+        N_u = (8.0 * np.pi * K_BOLTZMANN * nu ** 2 * w_cgs
+               / (H_PLANCK * C_LIGHT ** 3 * line.einstein_a))
+
+        if t_background > 0.0:
+            hnu_k = H_PLANCK * nu / K_BOLTZMANN
+            j_ex = hnu_k / np.expm1(hnu_k / temperature)
+            j_bg = hnu_k / np.expm1(hnu_k / t_background)
+            if j_ex <= j_bg:
+                raise ValueError(
+                    "Excitation temperature does not exceed the "
+                    "background: the line is in absorption and the "
+                    "thin-emission inversion does not apply.")
+            N_u *= j_ex / (j_ex - j_bg)
 
         # Total column density
         N_total = N_u * Q / g_u * np.exp(E_u * H_PLANCK * C_LIGHT / (K_BOLTZMANN * temperature))
@@ -329,22 +511,31 @@ class CDMSDatabase(SpectroscopyDatabase):
         return filtered
 
     def _generate_co_lines(self) -> List[SpectralLine]:
-        """Generate CO rotational ladder."""
+        """
+        Generate the CO rotational ladder from rotational constants.
+
+        NOTE: these lines are *computed*, not retrieved from CDMS - see
+        `LINEAR_ROTOR_CONSTANTS`.  Frequencies reproduce the CDMS entry
+        to <0.007 MHz, Einstein A coefficients reproduce LAMDA to <0.5%,
+        but the `intensity` field remains a placeholder.
+        """
         lines = []
-        B = 57635.968  # MHz, rotational constant
-        D = 0.1835  # MHz, centrifugal distortion
+        c = LINEAR_ROTOR_CONSTANTS["CO"]
+        B, D, H = c["B"], c["D"], c["H"]
 
         for J in range(1, 15):
-            freq = 2 * B * J - 4 * D * J**3  # MHz
+            # FIX(audit C3): explicit rigid-rotor + distortion model
+            freq = linear_rotor_frequency(J, B, D, H)  # MHz
             E_upper = B * J * (J + 1) / 29979.2458  # cm^-1
             E_lower = B * (J - 1) * J / 29979.2458  # cm^-1
 
-            # Einstein A coefficient
-            A = 3.497e-8 * freq**3 * J / (J + 1)  # s^-1 (approximate)
+            # FIX(audit C3): A = 64 pi^4 nu^3 mu^2 J / (3 h c^3 (2J+1));
+            # was 3.497e-8*nu_MHz^3*J/(J+1) -> 3.7e14x too large.
+            A = linear_rotor_einstein_a(freq, c["mu"], J)  # s^-1
 
             lines.append(SpectralLine(
                 frequency=freq,
-                frequency_uncertainty=0.001,
+                frequency_uncertainty=c["freq_rms"],
                 intensity=-4.0 + 0.5 * np.log10(J),
                 einstein_a=A,
                 upper_energy=E_upper,
@@ -355,26 +546,35 @@ class CDMSDatabase(SpectroscopyDatabase):
                 quantum_numbers_lower=f"J={J-1}",
                 molecule="CO",
                 isotopologue="12C16O",
-                database="CDMS",
+                database=SYNTHETIC_PROVENANCE,
                 tag=28001
             ))
 
         return lines
 
     def _generate_hcn_lines(self) -> List[SpectralLine]:
-        """Generate HCN rotational transitions."""
+        """
+        Generate the HCN rotational ladder from rotational constants.
+
+        Computed, not retrieved - see `_generate_co_lines`.
+        """
         lines = []
-        B = 44315.976  # MHz
+        c = LINEAR_ROTOR_CONSTANTS["HCN"]
+        B, D, H = c["B"], c["D"], c["H"]
 
         for J in range(1, 10):
-            freq = 2 * B * J
+            # FIX(audit C3): centrifugal distortion was omitted entirely
+            # (2*B*J), shifting HCN 1-0 by 1.18 km/s and 9-8 by 96 km/s.
+            freq = linear_rotor_frequency(J, B, D, H)
             E_upper = B * J * (J + 1) / 29979.2458
             E_lower = B * (J - 1) * J / 29979.2458
-            A = 2.4e-5 * (J / 3)**3  # Approximate
+            # FIX(audit C3): was 2.4e-5*(J/3)**3, i.e. the literature
+            # A(1-0) placed at J=3 -> A(1-0) 27x too small.
+            A = linear_rotor_einstein_a(freq, c["mu"], J)
 
             lines.append(SpectralLine(
                 frequency=freq,
-                frequency_uncertainty=0.005,
+                frequency_uncertainty=c["freq_rms"],
                 intensity=-3.5,
                 einstein_a=A,
                 upper_energy=E_upper,
@@ -385,26 +585,33 @@ class CDMSDatabase(SpectroscopyDatabase):
                 quantum_numbers_lower=f"J={J-1}",
                 molecule="HCN",
                 isotopologue="H12C14N",
-                database="CDMS",
+                database=SYNTHETIC_PROVENANCE,
                 tag=27001
             ))
 
         return lines
 
     def _generate_hcop_lines(self) -> List[SpectralLine]:
-        """Generate HCO+ rotational transitions."""
+        """
+        Generate the HCO+ rotational ladder from rotational constants.
+
+        Computed, not retrieved - see `_generate_co_lines`.
+        """
         lines = []
-        B = 44594.423  # MHz
+        c = LINEAR_ROTOR_CONSTANTS["HCO+"]
+        B, D, H = c["B"], c["D"], c["H"]
 
         for J in range(1, 10):
-            freq = 2 * B * J
+            # FIX(audit C3): distortion term restored (1.08 km/s at J=1)
+            freq = linear_rotor_frequency(J, B, D, H)
             E_upper = B * J * (J + 1) / 29979.2458
             E_lower = B * (J - 1) * J / 29979.2458
-            A = 4.2e-5 * (J / 3)**3
+            # FIX(audit C3): was 4.2e-5*(J/3)**3 -> A(1-0) 27x too small
+            A = linear_rotor_einstein_a(freq, c["mu"], J)
 
             lines.append(SpectralLine(
                 frequency=freq,
-                frequency_uncertainty=0.005,
+                frequency_uncertainty=c["freq_rms"],
                 intensity=-3.8,
                 einstein_a=A,
                 upper_energy=E_upper,
@@ -415,26 +622,35 @@ class CDMSDatabase(SpectroscopyDatabase):
                 quantum_numbers_lower=f"J={J-1}",
                 molecule="HCO+",
                 isotopologue="H12C16O+",
-                database="CDMS",
+                database=SYNTHETIC_PROVENANCE,
                 tag=29003
             ))
 
         return lines
 
     def _generate_n2hp_lines(self) -> List[SpectralLine]:
-        """Generate N2H+ rotational transitions."""
+        """
+        Generate the N2H+ rotational ladder from rotational constants.
+
+        Computed, not retrieved - see `_generate_co_lines`.  These are
+        the hyperfine-collapsed line centres (N2H+ 1-0 is split into
+        seven resolvable hyperfine groups spanning ~10 km/s).
+        """
         lines = []
-        B = 46586.867  # MHz
+        c = LINEAR_ROTOR_CONSTANTS["N2H+"]
+        B, D, H = c["B"], c["D"], c["H"]
 
         for J in range(1, 8):
-            freq = 2 * B * J
+            # FIX(audit C3): distortion term restored (1.08 km/s at J=1)
+            freq = linear_rotor_frequency(J, B, D, H)
             E_upper = B * J * (J + 1) / 29979.2458
             E_lower = B * (J - 1) * J / 29979.2458
-            A = 3.6e-5 * (J / 3)**3
+            # FIX(audit C3): was 3.6e-5*(J/3)**3 -> A(1-0) 27x too small
+            A = linear_rotor_einstein_a(freq, c["mu"], J)
 
             lines.append(SpectralLine(
                 frequency=freq,
-                frequency_uncertainty=0.01,
+                frequency_uncertainty=c["freq_rms"],
                 intensity=-4.0,
                 einstein_a=A,
                 upper_energy=E_upper,
@@ -445,7 +661,7 @@ class CDMSDatabase(SpectroscopyDatabase):
                 quantum_numbers_lower=f"J={J-1}",
                 molecule="N2H+",
                 isotopologue="14N2H+",
-                database="CDMS",
+                database=SYNTHETIC_PROVENANCE,
                 tag=29004
             ))
 
@@ -492,53 +708,54 @@ class CDMSDatabase(SpectroscopyDatabase):
             level_degeneracies=np.ones(len(energy_levels), dtype=int),
             level_quantum_numbers=[f"E={e:.3f}" for e in energy_levels],
             transitions=lines,
-            partition_function_temps=np.array([9.375, 18.75, 37.5, 75, 150, 225, 300, 500, 1000]),
+            partition_function_temps=self.QROT_TEMPS.copy(),
             partition_function_values=props['Qrot']
         )
 
         self._molecule_cache[molecule] = mol_data
         return mol_data
 
+    # CDMS-style partition-function temperature grid (K)
+    QROT_TEMPS = np.array([9.375, 18.75, 37.5, 75, 150, 225, 300, 500, 1000])
+
     def _get_molecule_properties(self, molecule: str) -> Dict[str, Any]:
-        """Get basic molecule properties."""
+        """
+        Basic molecule properties.
+
+        FIX(audit C4b): the `Qrot` arrays used to be hardcoded and did
+        not correspond to any consistent formula - CO was 1.434x the
+        true rotational partition function, HCN/HCO+/N2H+ 0.848x.  They
+        are now evaluated from the module's own rotational constants
+        with `linear_rotor_partition_function`, so Q and the g_u = 2J+1
+        line degeneracies are mutually consistent by construction.
+        """
         properties = {
-            "CO": {
-                "formula": "CO",
-                "mass": 28.0,
-                "symmetry": "linear",
-                "dipole": 0.112,
-                "Qrot": np.array([4.87, 9.74, 19.5, 38.9, 77.8, 117, 156, 259, 518])
-            },
-            "HCN": {
-                "formula": "HCN",
-                "mass": 27.0,
-                "symmetry": "linear",
-                "dipole": 2.985,
-                "Qrot": np.array([3.76, 7.52, 15.0, 30.1, 60.1, 90.2, 120, 200, 401])
-            },
-            "HCO+": {
-                "formula": "HCO+",
-                "mass": 29.0,
-                "symmetry": "linear",
-                "dipole": 3.89,
-                "Qrot": np.array([3.72, 7.44, 14.9, 29.8, 59.6, 89.4, 119, 199, 397])
-            },
-            "N2H+": {
-                "formula": "N2H+",
-                "mass": 29.0,
-                "symmetry": "linear",
-                "dipole": 3.40,
-                "Qrot": np.array([3.57, 7.13, 14.3, 28.5, 57.0, 85.5, 114, 190, 380])
-            }
+            "CO":   {"formula": "CO",   "mass": 28.0},
+            "HCN":  {"formula": "HCN",  "mass": 27.0},
+            "HCO+": {"formula": "HCO+", "mass": 29.0},
+            "N2H+": {"formula": "N2H+", "mass": 29.0},
         }
 
-        return properties.get(molecule, {
+        if molecule in properties:
+            const = LINEAR_ROTOR_CONSTANTS[molecule]
+            props = dict(properties[molecule])
+            props["symmetry"] = "linear"
+            props["dipole"] = const["mu"]
+            props["Qrot"] = np.array([
+                linear_rotor_partition_function(t, const["B"])
+                for t in self.QROT_TEMPS])
+            return props
+
+        # Unknown molecule: generic 30 GHz linear rotor placeholder
+        return {
             "formula": molecule,
             "mass": 30.0,
             "symmetry": "linear",
             "dipole": 1.0,
-            "Qrot": np.array([5, 10, 20, 40, 80, 120, 160, 267, 533])
-        })
+            "Qrot": np.array([
+                linear_rotor_partition_function(t, 30000.0)
+                for t in self.QROT_TEMPS]),
+        }
 
 
 class JPLDatabase(SpectroscopyDatabase):
@@ -652,9 +869,19 @@ class LAMDADatabase(SpectroscopyDatabase):
             return self._generate_generic_lamda(molecule)
 
     def _generate_co_lamda(self) -> MoleculeData:
-        """Generate CO LAMDA data with collision rates."""
+        """
+        Build a LAMDA-shaped CO dataset from rotational constants.
+
+        WARNING: this is *not* a LAMDA file.  Level energies, line
+        frequencies and Einstein A coefficients are computed from
+        B/D/H and the CO dipole moment (accurate: A(1-0) matches LAMDA
+        to 0.03%), but the H2 collision rate coefficients are an
+        order-of-magnitude placeholder, not the Yang et al. (2010)
+        LAMDA data.  Provenance is reported as "synthetic".
+        """
         n_levels = 41
-        B = 57635.968e-3  # GHz
+        c = LINEAR_ROTOR_CONSTANTS["CO"]
+        B = c["B"] * 1e-3  # GHz
 
         # Energy levels
         J_values = np.arange(n_levels)
@@ -664,12 +891,16 @@ class LAMDADatabase(SpectroscopyDatabase):
         # Transitions and Einstein A
         transitions = []
         for J in range(1, n_levels):
-            freq = 2 * B * J * 1000  # MHz
-            A = 3.497e-8 * (freq/1000)**3 * J / (J + 1)
+            # FIX(audit C3): distortion term + correct A coefficient.
+            # Was freq = 2*B*J*1000 and A = 3.497e-8*(freq/1000)**3*
+            # J/(J+1), giving A(CO 1-0) = 2.68e-2 s^-1 - i.e. the CDMS
+            # and LAMDA generators disagreed with each other by 1e9.
+            freq = linear_rotor_frequency(J, c["B"], c["D"], c["H"])  # MHz
+            A = linear_rotor_einstein_a(freq, c["mu"], J)
 
             transitions.append(SpectralLine(
                 frequency=freq,
-                frequency_uncertainty=0.001,
+                frequency_uncertainty=_synthetic_freq_uncertainty(J, c),
                 intensity=-4.0,
                 einstein_a=A,
                 upper_energy=energies[J],
@@ -679,19 +910,25 @@ class LAMDADatabase(SpectroscopyDatabase):
                 quantum_numbers_upper=f"J={J}",
                 quantum_numbers_lower=f"J={J-1}",
                 molecule="CO",
-                database="LAMDA"
+                database=SYNTHETIC_PROVENANCE
             ))
 
         # Collision rates with H2
         temps = np.array([10, 20, 30, 50, 70, 100, 150, 200, 300, 500, 1000, 2000])
         n_trans = len(transitions)
 
-        # Generate rate coefficients (approximate scaling)
+        # FIX(audit c.2): these are DOWNWARD (de-excitation) rate
+        # coefficients.  The old code multiplied them by
+        # exp(-E_u/(1.4 T)), i.e. applied a Boltzmann suppression to a
+        # downward rate - backwards; detailed balance puts that factor
+        # on the *upward* rate.  It made k(CO 1-0, 10 K) = 2.4e-12,
+        # 14x below the LAMDA value ~3.3e-11.  The remaining
+        # 1e-11 (T/100)^0.5 scaling is an ORDER-OF-MAGNITUDE PLACEHOLDER
+        # with no molecule-specific information; it is flagged as
+        # synthetic and warned about in get_collision_rates().
         rates = np.zeros((n_trans, len(temps)))
         for i in range(n_trans):
-            J = i + 1
-            # Typical CO-H2 rates ~10^-11 cm^3/s
-            rates[i] = 1e-11 * (temps / 100)**0.5 * np.exp(-energies[J] / (1.4 * temps))
+            rates[i] = 1e-11 * (temps / 100.0) ** 0.5
 
         collision_h2 = CollisionPartner(
             partner="H2",
@@ -717,9 +954,14 @@ class LAMDADatabase(SpectroscopyDatabase):
         )
 
     def _generate_hcn_lamda(self) -> MoleculeData:
-        """Generate HCN LAMDA data."""
+        """
+        Build a LAMDA-shaped HCN dataset from rotational constants.
+
+        WARNING: computed, not retrieved - see `_generate_co_lamda`.
+        """
         n_levels = 30
-        B = 44315.976e-3  # GHz
+        c = LINEAR_ROTOR_CONSTANTS["HCN"]
+        B = c["B"] * 1e-3  # GHz
 
         J_values = np.arange(n_levels)
         energies = B * J_values * (J_values + 1) / 0.0299792458
@@ -727,12 +969,13 @@ class LAMDADatabase(SpectroscopyDatabase):
 
         transitions = []
         for J in range(1, n_levels):
-            freq = 2 * B * J * 1000
-            A = 2.4e-5 * (J / 3)**3
+            # FIX(audit C3): distortion term + correct Einstein A
+            freq = linear_rotor_frequency(J, c["B"], c["D"], c["H"])
+            A = linear_rotor_einstein_a(freq, c["mu"], J)
 
             transitions.append(SpectralLine(
                 frequency=freq,
-                frequency_uncertainty=0.005,
+                frequency_uncertainty=_synthetic_freq_uncertainty(J, c),
                 intensity=-3.5,
                 einstein_a=A,
                 upper_energy=energies[J],
@@ -742,7 +985,7 @@ class LAMDADatabase(SpectroscopyDatabase):
                 quantum_numbers_upper=f"J={J}",
                 quantum_numbers_lower=f"J={J-1}",
                 molecule="HCN",
-                database="LAMDA"
+                database=SYNTHETIC_PROVENANCE
             ))
 
         temps = np.array([10, 20, 30, 50, 70, 100, 150, 200, 300, 500])
@@ -773,9 +1016,25 @@ class LAMDADatabase(SpectroscopyDatabase):
         )
 
     def _generate_generic_lamda(self, molecule: str) -> MoleculeData:
-        """Generate generic LAMDA-format data."""
+        """
+        Placeholder linear-rotor dataset for an unrecognised molecule.
+
+        WARNING: nothing here is measured.  B = 30 GHz and mu = 1 D are
+        arbitrary stand-ins; only the *internal consistency* between
+        level energies, frequencies and Einstein A coefficients is
+        guaranteed.  Never treat the numbers as spectroscopy.
+        """
+        warnings.warn(
+            f"No spectroscopic data for '{molecule}': returning a "
+            "generic linear rotor with B = 30 GHz and mu = 1 D. "
+            "Frequencies and Einstein A coefficients are placeholders, "
+            "not measurements.",
+            RuntimeWarning, stacklevel=3)
+
         n_levels = 20
-        B = 30000e-3  # GHz, generic
+        b_mhz = 30000.0  # MHz, generic placeholder
+        mu_generic = 1.0  # Debye, generic placeholder
+        B = b_mhz * 1e-3  # GHz
 
         J_values = np.arange(n_levels)
         energies = B * J_values * (J_values + 1) / 0.0299792458
@@ -783,12 +1042,15 @@ class LAMDADatabase(SpectroscopyDatabase):
 
         transitions = []
         for J in range(1, n_levels):
-            freq = 2 * B * J * 1000
-            A = 1e-5 * J
+            freq = 2 * b_mhz * J
+            # FIX(audit C3): A = 1e-5*J was an invented linear ramp;
+            # use the same rigid-rotor expression as everywhere else so
+            # the placeholder is at least internally consistent.
+            A = linear_rotor_einstein_a(freq, mu_generic, J)
 
             transitions.append(SpectralLine(
                 frequency=freq,
-                frequency_uncertainty=0.01,
+                frequency_uncertainty=np.nan,  # unknown: not measured
                 intensity=-4.0,
                 einstein_a=A,
                 upper_energy=energies[J],
@@ -798,7 +1060,7 @@ class LAMDADatabase(SpectroscopyDatabase):
                 quantum_numbers_upper=f"J={J}",
                 quantum_numbers_lower=f"J={J-1}",
                 molecule=molecule,
-                database="LAMDA"
+                database=SYNTHETIC_PROVENANCE
             ))
 
         return MoleculeData(
@@ -817,7 +1079,13 @@ class LAMDADatabase(SpectroscopyDatabase):
                            upper: int, lower: int,
                            temperature: float) -> float:
         """
-        Get collision rate coefficient.
+        Get a *synthetic* collisional de-excitation rate coefficient.
+
+        WARNING (audit rule 3): this class does not read LAMDA files.
+        The returned coefficient comes from the order-of-magnitude
+        scaling k ~ 1e-11 (T/100 K)^0.5 cm^3/s and carries no
+        molecule-, transition- or partner-specific information.  For
+        quantitative excitation modelling load a real LAMDA datafile.
 
         Parameters
         ----------
@@ -835,8 +1103,12 @@ class LAMDADatabase(SpectroscopyDatabase):
         Returns
         -------
         float
-            Rate coefficient in cm^3/s
+            Rate coefficient in cm^3/s (synthetic placeholder)
         """
+        warnings.warn(
+            "LAMDADatabase.get_collision_rates returns a synthetic "
+            "order-of-magnitude placeholder, not LAMDA data.",
+            RuntimeWarning, stacklevel=2)
         mol_data = self.get_molecule(molecule)
 
         if partner not in mol_data.collision_partners:

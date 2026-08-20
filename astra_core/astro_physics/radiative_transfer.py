@@ -76,14 +76,25 @@ def escape_probability(tau: float, geometry: EscapeGeometry) -> float:
     if tau < 1e-10:
         return 1.0
 
-    if geometry == EscapeGeometry.UNIFORM_SPHERE:
-        # Uniform sphere: beta = 1.5/tau * (1 - 2/tau^2 + (2/tau + 2/tau^2)*exp(-tau))
+    if geometry in (EscapeGeometry.UNIFORM_SPHERE, EscapeGeometry.STATIC_SPHERE):
+        # Uniform (static, homogeneous) sphere, Osterbrock (1989) Appendix 2 --
+        # the same expression RADEX uses for its "uniform sphere" geometry:
+        #
+        #   beta = 1.5/tau * [1 - 2/tau^2 + (2/tau + 2/tau^2) exp(-tau)]
+        #
+        # FIX(audit H7): the small-tau branch used the LVG series 1 - tau/2 +
+        # tau^2/6. Expanding the expression above gives
+        #   beta = 1 - 3 tau/8 + tau^2/10 - tau^3/120 + O(tau^4),
+        # so the old branch was discontinuous by 1.16e-3 across tau = 0.01
+        # (0.9950663 vs the exact 0.9962973 at tau = 0.0099).
+        # The series is needed only to avoid catastrophic cancellation as
+        # tau -> 0 (the 2/tau^2 terms).
+        # FIX(audit, LOW): the tau > 50 branch returned 1.5/tau, discontinuous
+        # by 8e-4 relative at tau = 50; the full expression has no cancellation
+        # problem at large tau, so it is now used everywhere above tau = 0.01.
         if tau < 0.01:
-            return 1.0 - tau/2.0 + tau**2/6.0
-        elif tau > 50:
-            return 1.5 / tau
-        else:
-            return 1.5/tau * (1.0 - 2.0/tau**2 + (2.0/tau + 2.0/tau**2) * np.exp(-tau))
+            return 1.0 - 3.0*tau/8.0 + tau**2/10.0 - tau**3/120.0
+        return 1.5/tau * (1.0 - 2.0/tau**2 + (2.0/tau + 2.0/tau**2) * np.exp(-tau))
 
     elif geometry == EscapeGeometry.EXPANDING_SPHERE:
         # LVG/Sobolev approximation: beta = (1 - exp(-tau)) / tau
@@ -99,14 +110,19 @@ def escape_probability(tau: float, geometry: EscapeGeometry) -> float:
         else:
             return (1.0 - np.exp(-3.0*tau)) / (3.0*tau)
 
-    elif geometry == EscapeGeometry.STATIC_SPHERE:
-        # Static sphere with thermal broadening
-        if tau < 0.01:
-            return 1.0 - tau/2.0
-        elif tau > 50:
-            return 1.0 / (tau * np.sqrt(np.log(tau/np.sqrt(np.pi))))
-        else:
-            return 1.5/tau * (1.0 - 2.0/tau**2 + (2.0/tau + 2.0/tau**2) * np.exp(-tau))
+    # FIX(audit H6): STATIC_SPHERE is handled together with UNIFORM_SPHERE above.
+    # It previously returned the uniform-sphere expression below tau = 50 and a
+    # Doppler-core asymptote 1/(tau sqrt(ln(tau/sqrt(pi)))) above it, which is a
+    # different physical assumption: beta jumped by x2.74 at tau = 50 (0.0300 ->
+    # 0.0109) and diverged from the sphere result thereafter (x3.78 at tau=1000).
+    # The static homogeneous sphere IS the Osterbrock/RADEX uniform-sphere case
+    # for a frequency-independent (line-centre) optical depth, so the two are
+    # now identical and continuous.
+    # AUDIT-FLAG: a genuinely frequency-dependent static-sphere treatment (with
+    # a Doppler profile and partial frequency redistribution, for which
+    # beta ~ 1/(tau sqrt(pi ln tau)) at large tau; Osterbrock 1962, Hummer 1968)
+    # is NOT implemented here and cannot be obtained by patching a branch onto
+    # the grey formula -- it requires frequency redistribution in the solver.
 
     return 1.0
 
@@ -140,6 +156,12 @@ class MolecularData:
     einstein_A: np.ndarray      # Einstein A coefficients (s⁻¹)
     frequencies: np.ndarray     # Transition frequencies (Hz)
     collision_rates: List[CollisionRates]
+    # FIX(audit H8): (upper, lower) level indices for each entry of
+    # einstein_A/frequencies, in the same order. LAMDA files list only the
+    # allowed transitions, so this mapping cannot be inferred in general.
+    # If left None the solver accepts only unambiguous layouts (all-pairs
+    # packed order, or an adjacent dipole ladder) and otherwise raises.
+    radiative_transitions: Optional[List[Tuple[int, int]]] = None
 
 
 # =============================================================================
@@ -189,31 +211,66 @@ class StatisticalEquilibriumSolver:
     # ------------------------------------------------------------------ setup
     def _index_transitions(self):
         """Build flat radiative and collisional transition tables."""
+        A = np.atleast_1d(np.asarray(self.data.einstein_A, dtype=float))
+        nu = np.atleast_1d(np.asarray(self.data.frequencies, dtype=float))
+        pairs = self._radiative_pairs(len(A))
+        if len(nu) != len(A):
+            raise ValueError(
+                f"einstein_A has {len(A)} entries but frequencies has {len(nu)}")
         # Radiative transitions: (upper, lower, A_ul, freq)
         self.radiative = []
-        for up in range(self.n_levels):
-            for low in range(up):
-                k = self._radiative_index(up, low)
-                if k is not None and self.data.einstein_A[k] > 0:
-                    self.radiative.append((up, low, float(self.data.einstein_A[k]),
-                                           float(self.data.frequencies[k])))
+        for k, (up, low) in enumerate(pairs):
+            if A[k] > 0:
+                self.radiative.append((int(up), int(low), float(A[k]), float(nu[k])))
         # Collisional rates interpolated to T_kin, flattened per partner
         self._coll_cache = {}
 
-    def _radiative_index(self, up: int, low: int):
-        """Index into einstein_A/frequencies arrays for (up, low).
+    def _radiative_pairs(self, n_trans: int) -> List[Tuple[int, int]]:
+        """
+        Map each entry of einstein_A/frequencies onto its (upper, lower) levels.
 
-        Assumes transitions are ordered upper-descending as in LAMDA files:
-        index = up*(up-1)/2 + low is the natural packed ordering; fall back
-        to a linear scan if the arrays do not match that packing.
+        FIX(audit H8): the old `_radiative_index` *assumed* the all-pairs packed
+        ordering k = up(up-1)/2 + low for every input. Real LAMDA files list only
+        the allowed transitions, so for a 3-level linear rotor with
+        einstein_A = [A_10, A_21] the solver silently assigned A_21 and nu_21 to
+        the dipole-FORBIDDEN 2->0 transition and dropped the real 2->1 line.
+        Nothing warned. The mapping is now either taken from the data
+        (`MolecularData.radiative_transitions`) or inferred only when the array
+        length makes the ordering unambiguous; anything else raises.
+
+        Accepted layouts:
+          * explicit `radiative_transitions` [(up, low), ...]  -- preferred;
+          * n_trans == n(n-1)/2 : all-pairs packed order, k = up(up-1)/2 + low
+            (zero-pad the forbidden entries; the solver skips A <= 0);
+          * n_trans == n-1      : adjacent ladder, k -> (k+1, k), the LAMDA
+            layout for a linear rotor with dipole selection rule dJ = 1.
         """
         n = self.n_levels
-        k = up * (up - 1) // 2 + low
-        n_trans_packed = n * (n - 1) // 2
-        arr_len = len(np.atleast_1d(self.data.einstein_A))
-        if k < min(arr_len, n_trans_packed):
-            return k
-        return None
+        explicit = getattr(self.data, 'radiative_transitions', None)
+        if explicit is not None:
+            pairs = [(int(u), int(l)) for u, l in explicit]
+            if len(pairs) != n_trans:
+                raise ValueError(
+                    f"radiative_transitions has {len(pairs)} entries but "
+                    f"einstein_A has {n_trans}")
+            for up, low in pairs:
+                if not (0 <= low < up < n):
+                    raise ValueError(
+                        f"invalid radiative transition ({up}, {low}) for "
+                        f"{n} levels")
+            return pairs
+
+        n_packed = n * (n - 1) // 2
+        if n_trans == n_packed:
+            return [(up, low) for up in range(n) for low in range(up)]
+        if n_trans == n - 1:
+            return [(k + 1, k) for k in range(n - 1)]
+        raise ValueError(
+            f"cannot infer the (upper, lower) level pairs for {n_trans} "
+            f"radiative transitions among {n} levels: supply "
+            f"MolecularData.radiative_transitions explicitly (expected "
+            f"{n_packed} for all-pairs packed order or {n - 1} for an "
+            f"adjacent dipole ladder)")
 
     def _collisional_rates(self, T_kin: float) -> np.ndarray:
         """Total collisional rate matrix C[i, j] (s^-1 * n) at T_kin."""

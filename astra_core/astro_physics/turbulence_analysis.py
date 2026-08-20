@@ -137,40 +137,32 @@ class StructureFunctionAnalysis:
         lags = np.arange(1, max_lag + 1)
         S_p = np.zeros(len(lags))
 
-        angles = np.linspace(0, 2*np.pi, n_angles, endpoint=False)
+        # FIX(audit H11): the previous implementation stepped through n_angles
+        # angles and truncated the displacement with dx = int(lag*cos(theta)),
+        # dy = int(lag*sin(theta)). At lag = 1 that gives (0, 0) for 32 of the 36
+        # default angles, so S_2(1) was the mean of 32 exact zeros and 4 real
+        # values -- 11x too low (3.894e-4 vs a direct 4.494e-3), and the fitted
+        # slope was biased (1.577 vs 1.513).
+        # We now average over the *integer lattice* displacements that actually
+        # fall in the annulus |d| in [lag-0.5, lag+0.5), which is the standard
+        # radially-binned estimator, and weight by the number of pixel pairs.
+        offsets_by_lag = self._annulus_offsets(lags, nx, ny, n_angles)
 
         for i, lag in enumerate(lags):
-            values = []
-
-            for angle in angles:
-                dx = int(lag * np.cos(angle))
-                dy = int(lag * np.sin(angle))
-
-                if abs(dx) >= nx or abs(dy) >= ny:
-                    continue
-
-                # Slice arrays for the lag
-                if dx >= 0 and dy >= 0:
-                    d1 = data[dy:, dx:]
-                    d2 = data[:ny-dy if dy > 0 else ny, :nx-dx if dx > 0 else nx]
-                elif dx >= 0 and dy < 0:
-                    d1 = data[:ny+dy, dx:]
-                    d2 = data[-dy:, :nx-dx if dx > 0 else nx]
-                elif dx < 0 and dy >= 0:
-                    d1 = data[dy:, :nx+dx]
-                    d2 = data[:ny-dy if dy > 0 else ny, -dx:]
-                else:
-                    d1 = data[:ny+dy, :nx+dx]
-                    d2 = data[-dy:, -dx:]
-
-                min_size = min(d1.shape[0], d2.shape[0], d1.shape[1], d2.shape[1])
-                if min_size > 0:
-                    diff = np.abs(d1[:min_size, :min_size] -
-                                 d2[:min_size, :min_size])**order
-                    values.extend(diff.flatten())
-
-            if values:
-                S_p[i] = np.mean(values)
+            total = 0.0
+            count = 0
+            for dx, dy in offsets_by_lag[i]:
+                # overlapping region of data and data shifted by (dx, dy)
+                y1 = slice(max(0, dy), ny + min(0, dy))
+                y0 = slice(max(0, -dy), ny + min(0, -dy))
+                x1 = slice(max(0, dx), nx + min(0, dx))
+                x0 = slice(max(0, -dx), nx + min(0, -dx))
+                diff = data[y1, x1] - data[y0, x0]
+                if diff.size:
+                    total += float(np.sum(np.abs(diff) ** order))
+                    count += diff.size
+            if count:
+                S_p[i] = total / count
 
         # Fit power law
         slope, slope_err, fit_range = self._fit_power_law(lags, S_p)
@@ -183,6 +175,47 @@ class StructureFunctionAnalysis:
             slope_err=slope_err,
             fit_range=fit_range
         )
+
+    @staticmethod
+    def _annulus_offsets(lags: np.ndarray, nx: int, ny: int,
+                        n_angles: int) -> List[List[Tuple[int, int]]]:
+        """
+        Integer lattice displacements in each lag annulus, |d| in [l-0.5, l+0.5).
+
+        Only half of the plane is kept (dx > 0, or dx == 0 and dy > 0) because
+        (dx, dy) and (-dx, -dy) sample exactly the same pixel pairs.
+
+        `n_angles` is retained from the previous API and now acts as a cap: if an
+        annulus contains more than `n_angles` distinct half-plane displacements,
+        they are subsampled uniformly in position angle so the azimuthal average
+        stays isotropic while the cost stays bounded. (Setting n_angles very
+        small degrades the isotropy of the average; the default 36 is fine for
+        the usual max_lag = N/4.)
+        """
+        max_lag = int(lags[-1])
+        out: List[List[Tuple[int, int]]] = []
+        # Pre-bin all candidate displacements once.
+        buckets: Dict[int, List[Tuple[float, int, int]]] = {int(l): [] for l in lags}
+        rng = range(-max_lag, max_lag + 1)
+        for dy in rng:
+            if abs(dy) >= ny:
+                continue
+            for dx in rng:
+                if abs(dx) >= nx:
+                    continue
+                if dx < 0 or (dx == 0 and dy <= 0):
+                    continue                      # keep one of each +/- pair
+                r = np.hypot(dx, dy)
+                lag_bin = int(np.floor(r + 0.5))   # annulus [l-0.5, l+0.5)
+                if lag_bin in buckets:
+                    buckets[lag_bin].append((float(np.arctan2(dy, dx)), dx, dy))
+        for lag in lags:
+            entries = sorted(buckets[int(lag)])
+            if n_angles and len(entries) > n_angles:
+                idx = np.linspace(0, len(entries) - 1, n_angles).round().astype(int)
+                entries = [entries[j] for j in sorted(set(idx.tolist()))]
+            out.append([(dx, dy) for _, dx, dy in entries])
+        return out
 
     def velocity_structure_function(self, centroid_velocity: np.ndarray,
                                    pixel_scale: float,
@@ -378,7 +411,16 @@ class SpectralPCA:
         """
         cube = np.asarray(cube, dtype=float)
         nx, ny, nch = cube.shape
-        X = cube.reshape(nx * ny, nch) - cube.mean()
+        # FIX(audit H12): centre each spectral channel on its own mean, as PCA
+        # requires. Subtracting the single global scalar `cube.mean()` leaves the
+        # mean spectrum in the data, so PC1 was simply the mean spectrum:
+        # on a cube = mean spectrum + 1% noise the old code reported
+        # explained_variance_ratio = [0.99915, 5e-5, 5e-5]; correctly centred it
+        # is [0.0558, 0.0517, 0.0494]. `total_variance` below was already
+        # computed on the properly centred matrix, so the two outputs used to be
+        # mutually inconsistent.
+        X = cube.reshape(nx * ny, nch)
+        X = X - X.mean(axis=0, keepdims=True)
 
         U, S, Vt = np.linalg.svd(X, full_matrices=False)
         eig = S ** 2

@@ -134,25 +134,39 @@ class MassProfile(ABC):
         """Lensing potential"""
         pass
 
-    def gamma(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Shear (gamma1, gamma2) from numerical differentiation"""
-        h = 0.01  # arcsec
-        kappa_c = self.kappa(x, y)
-        kappa_xp = self.kappa(x + h, y)
-        kappa_xm = self.kappa(x - h, y)
-        kappa_yp = self.kappa(x, y + h)
-        kappa_ym = self.kappa(x, y - h)
+    def gamma(self, x: np.ndarray, y: np.ndarray,
+              h: float = 0.01) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Shear (gamma1, gamma2) from the lensing potential.
 
-        # gamma1 = (psi_xx - psi_yy) / 2
-        # gamma2 = psi_xy
-        # For convergence: kappa = (psi_xx + psi_yy) / 2
+            gamma1 = (psi_xx - psi_yy) / 2,   gamma2 = psi_xy
+            kappa  = (psi_xx + psi_yy) / 2
 
-        psi_xx = (kappa_xp - 2*kappa_c + kappa_xm) / h**2
-        psi_yy = (kappa_yp - 2*kappa_c + kappa_ym) / h**2
+        FIX(audit C6): the second derivatives were taken of
+        `self.kappa` rather than `self.potential`.  Besides being
+        dimensionally inconsistent (units of kappa per arcsec^2) this
+        gave the wrong answer wherever it could be checked: for an SIS
+        with theta_E = 1 at (x, y) = (1.5, 0.7) the exact result is
+        |gamma| = kappa = 0.302061, and the old code returned 0.165366
+        (-45%).
+
+        `h` is the finite-difference step in arcsec.
+        """
+        psi_c = self.potential(x, y)
+        psi_xp = self.potential(x + h, y)
+        psi_xm = self.potential(x - h, y)
+        psi_yp = self.potential(x, y + h)
+        psi_ym = self.potential(x, y - h)
+
+        psi_xx = (psi_xp - 2 * psi_c + psi_xm) / h ** 2
+        psi_yy = (psi_yp - 2 * psi_c + psi_ym) / h ** 2
+        psi_xy = (self.potential(x + h, y + h)
+                  - self.potential(x + h, y - h)
+                  - self.potential(x - h, y + h)
+                  + self.potential(x - h, y - h)) / (4 * h ** 2)
 
         gamma1 = (psi_xx - psi_yy) / 2
-        gamma2 = (self.kappa(x+h, y+h) - self.kappa(x+h, y-h) -
-                  self.kappa(x-h, y+h) + self.kappa(x-h, y-h)) / (4*h**2)
+        gamma2 = psi_xy
 
         return gamma1, gamma2
 
@@ -186,7 +200,19 @@ class SIEProfile(MassProfile):
         self.q = 1 - e
 
     def kappa(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        """Convergence"""
+        """
+        Convergence, in the same Kormann et al. (1994) convention as
+        `alpha`:
+
+            kappa(x, y) = sqrt(q) theta_E / (2 sqrt(q^2 x^2 + y^2))
+
+        FIX(audit C8): the previous expression was
+        theta_E / (2 sqrt(x^2 + y^2/q^2)), which is *not* the
+        divergence of this profile's own deflection field.  At
+        theta_E = 1, q = 0.7, (x, y) = (1.5, 0.7) it returned 0.277350
+        against (1/2) div alpha = 0.331497 - a 16.3% inconsistency
+        between the mass distribution and the deflections it produces.
+        """
         x_c = x - self.center_x
         y_c = y - self.center_y
 
@@ -194,10 +220,10 @@ class SIEProfile(MassProfile):
         x_rot = x_c * np.cos(self.theta_e) + y_c * np.sin(self.theta_e)
         y_rot = -x_c * np.sin(self.theta_e) + y_c * np.cos(self.theta_e)
 
-        # Elliptical radius
-        r_ell = np.sqrt(x_rot**2 + y_rot**2 / self.q**2)
+        # Kormann elliptical radius (matches `alpha`)
+        r_kormann = np.sqrt(self.q ** 2 * x_rot ** 2 + y_rot ** 2)
 
-        return self.theta_E / (2 * r_ell + 1e-10)
+        return np.sqrt(self.q) * self.theta_E / (2 * r_kormann + 1e-10)
 
     def alpha(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Deflection angles"""
@@ -230,16 +256,30 @@ class SIEProfile(MassProfile):
         return alpha_x_out, alpha_y_out
 
     def potential(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        """Lensing potential"""
+        """
+        Lensing potential.
+
+        An isothermal profile has kappa homogeneous of degree -1, so
+        psi is homogeneous of degree 1 and Euler's theorem gives
+        exactly
+
+            psi(x) = x . grad psi = x alpha_x + y alpha_y
+
+        which is used here.  This makes psi consistent with `alpha` by
+        construction (and hence with `gamma`, which differentiates it).
+
+        FIX(audit C7): the previous closed form
+        theta_E sqrt(q x^2 + y^2/q) was not the potential of this
+        deflection field: at theta_E = 1, q = 0.7, (1.5, 0.7) it gave
+        1.508310 while x . alpha = 1.580536, and grad psi = (0.696143,
+        0.662994) against alpha = (0.824581, 0.490949).
+        """
         x_c = x - self.center_x
         y_c = y - self.center_y
 
-        x_rot = x_c * np.cos(self.theta_e) + y_c * np.sin(self.theta_e)
-        y_rot = -x_c * np.sin(self.theta_e) + y_c * np.cos(self.theta_e)
+        alpha_x, alpha_y = self.alpha(x, y)
 
-        r_ell = np.sqrt(self.q * x_rot**2 + y_rot**2 / self.q)
-
-        return self.theta_E * r_ell
+        return x_c * alpha_x + y_c * alpha_y
 
 
 class NFWProfile(MassProfile):
@@ -279,8 +319,14 @@ class NFWProfile(MassProfile):
 
     def _compute_scale_parameters(self):
         """Compute NFW scale parameters"""
-        # Critical density at lens redshift
-        rho_crit = 2.78e11 * self.cosmo.E(self.z_lens)**2  # M_sun/Mpc³
+        # Critical density at lens redshift.
+        # FIX(audit H4): rho_crit,0 = 3 H0^2 / (8 pi G) = 2.775e11 h^2
+        # M_sun/Mpc^3; the h^2 was dropped and self.cosmo.H0 never used.
+        # At H0 = 70, z = 0.3 the old code gave 3.778e11 instead of
+        # 1.848e11 (2.045x), so r_200 for a 1e14 M_sun halo came out
+        # 681 kpc instead of 864 kpc.
+        h = self.cosmo.H0 / 100.0
+        rho_crit = 2.775e11 * h ** 2 * self.cosmo.E(self.z_lens) ** 2  # M_sun/Mpc^3
 
         # r_200 from M_200
         r_200 = (3 * self.M_200 / (4 * np.pi * 200 * rho_crit))**(1/3)  # Mpc
@@ -362,39 +408,94 @@ class NFWProfile(MassProfile):
         return alpha_x, alpha_y
 
     def potential(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        """NFW potential (numerical integration)"""
-        # Approximate using kappa integral
+        """
+        NFW lensing potential (Bartelmann 1996; Wright & Brainerd
+        1999), in units consistent with `alpha`:
+
+            psi(u) = 2 kappa_s theta_s^2 [ ln^2(u/2) + C(u) ]
+            C(u)   = -arccosh^2(1/u)   u < 1
+                   =  0                u = 1
+                   = +arccos^2(1/u)    u > 1
+
+        with u = theta / theta_s.  This is the exact antiderivative of
+        the deflection: d psi / d theta = 4 kappa_s theta_s g(u)/u,
+        which is precisely `alpha`.
+
+        FIX(audit C7): the previous "simplified potential" kept only
+        the ln^2(u/2) term.  Its gradient at (2, 1) arcsec was
+        (-888.76, -444.38) against alpha = (2.0249, 1.0124) - wrong by
+        -439x including the sign - and it feeds
+        `TimeDelayCosmography.time_delay`, so every predicted time
+        delay and every inferred H0 was wrong.
+        """
         x_c = (x - self.center_x) / self.theta_s
         y_c = (y - self.center_y) / self.theta_s
-        r = np.sqrt(x_c**2 + y_c**2)
+        u = np.sqrt(x_c ** 2 + y_c ** 2)
 
-        # Simplified potential
-        return 2 * self.kappa_s * self.theta_s**2 * np.log(r/2 + 1e-10)**2
+        u = np.asarray(u, dtype=float)
+        scalar = (u.ndim == 0)
+        u = np.atleast_1d(u)
+
+        u_safe = np.maximum(u, 1e-10)
+        psi = np.log(u_safe / 2.0) ** 2
+
+        inner = u_safe < 1.0 - 1e-9
+        outer = u_safe > 1.0 + 1e-9
+        if np.any(inner):
+            ui = u_safe[inner]
+            psi[inner] -= np.arccosh(1.0 / ui) ** 2
+        if np.any(outer):
+            uo = u_safe[outer]
+            psi[outer] += np.arccos(1.0 / uo) ** 2
+        # |u - 1| <= 1e-9: C(u) -> 0, nothing to add.
+
+        psi = 2 * self.kappa_s * self.theta_s ** 2 * psi
+        return float(psi[0]) if scalar else psi.reshape(np.shape(x))
 
 
 class ExternalShear(MassProfile):
-    """External shear perturbation"""
+    """
+    External shear perturbation.
+
+    FIX(audit C6, second part): the constructor used to bind
+    `self.gamma = gamma` (a float), shadowing the inherited `gamma()`
+    method, so `ExternalShear(0.05, 0).gamma(x, y)` raised
+    `TypeError: 'float' object is not callable`.  The magnitude is now
+    stored as `gamma_ext` and `gamma()` returns the (constant) shear
+    components analytically.
+    """
 
     def __init__(self, gamma: float, theta_gamma: float):
         """
         Parameters
         ----------
         gamma : float
-            Shear magnitude
+            Shear magnitude (stored as `self.gamma_ext`)
         theta_gamma : float
             Shear angle (degrees)
         """
-        self.gamma = gamma
+        self.gamma_ext = gamma
         self.theta_gamma = np.radians(theta_gamma)
+
+    def _components(self) -> Tuple[float, float]:
+        """(gamma1, gamma2) of the external shear."""
+        return (self.gamma_ext * np.cos(2 * self.theta_gamma),
+                self.gamma_ext * np.sin(2 * self.theta_gamma))
 
     def kappa(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         """Shear has no convergence"""
         return np.zeros_like(x)
 
+    def gamma(self, x: np.ndarray, y: np.ndarray,
+              h: float = 0.01) -> Tuple[np.ndarray, np.ndarray]:
+        """Constant shear components (exact, no differentiation)."""
+        gamma1, gamma2 = self._components()
+        ones = np.ones_like(np.asarray(x, dtype=float))
+        return gamma1 * ones, gamma2 * ones
+
     def alpha(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Shear deflection"""
-        gamma1 = self.gamma * np.cos(2 * self.theta_gamma)
-        gamma2 = self.gamma * np.sin(2 * self.theta_gamma)
+        gamma1, gamma2 = self._components()
 
         alpha_x = gamma1 * x + gamma2 * y
         alpha_y = gamma2 * x - gamma1 * y
@@ -403,8 +504,7 @@ class ExternalShear(MassProfile):
 
     def potential(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         """Shear potential"""
-        gamma1 = self.gamma * np.cos(2 * self.theta_gamma)
-        gamma2 = self.gamma * np.sin(2 * self.theta_gamma)
+        gamma1, gamma2 = self._components()
 
         return 0.5 * gamma1 * (x**2 - y**2) + gamma2 * x * y
 
@@ -709,11 +809,21 @@ class TimeDelayCosmography:
             model_delay = model_delays[(i, j)]
             if np.abs(obs_delay) > 0:
                 H0_est = H0_fid * model_delay / obs_delay
-                H0_estimates.append(H0_est)
 
-                # Weight by inverse variance
+                # FIX(audit H5): the weight must be the inverse
+                # variance *of H0*, not of the delay.  Since
+                # H0 = H0_fid * dt_model / dt_obs at fixed model,
+                # sigma_H0 = H0 * sigma_dt / |dt_obs|; the old code used
+                # 1/sigma_dt^2 (units day^-2) and then reported
+                # 1/sqrt(sum w) - a number in days - as "km/s/Mpc".
+                # For dt = 30 +/- 2 d at H0 = 70 it gave 2.0 instead of
+                # the correct 4.67 km/s/Mpc.
                 err = observed_delay_errors.get((i, j), 1.0)
-                weights.append(1.0 / err**2)
+                sigma_h0 = np.abs(H0_est) * err / np.abs(obs_delay)
+                if not np.isfinite(sigma_h0) or sigma_h0 <= 0:
+                    continue
+                H0_estimates.append(H0_est)
+                weights.append(1.0 / sigma_h0 ** 2)
 
         if len(H0_estimates) == 0:
             return {'H0': np.nan, 'H0_err': np.nan, 'chi2': np.nan}

@@ -308,8 +308,13 @@ class UVSimulator:
         """
         dec_rad = np.radians(source_dec)
         lat_rad = self.array.latitude
-        wavelength = c_light / freq_Hz * 1e-2  # wavelengths (m -> cm, then to wavelengths)
-        wavelength_m = c_light / freq_Hz  # in meters
+        # FIX(audit C12/B5.1): c_light is CGS (cm/s, see the module constants),
+        # so c_light/freq_Hz is a wavelength in CENTIMETRES. It was assigned to
+        # `wavelength_m` and divided into baselines given in metres, making
+        # every uv coordinate 100.6x too small (ALMA-compact at 230 GHz: 2140
+        # lambda instead of 215 342 lambda). Every visibility then fell in the
+        # central uv cell and the dirty beam degenerated to a constant array.
+        wavelength_m = (c_light * 1e-2) / freq_Hz  # cm/s -> m/s, then metres
 
         baselines = self.array.get_baselines()
 
@@ -334,14 +339,28 @@ class UVSimulator:
             for i, j, b in baselines:
                 # Transform baseline to UV coordinates
                 # b = (East, North, Up) in meters
+                #
+                # FIX(audit B5.5): the local ENU components were fed straight
+                # into the equatorial rotation as if they were (X, Y, Z), and
+                # sin_lat/cos_lat were computed but never used -- a pure N-S
+                # 1000 m baseline gave identical (u, v) at latitude 0 and 70
+                # deg, and u = 3335 at transit where the correct answer is
+                # exactly 0. The ENU -> equatorial rotation (Thompson, Moran &
+                # Swenson, "Interferometry and Synthesis in Radio Astronomy",
+                # eq. 4.2) is:
+                #     X = -N sin(phi) + U cos(phi)   (towards HA = 0h, dec = 0)
+                #     Y =  E                          (towards HA = -6h)
+                #     Z =  N cos(phi) + U sin(phi)    (towards the NCP)
+                bx = -b[1] * sin_lat + b[2] * cos_lat
+                by = b[0]
+                bz = b[1] * cos_lat + b[2] * sin_lat
 
-                # Convert to (X, Y, Z) in wavelengths
-                # where X points to HA=0, Y to HA=6h, Z to NCP
-                u = (sin_ha * b[0] + cos_ha * b[1]) / wavelength_m
-                v = (-sin_dec * cos_ha * b[0] + sin_dec * sin_ha * b[1] +
-                     cos_dec * b[2]) / wavelength_m
-                w = (cos_dec * cos_ha * b[0] - cos_dec * sin_ha * b[1] +
-                     sin_dec * b[2]) / wavelength_m
+                # Standard (u, v, w) rotation (TMS eq. 4.1), in wavelengths
+                u = (sin_ha * bx + cos_ha * by) / wavelength_m
+                v = (-sin_dec * cos_ha * bx + sin_dec * sin_ha * by +
+                     cos_dec * bz) / wavelength_m
+                w = (cos_dec * cos_ha * bx - cos_dec * sin_ha * by +
+                     sin_dec * bz) / wavelength_m
 
                 all_u.append(u)
                 all_v.append(v)
@@ -528,16 +547,36 @@ class Imager:
                 sampling_grid[iv, iu] += 1
 
         # Normalize
-        with np.errstate(invalid='ignore', divide='ignore'):
-            vis_grid = np.where(weight_grid > 0, vis_grid / weight_grid, 0)
+        # FIX(audit B5.2): the grid used to be normalised PER CELL
+        # (vis_grid/weight_grid), which divides the weights straight back out
+        # and gives every occupied cell the same weight -- i.e. uniform
+        # weighting always. NATURAL and UNIFORM produced bit-identical dirty
+        # beams and BRIGGS robust = -2, 0, +2 all gave bmaj = 8.7009". The
+        # correct normalisation is by the TOTAL weight:
+        #     I_dirty(l, m) = sum_k w_k V_k e^{2 pi i (u l + v m)} / sum_k w_k
+        total_weight = float(np.sum(weight_grid))
+        if total_weight > 0:
+            vis_grid = vis_grid / total_weight
 
         # FFT to image
-        dirty_image = np.real(fftshift(ifft2(ifftshift(vis_grid))))
+        # FIX(audit B5.3): numpy's ifft2 carries a 1/(nx*ny) normalisation that
+        # was never undone, so a 1 Jy point source produced a dirty-image peak
+        # of 6.1035e-05 = 1/128^2. Multiplying by nx*ny restores the flux scale
+        # (peak of an unresolved 1 Jy source = 1 Jy).
+        dirty_image = np.real(fftshift(ifft2(ifftshift(vis_grid)))) * (nx * ny)
 
         # Dirty beam (PSF)
-        beam_grid = np.where(sampling_grid > 0, 1.0, 0.0)
-        dirty_beam = np.real(fftshift(ifft2(ifftshift(beam_grid))))
-        dirty_beam /= np.max(dirty_beam)
+        # FIX(audit B5.7): the PSF was built from a BINARY sampling mask, so it
+        # did not correspond to the weighting actually applied to the image.
+        # The same weight grid is used for both.
+        if total_weight > 0:
+            beam_grid = weight_grid / total_weight
+        else:
+            beam_grid = np.where(sampling_grid > 0, 1.0, 0.0)
+        dirty_beam = np.real(fftshift(ifft2(ifftshift(beam_grid)))) * (nx * ny)
+        peak = np.max(dirty_beam)
+        if peak > 0:
+            dirty_beam /= peak
 
         # Fit beam
         beam_params = self._fit_beam(dirty_beam, pixel_size)
@@ -558,37 +597,49 @@ class Imager:
         if weighting == WeightingScheme.NATURAL:
             return vis.weight
 
-        elif weighting == WeightingScheme.UNIFORM:
-            # Count visibilities per UV cell
-            cell_counts = {}
-            for i in range(len(vis.u)):
-                iu = int(np.round(vis.u[i] / du)) + nx // 2
-                iv = int(np.round(vis.v[i] / dv)) + ny // 2
-                key = (iu, iv)
-                cell_counts[key] = cell_counts.get(key, 0) + 1
+        # FIX(audit B5.2): both UNIFORM and BRIGGS now work from the GRIDDED
+        # WEIGHT DENSITY W_k (the sum of visibility weights in each uv cell),
+        # which is what the textbook definitions use. The old BRIGGS branch put
+        # the per-visibility weight where W_k belongs, making the result
+        # independent of the uv density -- and therefore of `robust`.
+        cell_weight = self._cell_weight_density(vis, du, dv, nx, ny)
+        keys = self._cell_keys(vis, du, dv, nx, ny)
+        W = np.array([cell_weight[k] for k in keys], dtype=float)
 
-            weights = np.zeros(len(vis.u))
-            for i in range(len(vis.u)):
-                iu = int(np.round(vis.u[i] / du)) + nx // 2
-                iv = int(np.round(vis.v[i] / dv)) + ny // 2
-                key = (iu, iv)
-                weights[i] = 1.0 / cell_counts.get(key, 1)
-
-            return weights
+        if weighting == WeightingScheme.UNIFORM:
+            # w_i = w_i / W_k : every occupied cell gets the same total weight
+            with np.errstate(divide='ignore', invalid='ignore'):
+                return np.where(W > 0, vis.weight / W, 0.0)
 
         elif weighting == WeightingScheme.BRIGGS:
-            # Briggs robust weighting
-            # First compute uniform weights
-            uniform = self._compute_weights(vis, WeightingScheme.UNIFORM,
-                                           robust, du, dv, nx, ny)
-            natural = vis.weight
-
-            # Robust factor
-            f2 = (5 * 10**(-robust))**2 * np.sum(uniform) / np.sum(natural)
-
-            return natural / (1 + natural * f2)
+            # Briggs (1995) robust weighting:
+            #   w_i = w_i / (1 + W_k f^2),
+            #   f^2 = (5 * 10^-robust)^2 / (sum_k W_k^2 / sum_i w_i)
+            # robust -> -2 approaches uniform, robust -> +2 approaches natural.
+            sum_w = float(np.sum(vis.weight))
+            sum_W2 = float(np.sum(np.array(list(cell_weight.values())) ** 2))
+            if sum_w <= 0 or sum_W2 <= 0:
+                return vis.weight
+            f2 = (5.0 * 10 ** (-robust)) ** 2 / (sum_W2 / sum_w)
+            return vis.weight / (1.0 + W * f2)
 
         return vis.weight
+
+    @staticmethod
+    def _cell_keys(vis: Visibility, du: float, dv: float,
+                   nx: int, ny: int) -> List[Tuple[int, int]]:
+        """uv cell index of each visibility."""
+        iu = np.round(np.asarray(vis.u) / du).astype(int) + nx // 2
+        iv = np.round(np.asarray(vis.v) / dv).astype(int) + ny // 2
+        return list(zip(iu.tolist(), iv.tolist()))
+
+    def _cell_weight_density(self, vis: Visibility, du: float, dv: float,
+                             nx: int, ny: int) -> Dict[Tuple[int, int], float]:
+        """Sum of visibility weights per uv cell (the gridded density W_k)."""
+        density: Dict[Tuple[int, int], float] = {}
+        for key, w in zip(self._cell_keys(vis, du, dv, nx, ny), vis.weight):
+            density[key] = density.get(key, 0.0) + float(w)
+        return density
 
     def _fit_beam(self, beam: np.ndarray, pixel_size: float) -> Dict[str, float]:
         """Fit 2D Gaussian to beam"""
@@ -752,9 +803,15 @@ class CLEANDeconvolver:
         bmaj = beam_params['bmaj']
         bmin = beam_params['bmin']
         pa = np.radians(beam_params['pa'])
-        # rotate to principal frame (x' along major axis)
-        xp = x * np.cos(pa) + y * np.sin(pa)
-        yp = -x * np.sin(pa) + y * np.cos(pa)
+        # FIX(audit B5.6): _fit_beam defines PA east-of-north, i.e. the major
+        # axis points along (sin PA, cos PA) in (x, y). The old code applied
+        # sig_maj along yp = -x sin PA + y cos PA, which is the direction at
+        # -PA, so the restoring beam came out MIRRORED: requesting PA = 30 deg
+        # produced a Gaussian that fitted back as -30 deg (60 -> -60,
+        # 120 -> -120), i.e. restored maps carried a beam rotated by 2 x PA.
+        # Sizes were unaffected.
+        yp = x * np.sin(pa) + y * np.cos(pa)     # along the major axis
+        xp = x * np.cos(pa) - y * np.sin(pa)     # perpendicular (minor axis)
         sig_maj = bmaj / 2.3548200450309493
         sig_min = bmin / 2.3548200450309493
         return np.exp(-0.5 * ((yp / sig_maj) ** 2 + (xp / sig_min) ** 2))
@@ -922,13 +979,18 @@ class VisibilityModeler:
         ny, nx = img.shape
         dl = self.pixel_size / 206265.0        # arcsec -> radians
 
-        # DFT convention: V(u,v) = sum I(l,m) e^{-2pi i (u l + v m)};
-        # with numpy's ifft2 (which has the e^{+2pi i} kernel) applied
-        # to the shifted image we get exactly this, up to the pixel
-        # area factor dl*dm
-        # image pixel values are flux per pixel (e.g. Jy): the DFT
-        # sum over pixels gives the visibility directly
-        vis_grid = fftshift(ifft2(ifftshift(img))) * (nx * ny)
+        # DFT convention: V(u,v) = sum I(l,m) e^{-2pi i (u l + v m)}.
+        # FIX(audit B5.4): this used numpy's ifft2, whose kernel is e^{+2pi i},
+        # so `model_visibilities` returned the COMPLEX CONJUGATE of its own
+        # documented convention -- and of `observe_model`, which is correct.
+        # For an on-grid point source at (+5, +3) px observe_model gave
+        # 0.51410 - 0.85773j (= e^{-2pi i(ul+vm)}, right) while this returned
+        # 0.51410 + 0.85773j. Any visibility-domain fit therefore converged on
+        # the source MIRRORED through the phase centre: chi2 of the true image
+        # was 6.16e6 against 2.08e4 for the mirrored one.
+        # np.fft.fft2 carries the e^{-2pi i} kernel and no 1/N normalisation,
+        # so the sum over pixels IS the visibility (pixel values = flux/pixel).
+        vis_grid = fftshift(fft2(ifftshift(img)))
         # uv grid coordinates of the FFT samples
         u_grid = fftshift(fftfreq(nx, d=dl))
         v_grid = fftshift(fftfreq(ny, d=dl))

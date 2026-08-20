@@ -229,6 +229,11 @@ class Reaction:
 
         elif self.reaction_type == ReactionType.COSMIC_RAY_PHOTODISSOCIATION:
             # k = α * ζ_CR * (γ / (1 - ω))
+            # AUDIT-FLAG (H15, NOT FIXED - outside this worker's scope):
+            # the documented factor gamma/(1-omega) (UMIST: the grain
+            # albedo term, typically ~1e3-1e4) is missing from the
+            # return, so these rates are orders of magnitude low.  Not
+            # changed here because `omega` is not carried by Reaction.
             zeta_CR = kwargs.get('zeta_CR', 1.3e-17)
             return self.alpha * zeta_CR
 
@@ -538,6 +543,11 @@ class ChemistrySolver:
         # Time array (logarithmic spacing)
         t_span = (1.0, t_final * year_s)
         t_eval = np.logspace(0, np.log10(t_final * year_s), n_output)
+        # FIX(audit H16): 10**log10(x) does not round-trip exactly, so
+        # t_eval[-1] could exceed t_span[1] by ~1e-11 relative (9.83e4 s
+        # at t_final = 1e12 yr) and solve_ivp raised
+        # "Values in t_eval are not within t_span".  Clamp the endpoints.
+        t_eval = np.clip(t_eval, t_span[0], t_span[1])
 
         # Rate calculation kwargs
         rate_kwargs = {
@@ -587,15 +597,32 @@ class ChemistrySolver:
 
     def _compute_rates(self, y: np.ndarray, T: float, n_H: float,
                       kwargs: Dict) -> np.ndarray:
-        """Compute rate of change for each species"""
+        """
+        Rate of change of the fractional abundances y_i = n_i / n_H.
+
+        The volumetric reaction rate is R = k * prod_j n_j
+        = k * prod_j (y_j n_H)  [cm^-3 s^-1], so dy_i/dt = -R / n_H.
+        A unary (cosmic-ray / photo) reaction therefore gives
+        dy/dt = -k y, independent of n_H, and a binary reaction gives
+        dy_1/dt = -k y_1 y_2 n_H.
+
+        FIX(audit C17): the accumulator was initialised to `k * n_H`
+        instead of `k`, so *every* reaction - unary and binary alike -
+        acquired one spurious factor of n_H.  Verified against the
+        exact e-folding time of a single cosmic-ray ionisation with
+        zeta = 1e-13 s^-1 (1/k = 1.000e13 s): the old code gave
+        9.898e10 s at n_H = 1e2 and 9.987e8 s at n_H = 1e4, i.e. a
+        factor 1/n_H.  Equilibrium abundances were unaffected but every
+        reported timescale was wrong by n_H.
+        """
         dydt = np.zeros(self.n_species)
 
         for reaction in self.network.reactions:
             # Calculate rate coefficient
             k = reaction.rate_coefficient(T, **kwargs)
 
-            # Calculate reaction rate
-            rate = k * n_H  # Base rate
+            # Volumetric rate R = k * prod_j (y_j n_H)
+            rate = k  # FIX(audit C17): was `k * n_H`
 
             for reactant in reaction.reactants:
                 idx = self.network.get_species_index(reactant)

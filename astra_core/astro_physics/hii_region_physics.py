@@ -525,30 +525,56 @@ class NebularDiagnosticsCalculator:
 
     def oxygen_abundance(self, t3: float, t2: float,
                          o2plus_over_hbeta: float,
-                         oplus_over_hbeta: float) -> float:
+                         oplus_over_hbeta: float,
+                         n_e: float = 100.0) -> float:
         """
-        Total oxygen abundance O/H from ionic ratios.
+        Total oxygen abundance O/H = (O+ + O++)/H+ from ionic line ratios.
 
         Args:
             t3: Temperature (K) in the O++ zone (from [O III])
             t2: Temperature (K) in the O+ zone (from [O II])
-            o2plus_over_hbeta: I(4959+5007)/I(H beta)
-            oplus_over_hbeta: I(3727+3729)/I(H beta)
+            o2plus_over_hbeta: I(4959+5007)/I(H beta)   (ratio, H beta = 1)
+            oplus_over_hbeta: I(3727+3729)/I(H beta)    (ratio, H beta = 1)
+            n_e: electron density (cm^-3), used only in the [O II] density
+                 correction term; negligible for n_e << 1e3 cm^-3
 
         Returns:
-            O/H (12 + log10 returned directly is NOT applied)
+            O/H by number (linear, NOT 12 + log10)
         """
-        # Ionic abundances from the standard relations
-        # (Osterbrock & Ferland 2006, eq. 5.4-based formulation):
-        # O+/H+ ~ I([O II])/I(Hb) * f(T2), O++/H+ ~ I([O III])/I(Hb) * g(T3)
-        # Temperature factors include the t^-0.5 collisional term.
+        # FIX(audit B-HII-2): the previous expression
+        #   O++/H+ = R3 * 4.5e-3 * t3^0.5 / (1 + 2.2e-2 t3)
+        # had NO exp(Delta E / k T_e) Boltzmann factor at all, so the derived
+        # abundance *rose* with T_e instead of falling steeply, and was ~231x
+        # too high (O/H = 0.048 for a normal H II region, i.e. 12+log O/H = 10.7).
+        #
+        # Replaced with the standard direct-method ionic abundance relations,
+        # Izotov et al. (2006, A&A 448, 955) eqs. (3) and (4):
+        #
+        #  12 + log(O+ /H+) = log(I3727/IHb) + 5.961 + 1.676/t2 - 0.40 log t2
+        #                     - 0.034 t2 + log(1 + 1.35 x)
+        #  12 + log(O++/H+) = log(I4959+5007/IHb) + 6.200 + 1.251/t3
+        #                     - 0.55 log t3 - 0.014 t3
+        #  with t = T_e/1e4 and x = 1e-4 n_e t2^-0.5.
+        #
+        # The 1.676/t2 and 1.251/t3 terms are the exp(Delta E/kT) dependence in
+        # log form; they make O/H fall by ~5x from t = 0.7 to t = 2.0, as it must.
+        # Before/after at t3 = t2 = 1, R3 = 5, R2 = 2: 0.04804 -> 2.18e-4.
+        if t3 <= 0 or t2 <= 0:
+            raise ValueError("temperatures must be positive")
+        if o2plus_over_hbeta <= 0 or oplus_over_hbeta <= 0:
+            raise ValueError("line ratios must be positive")
+
         t3_4 = t3 / 1e4
         t2_4 = t2 / 1e4
-        o_plus = oplus_over_hbeta * 1.33e-2 * t2_4 ** 0.5 / (
-            1.0 + 2.2e-2 * t2_4)
-        o_2plus = o2plus_over_hbeta * 4.5e-3 * t3_4 ** 0.5 / (
-            1.0 + 2.2e-2 * t3_4)
-        return o_plus + o_2plus
+        x = 1e-4 * n_e * t2_4 ** -0.5
+
+        log_o_plus = (math.log10(oplus_over_hbeta) + 5.961 + 1.676 / t2_4
+                      - 0.40 * math.log10(t2_4) - 0.034 * t2_4
+                      + math.log10(1.0 + 1.35 * x) - 12.0)
+        log_o_2plus = (math.log10(o2plus_over_hbeta) + 6.200 + 1.251 / t3_4
+                       - 0.55 * math.log10(t3_4) - 0.014 * t3_4 - 12.0)
+
+        return 10.0 ** log_o_plus + 10.0 ** log_o_2plus
 
 
 # =============================================================================

@@ -80,8 +80,17 @@ class RVPeriodogram:
         # Compute Lomb-Scargle periodogram
         power = lombscargle(times, v_norm, angular_freqs, precenter=True)
 
-        # Normalize power to [0, 1]
-        power = power / (np.max(power) + 1e-10)
+        # FIX(audit B7.4): the power used to be divided by its own maximum, so
+        # the tallest peak ALWAYS had power exactly 1.0 no matter how
+        # insignificant it was -- pure noise produced a "significant" peak every
+        # time, and downstream `find_peaks(prominence=0.1)` and the FAP had no
+        # scale to work against. Use the Horne & Baliunas (1986) normalisation
+        # z = P / sigma^2 (sigma^2 = sample variance), for which z is
+        # exponentially distributed with unit mean under a white-noise null.
+        # This is the same normalisation applied in time_series_analysis.py.
+        variance = float(np.var(v_norm, ddof=1)) if v_norm.size > 1 else 0.0
+        if variance > 0:
+            power = power / variance
 
         periods = 1.0 / frequencies
 
@@ -162,7 +171,18 @@ class KeplerianFitter:
         sin_f = (np.sqrt(1 - ecc**2) * np.sin(E)) / (1 - ecc * np.cos(E))
 
         # Radial velocity
-        rv = K * (cos_f * np.cos(omega) + sin_f * np.sin(omega)) + gamma
+        # FIX(audit B7.1): the standard stellar RV curve is
+        #     v_r(t) = K [ cos(f + omega) + e cos(omega) ] + gamma
+        # (e.g. Murray & Correia 2010 eq. 65; Lovis & Fischer 2010 eq. 12).
+        # The code computed cos f cos omega + sin f sin omega = cos(f - omega):
+        # (i) the sign of omega was flipped and (ii) the constant K e cos(omega)
+        # term was missing -- the residual against the standard model was
+        # exactly K e cos(omega). Fitting a true e = 0.3, omega = 45 deg orbit
+        # returned e = 0.245, omega = 297.5 deg, with residual rms 4.40 m/s
+        # against 2.0 m/s noise (chi2/N = 4.85). gamma is held fixed at
+        # mean(v) by fit(), so the missing offset was not absorbed anywhere.
+        cos_f_plus_omega = cos_f * np.cos(omega) - sin_f * np.sin(omega)
+        rv = K * (cos_f_plus_omega + ecc * np.cos(omega)) + gamma
 
         return rv
 
@@ -393,11 +413,37 @@ class RVDetector:
         Returns:
             False alarm probability
         """
-        # Simplified FAP estimation
-        # In practice, would use bootstrap or analytic methods
+        # FIX(audit B7.5): the FAP was `1 - Phi(SNR)` -- it used the fitted
+        # semi-amplitude SNR as a Gaussian z-score, ignored the periodogram
+        # power entirely, and applied no correction for the number of
+        # frequencies searched. Any moderately well-fitted spurious peak
+        # therefore came back with FAP ~ 1e-10.
+        #
+        # Use the standard Baluev (2008)-style single-peak FAP for the
+        # Horne-Baliunas normalised power z:  FAP ~= 1 - (1 - e^-z)^M,
+        # with M the number of independent frequencies searched. M is bounded
+        # by the frequency grid actually used.
+        z = max(float(power), 0.0)
+        n_indep = max(int(self._n_independent_frequencies(n_points)), 1)
+        single_trial = np.exp(-z)
+        if single_trial <= 0.0:
+            return 1e-10
+        # 1 - (1 - p)^M, evaluated stably for small p
+        fap = -np.expm1(n_indep * np.log1p(-single_trial)) \
+            if single_trial < 1.0 else 1.0
+        return float(min(1.0, max(1e-10, fap)))
 
-        z_score = snr
-        return max(1e-10, 1 - stats.norm.cdf(z_score))
+    def _n_independent_frequencies(self, n_points: int) -> int:
+        """
+        Number of independent frequencies searched, used for the trials
+        correction in :meth:`_estimate_fap`.
+
+        Bounded above by the number of data points, since a periodogram of N
+        samples cannot resolve more than ~N independent frequencies however
+        finely the grid is sampled.
+        """
+        span_ratio = self.periodogram.max_period / self.periodogram.min_period
+        return int(min(max(span_ratio, 1.0), max(n_points, 1)))
 
 
 def example_usage():

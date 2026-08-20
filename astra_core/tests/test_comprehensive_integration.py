@@ -48,7 +48,7 @@ results = defaultdict(list)
 errors = []
 
 
-def test_section(name):
+def section(name):
     """Decorator to track test results"""
     def decorator(func):
         def wrapper():
@@ -75,7 +75,7 @@ def test_section(name):
 # 1. IMPORT CHAIN VALIDATION
 # =============================================================================
 
-@test_section("Core Module Imports")
+@section("Core Module Imports")
 def test_core_imports():
     """Test that all core modules can be imported"""
     modules = [
@@ -100,7 +100,7 @@ def test_core_imports():
             raise
 
 
-@test_section("V47+ Causal Discovery Module Imports")
+@section("V47+ Causal Discovery Module Imports")
 def test_v47_causal_imports():
     """Test V47+ enhanced causal discovery imports"""
     # Test from discovery subdirectory
@@ -131,7 +131,7 @@ def test_v47_causal_imports():
     print("  ✓ astra_core.causal top-level imports")
 
 
-@test_section("V47+ Physics Module Imports")
+@section("V47+ Physics Module Imports")
 def test_v47_physics_imports():
     """Test V47+ enhanced physics imports"""
     from astra_core.physics import (
@@ -154,7 +154,7 @@ def test_v47_physics_imports():
     print(f"  ✓ NuclearAstrophysics.binding_energy works: {be:.2f} MeV")
 
 
-@test_section("V47+ Domain Module Imports")
+@section("V47+ Domain Module Imports")
 def test_v47_domain_imports():
     """Test V47+ enhanced domain imports"""
     from astra_core.domains import (
@@ -180,7 +180,7 @@ def test_v47_domain_imports():
     print(f"  ✓ ExtragalacticDomain created: {len(eg_domain.get_capabilities())} capabilities")
 
 
-@test_section("V47+ Meta-Learning Imports")
+@section("V47+ Meta-Learning Imports")
 def test_v47_metalearning_imports():
     """Test V47+ meta-learning imports"""
     try:
@@ -200,7 +200,7 @@ def test_v47_metalearning_imports():
 # 2. CROSS-MODULE FUNCTION CALL VERIFICATION
 # =============================================================================
 
-@test_section("Cross-Module Function Calls: Physics")
+@section("Cross-Module Function Calls: Physics")
 def test_physics_cross_module_calls():
     """Test that physics modules can be called from other modules"""
     from astra_core.physics import UnifiedPhysicsEngine, RelativisticPhysics
@@ -216,7 +216,7 @@ def test_physics_cross_module_calls():
     print(f"  ✓ RelativisticPhysics.lorentz_factor callable: γ = {gamma:.3f}")
 
 
-@test_section("Cross-Module Function Calls: Causal to Physics")
+@section("Cross-Module Function Calls: Causal to Physics")
 def test_causal_physics_integration():
     """Test that causal modules can use physics constraints"""
     from astra_core.causal import StructuralCausalModel
@@ -230,7 +230,7 @@ def test_causal_physics_integration():
         print(f"  ✓ StructuralCausalModel handles creation: {e}")
 
 
-@test_section("Cross-Module Function Calls: Domains to Causal")
+@section("Cross-Module Function Calls: Domains to Causal")
 def test_domain_causal_integration():
     """Test that domain modules can use causal discovery"""
     from astra_core.domains import HighEnergyDomain
@@ -241,7 +241,7 @@ def test_domain_causal_integration():
     print(f"  ✓ HighEnergyDomain.process_query works: confidence = {result.confidence:.2f}")
 
 
-@test_section("Cross-Module Function Calls: Meta-Learning to Domains")
+@section("Cross-Module Function Calls: Meta-Learning to Domains")
 def test_metalearning_domain_integration():
     """Test that meta-learning can adapt to domains"""
     try:
@@ -265,7 +265,7 @@ def test_metalearning_domain_integration():
 # 3. ORCHESTRATOR INTEGRATION
 # =============================================================================
 
-@test_section("Orchestrator: Domain Registry")
+@section("Orchestrator: Domain Registry")
 def test_domain_orchestrator():
     """Test that domain orchestrator can load all domains"""
     from astra_core.domains import DomainRegistry
@@ -287,7 +287,7 @@ def test_domain_orchestrator():
             print(f"  ⚠ {name} domain: {e}")
 
 
-@test_section("Orchestrator: Unified System")
+@section("Orchestrator: Unified System")
 def test_unified_orchestrator():
     """Test that unified system can access all modules"""
     try:
@@ -308,7 +308,7 @@ def test_unified_orchestrator():
 # 4. CIRCULAR DEPENDENCY DETECTION
 # =============================================================================
 
-@test_section("Circular Dependency Detection")
+@section("Circular Dependency Detection")
 def test_circular_dependencies():
     """Check for circular import dependencies"""
     import importlib
@@ -378,7 +378,7 @@ def test_circular_dependencies():
 # 5. MISSING DEPENDENCY DETECTION
 # =============================================================================
 
-@test_section("Missing Dependency Detection")
+@section("Missing Dependency Detection")
 def test_missing_dependencies():
     """Check for missing optional dependencies"""
     optional_deps = {
@@ -400,7 +400,7 @@ def test_missing_dependencies():
 # 6. GRACEFUL DEGRADATION VERIFICATION
 # =============================================================================
 
-@test_section("Graceful Degradation: Core Causal")
+@section("Graceful Degradation: Core Causal")
 def test_causal_graceful_degradation():
     """Test that causal modules handle missing dependencies gracefully"""
     # Test with missing imports - should still work
@@ -424,7 +424,7 @@ def test_causal_graceful_degradation():
     print(f"  ✓ Generated {len(result.dag_samples)} samples")
 
 
-@test_section("Graceful Degradation: Physics")
+@section("Graceful Degradation: Physics")
 def test_physics_graceful_degradation():
     """Test that physics modules handle missing dependencies gracefully"""
     from astra_core.physics import (
@@ -444,7 +444,7 @@ def test_physics_graceful_degradation():
     print(f"  ✓ NuclearAstrophysics works independently")
 
 
-@test_section("Graceful Degradation: Domains")
+@section("Graceful Degradation: Domains")
 def test_domains_graceful_degradation():
     """Test that domain modules handle missing dependencies gracefully"""
     from astra_core.domains import (
@@ -471,7 +471,7 @@ def test_domains_graceful_degradation():
 # 7. END-TO-END INTEGRATION TESTS
 # =============================================================================
 
-@test_section("End-to-End: Active Discovery Pipeline")
+@section("End-to-End: Active Discovery Pipeline")
 def test_active_discovery_pipeline():
     """Test complete active discovery pipeline"""
     from astra_core.causal.discovery.bayesian_structure_learning import (
@@ -530,7 +530,7 @@ def test_active_discovery_pipeline():
     print(f"  ✓ Active discovery pipeline complete")
 
 
-@test_section("End-to-End: Multi-Domain Query Processing")
+@section("End-to-End: Multi-Domain Query Processing")
 def test_multidomain_query():
     """Test query processing across multiple domains"""
     from astra_core.domains import (

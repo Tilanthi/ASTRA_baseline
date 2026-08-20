@@ -124,32 +124,57 @@ class TransitDetector:
 
         power = np.zeros(n_freqs)
 
-        for i, freq in enumerate(frequencies):
-            period = periods[i]
+        # FIX(audit B6.1): the previous implementation tested only
+        # `in_transit = phase < dur/period`, i.e. a box pinned at phase 0. Real
+        # BLS maximises over the transit EPOCH as well as over period and
+        # duration. With the transit at phase 0 (the configuration hard-wired
+        # into example_usage) it worked; at phase 0.50 it returned an aliased
+        # period (2.502 d for a true 5 d) and at phase 0.74 it found NOTHING
+        # (0 detections of a 3%-deep, S/N >> 1 signal).
+        # The folded curve is now binned once per trial period and the box is
+        # slid over every starting phase using wrap-around cumulative sums,
+        # with the standard signal-detection statistic
+        #     SDE = depth * sqrt(n_in n_out / (n_in + n_out)) / sigma
+        # (Kovacs, Zucker & Mazeh 2002) -- the depth in units of its own
+        # standard error, so different durations are directly comparable.
+        n_bins = 100
+        min_points = 5
+        sigma = float(np.std(fluxes))
+        if sigma <= 0:
+            return periods, power
+        duty_cycles = np.array([0.01, 0.02, 0.04, 0.06, 0.08, 0.1])
+        widths = np.unique(np.maximum(1, np.round(duty_cycles * n_bins)).astype(int))
+        starts = np.arange(n_bins)
 
+        for i, freq in enumerate(frequencies):
             # Fold the light curve at this period
             phase = ((times - t_min) * freq) % 1.0
+            idx = np.minimum((phase * n_bins).astype(int), n_bins - 1)
 
-            # Try different transit durations
-            durations = np.array([0.01, 0.02, 0.04, 0.06, 0.08, 0.1]) * period
-            best_pwr = 0
+            sums = np.bincount(idx, weights=fluxes, minlength=n_bins)
+            counts = np.bincount(idx, minlength=n_bins).astype(float)
+            total_sum = float(sums.sum())
+            total_n = float(counts.sum())
+            if total_n < 2 * min_points:
+                continue
 
-            for dur in durations:
-                # Create in-transit mask
-                in_transit = phase < (dur / period)
+            # wrap-around cumulative sums, so a box may straddle phase 0
+            csum = np.concatenate(([0.0], np.cumsum(np.concatenate((sums, sums)))))
+            ccnt = np.concatenate(([0.0], np.cumsum(np.concatenate((counts, counts)))))
 
-                if np.sum(in_transit) < 10 or np.sum(~in_transit) < 10:
+            best_pwr = 0.0
+            for w in widths:
+                in_sum = csum[starts + w] - csum[starts]
+                in_n = ccnt[starts + w] - ccnt[starts]
+                out_sum = total_sum - in_sum
+                out_n = total_n - in_n
+                valid = (in_n >= min_points) & (out_n >= min_points)
+                if not np.any(valid):
                     continue
-
-                # BLS statistic: difference between in and out of transit
-                in_mean = np.mean(fluxes[in_transit])
-                out_mean = np.mean(fluxes[~in_transit])
-                out_std = np.std(fluxes[~in_transit])
-
-                # Depth * SNR
-                if out_std > 0:
-                    pwr = (out_mean - in_mean) / out_std
-                    best_pwr = max(best_pwr, pwr)
+                depth = (out_sum[valid] / out_n[valid] - in_sum[valid] / in_n[valid])
+                stat = depth * np.sqrt(
+                    in_n[valid] * out_n[valid] / (in_n[valid] + out_n[valid])) / sigma
+                best_pwr = max(best_pwr, float(np.max(stat)))
 
             power[i] = best_pwr
 
@@ -190,7 +215,13 @@ class TransitDetector:
         baseline = np.median(binned)
         depth = baseline - min_val
 
-        if depth < 0.001:  # Too shallow (< 1000 ppm)
+        # FIX(audit B6.3): a hardcoded `if depth < 0.001: return None` rejected
+        # every Neptune- (1300 ppm) and Earth-sized (84 ppm) transit around a
+        # solar-type star regardless of the data quality -- a 300 ppm transit at
+        # true S/N 27 returned 0 candidates. Significance is now decided by the
+        # transit SNR below (and the caller's min_snr), not by an absolute
+        # depth floor; only unphysical (non-positive) depths are rejected here.
+        if depth <= 0:
             return None
 
         # Estimate transit duration from the binned data
@@ -231,9 +262,16 @@ class TransitDetector:
         in_vals = fluxes[in_transit]
         out_vals = fluxes[~in_transit]
 
-        # Robust SNR: depth relative to out-of-transit scatter
+        # FIX(audit B6.2): the reported SNR was depth/sigma_per_point, which is
+        # the significance of a SINGLE measurement, not of the transit. The
+        # detection significance of a box fitted to n_in in-transit points is
+        # depth / (sigma / sqrt(n_in)), larger by sqrt(n_in). For a 300 ppm
+        # transit with sigma = 100 ppm and n_in = 80 the true SNR is 26.8, but
+        # the old statistic returned 3.0 -- below the default min_snr = 5, so a
+        # robust detection was thrown away.
         out_std = np.std(out_vals)
-        snr = depth / (out_std + 1e-10)
+        n_in = int(np.sum(in_transit))
+        snr = depth / (out_std / np.sqrt(max(n_in, 1)) + 1e-30)
 
         # Estimate epoch (time of first transit minimum)
         epoch = times[0] + transit_phase * period

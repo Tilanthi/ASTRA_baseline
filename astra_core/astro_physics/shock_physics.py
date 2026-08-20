@@ -488,9 +488,13 @@ class CShock:
     def ion_neutral_coupling_rate(self, density: float,
                                   ionization_fraction: float) -> float:
         """
-        Ion-neutral collision rate.
+        Rate at which a single ION collides with neutrals.
 
         ν_in = <σv>_in n_n ≈ 2×10^-9 n_n s^-1
+
+        NOTE: this is *not* the rate that sets the C-shock thickness -
+        see `neutral_ion_coupling_rate`.  Because the ionisation
+        fraction of molecular gas is ~1e-7, the two differ by ~1e7.
 
         Args:
             density: Total density (g/cm³)
@@ -504,25 +508,67 @@ class CShock:
         sigma_v = 2e-9  # cm³/s, typical ion-neutral rate
         return sigma_v * n_neutral
 
+    def neutral_ion_coupling_rate(self, density: float,
+                                  ionization_fraction: float) -> float:
+        """
+        Rate at which a single NEUTRAL collides with ions.
+
+            ν_ni = <σv>_in n_i = <σv>_in x_i n_total
+
+        This is the rate that governs how fast the neutral fluid is
+        dragged by the magnetically-cushioned ions, and hence the
+        C-shock thickness (Draine 1980; Draine & McKee 1993).  It is
+        smaller than `ion_neutral_coupling_rate` by 1/x_i.
+
+        Args:
+            density: Total density (g/cm³)
+            ionization_fraction: Ionization fraction x_i
+
+        Returns:
+            Collision rate (s^-1)
+        """
+        n_total = density / (self.mu_n * M_PROTON)
+        n_ion = n_total * ionization_fraction
+        sigma_v = 2e-9  # cm³/s, typical ion-neutral rate
+        return sigma_v * n_ion
+
     def shock_width(self, shock_velocity: float, magnetic_field: float,
                     density: float, ionization_fraction: float) -> float:
         """
-        C-shock width estimate.
+        C-shock width estimate,
 
-        L_shock ~ v_A / ν_in
+            L_shock ~ v_s / ν_ni,  ν_ni = <σv>_in x_i n_total
+
+        i.e. the distance a neutral travels before its momentum is
+        exchanged with the ion fluid.
+
+        FIX(audit B-SH-2): the previous version used
+        ν_in = <σv> n_n (1 - x_i), the frequency with which an *ion*
+        hits neutrals, which is larger by 1/x_i ≈ 1e7.  At
+        n = 1e4 cm^-3, B = 100 uG, x_i = 1e-7, v_s = 10 km/s it
+        returned 7.08e9 cm = 4.7e-4 AU, against 5e17 cm here
+        (literature C-shock widths are 1e15-1e17 cm).  Because
+        (1 - x_i) ≈ 1, the old expression was also insensitive to
+        `ionization_fraction` (0.1% change over four decades) and did
+        not use `shock_velocity` at all.
 
         Args:
             shock_velocity: Shock velocity (cm/s)
-            magnetic_field: Magnetic field (Gauss)
+            magnetic_field: Magnetic field (Gauss) - kept for the
+                Alfven-speed diagnostic, see note below
             density: Density (g/cm³)
             ionization_fraction: Ionization fraction
 
         Returns:
             Shock width (cm)
         """
-        v_a = self.alfven_velocity(magnetic_field, density)
-        nu_in = self.ion_neutral_coupling_rate(density, ionization_fraction)
-        return v_a / nu_in if nu_in > 0 else float('inf')
+        nu_ni = self.neutral_ion_coupling_rate(density, ionization_fraction)
+        if nu_ni <= 0:
+            return float('inf')
+        # v_s and v_A are comparable across a C-shock; the shock speed
+        # is the standard choice (Draine 1980, eq. 1.3).
+        _ = self.alfven_velocity(magnetic_field, density)
+        return shock_velocity / nu_ni
 
     def maximum_temperature(self, shock_velocity: float,
                             ionization_fraction: float) -> float:
@@ -1030,8 +1076,23 @@ class CloudCollisionShock:
         """
         from .gravitational_collapse import JeansAnalysis
 
-        jeans = JeansAnalysis()
-        m_j = jeans.jeans_mass_thermal(temperature, interface_density)
+        # FIX(audit C10): `JeansAnalysis.jeans_mass_thermal` does not
+        # exist anywhere in the codebase, so this method raised
+        # AttributeError on every call.  The real method is
+        # `jeans_mass(density, temperature)` - note the argument order
+        # was also swapped - and it defaults to interpreting its first
+        # argument as a NUMBER density, whereas `interface_density`
+        # here is a MASS density in g/cm^3, hence number_density=False.
+        # mu_particle is set to this module's molecular value so the
+        # sound speed matches the Rankine-Hugoniot solver above.
+        jeans = JeansAnalysis(number_density=False,
+                              mu_particle=MU_MOLECULAR)
+        m_j = jeans.jeans_mass(interface_density, temperature)
+
+        if not math.isfinite(m_j) or m_j <= 0:
+            raise ValueError(
+                "Jeans mass is not positive-definite for "
+                f"rho = {interface_density:g} g/cm^3, T = {temperature:g} K")
 
         # Potential cores
         n_cores = cloud_mass / m_j

@@ -98,7 +98,33 @@ class HaloMassFunction:
 
     def growth_factor(self, z: float) -> float:
         """
-        Calculate linear growth factor D(z).
+        Linear growth factor D(z), normalised to D(0) = 1.
+
+        Exact solution of the linear growth equation for a
+        pressureless fluid in a LCDM background (Heath 1977;
+        Peebles 1980, sec. 11):
+
+            D(a) prop. to E(a) Int_0^a da' / (a' E(a'))^3
+            E(a) = sqrt(Omega_m a^-3 + Omega_k a^-2 + Omega_L)
+
+        evaluated by quadrature and divided by its value at a = 1.
+
+        FIX(audit B-COS-2): the old expression,
+        `a * (Om_z/Omega_m)**0.55 * (1 + (1-Om_z)/70)`, applied the
+        growth *index* (f = dlnD/dlna ~ Omega_m(z)^0.55) as a
+        multiplicative factor on the growth *factor*.  It returned
+        D(0) = 1.01 (not 1) and was 25-49% high:
+
+            z      old      exact
+            0.5    0.96421  0.77318
+            1      0.83656  0.61181
+            2      0.61212  0.42145
+            10     0.17437  0.11667
+
+        Since sigma(M) enters the mass function exponentially, the old
+        D made `cumulative_number_density(1e14, z)` 25x too high at
+        z = 2 and predicted MORE massive clusters at z = 2 than at
+        z = 0.
 
         Args:
             z: Redshift
@@ -106,15 +132,22 @@ class HaloMassFunction:
         Returns:
             D(z) normalized to D(0) = 1
         """
-        # Approximate growth factor for flat LCDM
-        a = 1 / (1 + z)
-        Om_z = self.cosmo.Omega_m * (1 + z)**3 / \
-               (self.cosmo.Omega_m * (1 + z)**3 + self.cosmo.Omega_L)
+        from scipy.integrate import quad
 
-        D = a * (Om_z / self.cosmo.Omega_m)**0.55 * \
-            (1 + (1 - Om_z) / 70)
+        om = self.cosmo.Omega_m
+        ol = self.cosmo.Omega_L
+        ok = 1.0 - om - ol
 
-        return D
+        def e_of_a(a):
+            return np.sqrt(om / a ** 3 + ok / a ** 2 + ol)
+
+        def unnormalised(a):
+            integral, _ = quad(lambda ap: 1.0 / (ap * e_of_a(ap)) ** 3,
+                               0.0, a, limit=200)
+            return e_of_a(a) * integral
+
+        a = 1.0 / (1.0 + float(z))
+        return unnormalised(a) / unnormalised(1.0)
 
     def nu(self, M: np.ndarray, z: float = 0) -> np.ndarray:
         """
@@ -727,9 +760,23 @@ class ReionizationModel:
         z = np.linspace(0, z_max, 1000)
         Q = self.ionization_history(z)
 
-        # Comoving electron density
-        n_e0 = self.cosmo.Omega_b * RHO_CRIT_0 * self.cosmo.h**2 / 1.67e-24
-        n_e0 *= 0.875  # Hydrogen fraction
+        # Comoving electron density (cm^-3)
+        #
+        # FIX(audit C11 / B-COS-1): RHO_CRIT_0 is in M_sun/Mpc^3 while
+        # 1.67e-24 is a mass in grams, so the old line divided
+        # M_sun/Mpc^3 by grams and produced n_e0 = 3.21e33 cm^-3
+        # (correct: 1.86e-7), a factor 1.73e40, giving
+        # tau_reion = 7.9e38 against the Planck 2018 value 0.054.
+        # Both the M_sun -> g and the Mpc^3 -> cm^3 conversions were
+        # missing.
+        MSUN_G = 1.989e33            # g
+        MPC_CM = 3.0857e24           # cm
+        rho_b0 = (self.cosmo.Omega_b * RHO_CRIT_0 * self.cosmo.h ** 2
+                  * MSUN_G / MPC_CM ** 3)          # g/cm^3
+        n_e0 = rho_b0 / 1.67e-24                   # nucleons/cm^3
+        # Electrons per nucleon for fully ionised H and He:
+        # X + Y/2 = 0.75 + 0.25/2 = 0.875
+        n_e0 *= 0.875
 
         # sigma_T
         sigma_T = 6.65e-25  # cm^2

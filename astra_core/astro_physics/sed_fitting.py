@@ -42,6 +42,9 @@ k_B = 1.38e-16          # erg/K
 L_sun = 3.828e33        # erg/s
 pc_to_cm = 3.086e18
 Jy_to_cgs = 1e-23
+# Stefan-Boltzmann constant (CODATA 2018), erg cm^-2 s^-1 K^-4. Used to
+# normalise blackbody SHAPES exactly: int B_nu dnu = sigma T^4 / pi.
+SIGMA_SB = 5.670374419e-5
 
 
 # =============================================================================
@@ -357,8 +360,9 @@ class StellarPopulation(SEDComponent):
             temps = self.POPULATION_TEMPS['intermediate'] + self.POPULATION_TEMPS['old']
             weights = [0.2, 0.3, 0.3, 0.2]
 
-        # Sum blackbodies
+        # Sum blackbodies -> a spectral SHAPE (units of B_nu)
         flux = np.zeros_like(wavelength, dtype=float)
+        shape_integral = 0.0
         for T, w in zip(temps, weights):
             x = h_planck * nu / (k_B * T)
             with np.errstate(over='ignore'):
@@ -366,11 +370,22 @@ class StellarPopulation(SEDComponent):
                               2 * h_planck * nu**3 / c_light**2 / (np.exp(x) - 1),
                               0.0)
             flux += w * B_nu
+            # int B_nu dnu = sigma T^4 / pi  (exact, grid independent)
+            shape_integral += w * SIGMA_SB * T ** 4 / np.pi
 
-        # Scale by stellar mass (very rough approximation)
-        # Assume M/L ~ 1 in V-band
-        L_star = M_star * L_sun  # erg/s
-        flux *= L_star / (4 * np.pi * self.distance_cm**2)
+        # FIX(audit B1.2): the shape above is a specific intensity
+        # (erg/s/cm^2/Hz/sr) and was simply MULTIPLIED by the bolometric flux
+        # L_star/(4 pi D^2) (erg/s/cm^2). The result was dimensionally
+        # inconsistent and unnormalised: for M* = 1e10 Msun at 10 Mpc it gave
+        # int F_nu dnu = 3.19e+1 erg/s/cm^2 where L*/(4 pi D^2) = 3.20e-9,
+        # i.e. 9.96e9 too large (peak F_nu = 6.3e9 Jy).
+        # The correct normalisation makes the integrated flux equal the
+        # bolometric flux: F_nu = [L/(4 pi D^2)] * S_nu / int S_nu dnu.
+        # (The M/L = 1 assumption below is crude but is a separate issue.)
+        L_star = M_star * L_sun  # erg/s, assumes M/L ~ 1 in the V band
+        bolometric_flux = L_star / (4 * np.pi * self.distance_cm ** 2)
+        if shape_integral > 0:
+            flux *= bolometric_flux / shape_integral
 
         # Apply dust extinction (Calzetti law approximation)
         if A_V > 0:
@@ -420,22 +435,54 @@ class AGNTemplate(SEDComponent):
         uv_optical *= np.exp(-h_planck * nu / (k_B * 3e5))  # High-freq cutoff
         uv_optical *= np.exp(-(nu_ref / nu)**2)  # Low-freq cutoff
 
-        # Normalize to (1-f_torus) * L_bol
-        norm_uv = (1 - f_torus) * L_bol / (4 * np.pi * self.distance_cm**2)
-        # Rough normalization
-        flux += norm_uv * uv_optical / np.max(uv_optical)
+        # FIX(audit B1.3): the two components used to be normalised by dividing
+        # the SHAPE by its PEAK and multiplying by a bolometric flux, i.e. a
+        # flux (erg/s/cm^2) was assigned to the peak of a flux DENSITY
+        # (erg/s/cm^2/Hz) with no effective bandwidth anywhere. The integrated
+        # flux came out 1.4e15 times too large (1.19e8 vs L_bol/(4 pi D^2) =
+        # 8.36e-8 erg/s/cm^2). Each component is now normalised so that its
+        # integral over frequency equals its share of the bolometric flux:
+        #     F_nu = [f L_bol/(4 pi D^2)] * S_nu / int S_nu dnu
+        # The UV shape integral is evaluated on an internal dense frequency grid
+        # so it does not depend on the caller's wavelength sampling.
+        f_bol = L_bol / (4 * np.pi * self.distance_cm ** 2)
 
-        # Torus: Modified blackbody
+        uv_integral = self._uv_shape_integral(alpha_UV)
+        if uv_integral > 0:
+            flux += (1 - f_torus) * f_bol * uv_optical / uv_integral
+
+        # Torus: blackbody, int B_nu dnu = sigma T^4 / pi (exact)
         x = h_planck * nu / (k_B * T_torus)
         with np.errstate(over='ignore'):
             B_nu = np.where(x < 700,
                           2 * h_planck * nu**3 / c_light**2 / (np.exp(x) - 1),
                           0.0)
 
-        norm_torus = f_torus * L_bol / (4 * np.pi * self.distance_cm**2)
-        flux += norm_torus * B_nu / np.max(B_nu + 1e-30)
+        torus_integral = SIGMA_SB * T_torus ** 4 / np.pi
+        if torus_integral > 0:
+            flux += f_torus * f_bol * B_nu / torus_integral
 
         return flux
+
+    @staticmethod
+    def _uv_shape_integral(alpha_UV: float) -> float:
+        """
+        int S_nu dnu of the UV/optical shape, on an internal dense grid.
+
+        The shape is a power law with exponential cutoffs at both ends, so the
+        integral converges; evaluating it here (rather than on the caller's
+        grid) keeps the normalisation independent of the requested sampling.
+        """
+        lam = np.geomspace(1.0, 1e8, 4000)          # 1 A - 1 cm
+        nu = c_light / (lam * 1e-8)
+        nu_ref = c_light / (3000 * 1e-8)
+        shape = (nu / nu_ref) ** alpha_UV
+        with np.errstate(over='ignore', under='ignore'):
+            shape = shape * np.exp(-h_planck * nu / (k_B * 3e5))
+            shape = shape * np.exp(-(nu_ref / nu) ** 2)
+        shape = np.nan_to_num(shape)
+        order = np.argsort(nu)
+        return float(np.trapezoid(shape[order], nu[order]))
 
     def parameter_names(self) -> List[str]:
         return ['L_bol', 'f_torus', 'T_torus', 'alpha_UV']
@@ -592,26 +639,42 @@ class SEDFitter:
             initial: Optional[Dict[str, float]] = None,
             bounds: Optional[Dict[str, Tuple[float, float]]] = None,
             fixed: Optional[Dict[str, float]] = None,
-            log_params: Optional[List[str]] = None) -> SEDFitResult:
+            log_params: Optional[List[str]] = None,
+            flux_unit: str = 'cgs') -> SEDFitResult:
         """
         Fit the SED to data.
 
         Args:
             wavelength: observation wavelengths (Angstrom)
-            fluxes: observed fluxes (same units as model output, Jy)
-            errors: 1-sigma flux uncertainties
+            fluxes: observed flux densities, in `flux_unit`
+            errors: 1-sigma flux uncertainties, in the same unit
             initial: starting values (used for polishing)
             bounds: per-parameter (low, high); required for free
                 parameters not given a default range
             fixed: parameter values held constant
             log_params: parameters fit as log10(value) (e.g. masses)
+            flux_unit: 'cgs' (erg/s/cm^2/Hz, the model's native output,
+                default) or 'Jy'. FIX(audit B1.1): this docstring used to say
+                "same units as model output, Jy" -- but the model returns CGS
+                and CompositeSED.get_photometry returns Jy, a 1e23 mismatch.
+                Following the old instruction literally (feeding Jy) returned
+                T_dust = 123.4 K for a 25 K input SED, M_dust railed at the
+                bound 7.36e12 Msun and chi2_red = 640. The unit is now explicit
+                and converted here.
 
         Returns:
-            SEDFitResult
+            SEDFitResult (parameters in physical units; fluxes internally in CGS)
         """
         wl = np.asarray(wavelength, dtype=float)
         fl = np.asarray(fluxes, dtype=float)
         er = np.asarray(errors, dtype=float)
+        # FIX(audit B1.1): convert the input to the model's native CGS units.
+        unit = str(flux_unit).lower()
+        if unit in ('jy', 'jansky'):
+            fl = fl * Jy_to_cgs
+            er = er * Jy_to_cgs
+        elif unit not in ('cgs', 'erg/s/cm2/hz', 'erg'):
+            raise ValueError(f"flux_unit must be 'cgs' or 'Jy', got {flux_unit!r}")
         fixed = dict(fixed or {})
         log_params = set(log_params if log_params is not None
                          else ['M_dust'])

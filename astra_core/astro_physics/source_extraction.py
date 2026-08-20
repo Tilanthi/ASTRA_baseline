@@ -20,6 +20,7 @@ Author: STAN V43 Astrophysics Module
 """
 
 import math
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional, Tuple, Any
@@ -136,6 +137,11 @@ class DendrogramNode:
     centroid_y: float       # Centroid Y
     is_leaf: bool           # True for leaves (no children)
     integrated_flux: float  # Flux in this structure
+    # FIX(audit C16/B4.1): the (x, y) pixels belonging to this structure. The
+    # extractor tracked this internally but threw it away, which is why
+    # build_catalog had no way to read the column-density map and fell back to
+    # node.peak_value (the units of whatever image the dendrogram was built on).
+    pixels: List[Tuple[int, int]] = field(default_factory=list)
 
 
 @dataclass
@@ -821,7 +827,8 @@ class DendrogramExtractor:
                     centroid_x=float(x),
                     centroid_y=float(y),
                     is_leaf=True,
-                    integrated_flux=value
+                    integrated_flux=value,
+                    pixels=[(x, y)]          # FIX(audit C16)
                 )
                 nodes.append(node)
                 pixel_to_structure[(x, y)] = next_id
@@ -833,6 +840,7 @@ class DendrogramExtractor:
                 node = nodes[struct_id]
                 node.npixels += 1
                 node.integrated_flux += value
+                node.pixels.append((x, y))   # FIX(audit C16)
 
                 # Update centroid
                 n = node.npixels
@@ -853,11 +861,13 @@ class DendrogramExtractor:
                     # Create branch node
                     total_pix = 1  # Current pixel
                     total_flux = value
+                    total_pixels = [(x, y)]  # FIX(audit C16)
                     cx, cy = float(x), float(y)
 
                     for sid in struct_ids:
                         total_pix += nodes[sid].npixels
                         total_flux += nodes[sid].integrated_flux
+                        total_pixels.extend(nodes[sid].pixels)
                         nodes[sid].parent_id = next_id
 
                     # New branch
@@ -871,7 +881,8 @@ class DendrogramExtractor:
                         centroid_x=cx,
                         centroid_y=cy,
                         is_leaf=False,
-                        integrated_flux=total_flux
+                        integrated_flux=total_flux,
+                        pixels=total_pixels          # FIX(audit C16)
                     )
                     nodes.append(branch)
 
@@ -890,12 +901,14 @@ class DendrogramExtractor:
                     node = nodes[main_struct]
                     node.npixels += 1
                     node.integrated_flux += value
+                    node.pixels.append((x, y))       # FIX(audit C16)
 
                     for sid in struct_ids:
                         if sid != main_struct:
                             # Absorb smaller structure
                             node.npixels += nodes[sid].npixels
                             node.integrated_flux += nodes[sid].integrated_flux
+                            node.pixels.extend(nodes[sid].pixels)
                             for key, val in pixel_to_structure.items():
                                 if val == sid:
                                     pixel_to_structure[key] = main_struct
@@ -956,12 +969,54 @@ class FilamentFinder:
 
         return gx, gy
 
+    @staticmethod
+    def _gaussian_smooth(field: List[List[float]], sigma: float) -> List[List[float]]:
+        """Separable Gaussian blur of a 2-D list-of-lists (edges: clamped)."""
+        if sigma <= 0:
+            return [row[:] for row in field]
+        half = max(1, int(math.ceil(3.0 * sigma)))
+        kern = [math.exp(-0.5 * (k / sigma) ** 2) for k in range(-half, half + 1)]
+        norm = sum(kern)
+        kern = [k / norm for k in kern]
+
+        ny = len(field)
+        nx = len(field[0])
+        tmp = [[0.0] * nx for _ in range(ny)]
+        out = [[0.0] * nx for _ in range(ny)]
+        for y in range(ny):
+            row = field[y]
+            for x in range(nx):
+                acc = 0.0
+                for k, w in enumerate(kern):
+                    xi = min(nx - 1, max(0, x + k - half))
+                    acc += w * row[xi]
+                tmp[y][x] = acc
+        for x in range(nx):
+            for y in range(ny):
+                acc = 0.0
+                for k, w in enumerate(kern):
+                    yi = min(ny - 1, max(0, y + k - half))
+                    acc += w * tmp[yi][x]
+                out[y][x] = acc
+        return out
+
     def _compute_structure_tensor(self, gx: List[List[float]],
                                   gy: List[List[float]]
                                   ) -> Tuple[List[List[float]],
                                              List[List[float]],
                                              List[List[float]]]:
-        """Compute structure tensor components."""
+        """
+        Structure tensor J = G_sigma * (grad I grad I^T), sigma = self.scale.
+
+        FIX(audit B4.2 / H13): grad I grad I^T is rank 1 at every pixel, so
+        without the smoothing window lambda_2 is identically 0 and the
+        anisotropy (l1-l2)/(l1+l2) was identically 1.000000 -- measured over
+        25 281 pixels of a *circularly symmetric* blob: min = max = mean = 1.0,
+        i.e. every pixel with any gradient was flagged "maximally elongated".
+        The `scale` parameter existed but was never used to smooth anything.
+        Convolving the three components is what makes the structure tensor a
+        shape descriptor at all (Bigun & Granlund 1987; Forstner & Gulch 1987).
+        """
         ny = len(gx)
         nx = len(gx[0])
 
@@ -974,6 +1029,10 @@ class FilamentFinder:
                 Jxx[y][x] = gx[y][x]**2
                 Jxy[y][x] = gx[y][x] * gy[y][x]
                 Jyy[y][x] = gy[y][x]**2
+
+        Jxx = self._gaussian_smooth(Jxx, self.scale)
+        Jxy = self._gaussian_smooth(Jxy, self.scale)
+        Jyy = self._gaussian_smooth(Jyy, self.scale)
 
         return Jxx, Jxy, Jyy
 
@@ -991,10 +1050,17 @@ class FilamentFinder:
         lambda1 = (trace + sqrt_disc) / 2.0
         lambda2 = (trace - sqrt_disc) / 2.0
 
-        # Eigenvector for lambda2 (perpendicular to filament)
+        # Eigenvector for lambda2. For a ridge the gradient energy is largest
+        # ACROSS the filament, so the small-eigenvalue eigenvector points ALONG
+        # the filament -- FIX(audit B4.3 / H13): the old comment here claimed
+        # "perpendicular to filament", and find() acted on that by adding a
+        # further pi/2 to the step direction, walking the tracer straight across
+        # the ridge (0 filaments found on a textbook synthetic filament).
+        # v satisfies (Jxx - l2) vx + Jxy vy = 0  =>  v = (Jxy, l2 - Jxx).
         if abs(Jxy) > 1e-10:
             theta = math.atan2(lambda2 - Jxx, Jxy)
         else:
+            # diagonal tensor: l2 direction is x if Jxx < Jyy else y
             theta = 0.0 if Jxx < Jyy else math.pi / 2
 
         return lambda1, lambda2, theta
@@ -1051,17 +1117,26 @@ class FilamentFinder:
                 spine = [(float(x), float(y))]
                 visited.add((x, y))
 
-                # Trace in both directions along ridge
+                # Trace in both directions along the ridge.
+                # FIX(audit B4.3 / H13): step ALONG the lambda_2 eigenvector.
+                # The old code used theta = orientation + direction*pi/2 and
+                # then stepped by direction*(cos, sin), i.e. across the ridge;
+                # removing the two spurious +pi/2 terms takes the textbook
+                # synthetic filament from 0 detections to 24 segments.
+                # The eigenvector sign is arbitrary, so the step direction is
+                # also forced to stay continuous with the previous step
+                # (dot product >= 0) instead of being multiplied by +/-1.
                 for direction in [1, -1]:
                     cx, cy = float(x), float(y)
-                    theta = orientation[y][x] + direction * math.pi / 2
+                    theta = orientation[y][x]
+                    step_x = direction * math.cos(theta)
+                    step_y = direction * math.sin(theta)
 
                     for _ in range(100):  # Max length
-                        # Step along perpendicular to gradient
-                        nx_ = cx + direction * math.cos(theta)
-                        ny_ = cy + direction * math.sin(theta)
+                        nx_ = cx + step_x
+                        ny_ = cy + step_y
 
-                        ix, iy = int(nx_), int(ny_)
+                        ix, iy = int(round(nx_)), int(round(ny_))
                         if ix < 0 or ix >= nx or iy < 0 or iy >= ny:
                             break
                         if (ix, iy) in visited:
@@ -1078,7 +1153,11 @@ class FilamentFinder:
                             spine.insert(0, (nx_, ny_))
 
                         cx, cy = nx_, ny_
-                        theta = orientation[iy][ix] + direction * math.pi / 2
+                        theta = orientation[iy][ix]
+                        new_x, new_y = math.cos(theta), math.sin(theta)
+                        if new_x * step_x + new_y * step_y < 0.0:
+                            new_x, new_y = -new_x, -new_y   # keep orientation
+                        step_x, step_y = new_x, new_y
 
                 # Check if long enough
                 if len(spine) >= self.min_length:
@@ -1092,7 +1171,16 @@ class FilamentFinder:
                     segment = FilamentSegment(
                         segment_id=len(filaments) + 1,
                         spine_points=spine,
-                        width=self.scale * 2.0,  # Approximate
+                        # AUDIT-FLAG (B4.12): `width`, `curvature`, `junctions`
+                        # and `mass_per_length` below are STUBS presented as
+                        # measurements -- width is just 2 x the analysis scale
+                        # (so FilamentNetwork.mean_width is a constant), and the
+                        # other three are hardcoded zeros/empties. Left in place
+                        # because measuring them (perpendicular profile fits,
+                        # spine curvature, junction detection, a column-density
+                        # calibration) is new functionality rather than a repair.
+                        # Do not treat these four fields as data.
+                        width=self.scale * 2.0,  # STUB, not measured
                         length=length,
                         curvature=0.0,  # Would compute from spine
                         peak_column=max(image[int(p[1])][int(p[0])]
@@ -1233,17 +1321,40 @@ class CoreCatalogBuilder:
             if ix < 0 or ix >= nx or iy < 0 or iy >= ny:
                 continue
 
-            # Peak column density
-            N_peak = node.peak_value
+            # FIX(audit C16/B4.1): read the column densities of the pixels that
+            # actually belong to this structure. Previously N_peak was
+            # node.peak_value -- the peak of whatever image the dendrogram was
+            # built on -- and column_density_map was used only for len(), so two
+            # column maps differing by 100x produced identical catalogue masses,
+            # and a dendrogram built on an intensity image peaking at 10 gave
+            # M ~ 0 Msun and alpha_vir ~ 1e22 for every core.
+            node_pixels = [(px, py) for (px, py) in node.pixels
+                           if 0 <= px < nx and 0 <= py < ny]
+            if node_pixels:
+                columns = [column_density_map[py][px] for (px, py) in node_pixels]
+                N_peak = max(columns)
+                N_mean = sum(columns) / len(columns)
+                n_pix_used = len(columns)
+            else:
+                # Node carries no pixel list (not produced by
+                # DendrogramExtractor): fall back to the centroid pixel, loudly.
+                warnings.warn(
+                    f"dendrogram node {node.node_id} carries no pixel list; "
+                    f"its mass is estimated from the single centroid pixel of "
+                    f"the column density map", RuntimeWarning)
+                N_peak = N_mean = column_density_map[iy][ix]
+                n_pix_used = node.npixels
 
             # Effective radius
             r_pix = math.sqrt(node.npixels / math.pi)
             r_arcsec = r_pix * pixel_scale_arcsec
             r_pc = r_arcsec * self.distance_pc / 206265.0
 
-            # Mass
-            area_sr = node.npixels * pixel_size_sr
-            mass = self.column_to_mass(N_peak * 0.5, area_sr)  # Average column
+            # Mass = mean column over the structure x its area
+            # (replaces the undocumented "average column = half the peak"
+            # factor of 2, audit B4.13).
+            area_sr = n_pix_used * pixel_size_sr
+            mass = self.column_to_mass(N_mean, area_sr)
 
             # Volume density (assuming sphere)
             if r_pc > 0:
@@ -1277,7 +1388,13 @@ class CoreCatalogBuilder:
                 dec=0.0,
                 radius=r_pc,
                 mass=mass,
-                mass_error=mass * 0.5,  # Assume 50% uncertainty
+                # AUDIT-FLAG (B4.7): this is NOT a measured uncertainty -- it is
+                # a hardcoded 50% attached to every core regardless of S/N,
+                # calibration or dust temperature. Left in place because the
+                # inputs needed for a real error budget (map noise, kappa and
+                # T_dust uncertainties) are not passed to this method; treat
+                # `mass_error` as a placeholder, not a statistic.
+                mass_error=mass * 0.5,
                 temperature=self.temperature,
                 column_density=N_peak,
                 volume_density=n_H2,

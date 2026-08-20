@@ -55,6 +55,10 @@ class InferenceResult:
     degrees_of_freedom: int
     reduced_chi_squared: float
     log_evidence: float
+    # NOTE (audit M1): for method="swarm" this is the set of particle
+    # personal-best positions -- an optimiser trace, not a posterior sample.
+    # Do not histogram it as a posterior; the parameter uncertainties come from
+    # the chi^2 curvature at the optimum instead.
     posterior_samples: Optional[np.ndarray] = None
     convergence_achieved: bool = True
     n_evaluations: int = 0
@@ -218,6 +222,7 @@ class BayesianSwarmInference:
         w_start, w_end = 0.9, 0.4          # inertia decay
         c1, c2 = 2.0, 2.0                  # cognitive / social coefficients
         stall_iterations = 0
+        swarm_converged = False            # FIX(audit M1): real convergence flag
 
         for it in range(n_iterations):
             w = w_start - (w_start - w_end) * it / max(1, n_iterations - 1)
@@ -249,6 +254,9 @@ class BayesianSwarmInference:
                 if stall_iterations >= 10:
                     if verbose:
                         print(f"  [swarm] converged after {it + 1} iterations")
+                    # FIX(audit M1): record whether the swarm actually stalled;
+                    # `convergence_achieved` used to be hardcoded True.
+                    swarm_converged = True
                     break
             else:
                 stall_iterations = 0
@@ -256,48 +264,65 @@ class BayesianSwarmInference:
         best = self.global_best_position.copy()
         best_chi2 = self.global_best_chi_squared
 
-        # --- posterior summary from the final swarm ---------------------------
+        # --- parameter uncertainties -----------------------------------------
+        # FIX(audit M1): the uncertainties used to be percentiles of the swarm's
+        # personal-best positions, importance weighted by exp(-dchi2/2). A PSO
+        # swarm COLLAPSES onto the optimum, so that spread measures how far the
+        # optimiser has converged, not how well the data constrain the model:
+        # on a 20-point straight-line fit with sigma = 0.5 it returned
+        # +0.00000/-0.00000 for both parameters at n_iterations = 50, and error
+        # bars that varied non-monotonically with iteration count.
+        # We now use the local curvature of chi^2 at the optimum, exactly as
+        # sed_fitting.SEDFitter does (and as verified against the analytic
+        # Fisher matrix there): with chi^2 = -2 ln L, the covariance is
+        # C = 2 H^-1, H_ij = d^2 chi^2 / dtheta_i dtheta_j.
+        # If H is not positive definite (a saddle, a bound-limited or a
+        # non-smooth minimum) NO number is invented: the uncertainties are
+        # returned as NaN, `convergence_achieved` is False and a warning is
+        # issued. A wrong error bar is worse than no error bar.
+        cov, cov_ok = self._hessian_covariance(best, observations, lo, hi, span)
+
+        # The swarm's weighted personal bests are still returned as
+        # `posterior_samples`, but they are an optimiser trace, NOT a posterior
+        # sample -- see the InferenceResult docstring.
         final = np.array([p.best_position for p in particles])
         final_chi2 = np.array([p.best_chi_squared for p in particles])
-        # Importance weights: points within delta-chi2 ~ few of the minimum
         delta = final_chi2 - best_chi2
         weights = np.exp(-0.5 * np.clip(delta, 0, 50))
         weights /= weights.sum()
-        # Discard totally stale particles from the uncertainty estimate
         active = weights > 1e-3
-        if active.sum() >= 2:
-            w_active = weights[active]
-            samples = final[active]
-            # Resample for percentile robustness
-            idx = rng.choice(len(samples), size=min(2000, len(samples) * 20),
-                             replace=True, p=w_active / w_active.sum())
-            post = samples[idx]
-            lo16, med, hi84 = np.percentile(post, [16, 50, 84], axis=0)
-        else:
-            med, lo16, hi84 = best, best - 0.02 * span, best + 0.02 * span
-            post = best.reshape(1, -1)
+        post = final[active] if active.sum() >= 1 else best.reshape(1, -1)
 
         parameters = {}
         for i, name in enumerate(names):
+            sigma_i = float(np.sqrt(cov[i, i])) if cov_ok else float('nan')
             parameters[name] = ParameterEstimate(
                 name=name,
-                value=float(med[i]),
-                uncertainty_lower=float(max(1e-12, med[i] - lo16[i])),
-                uncertainty_upper=float(max(1e-12, hi84[i] - med[i])),
+                value=float(best[i]),
+                uncertainty_lower=sigma_i,
+                uncertainty_upper=sigma_i,
                 unit=self._bounds[name][2],
             )
 
         dof = self._degrees_of_freedom(observations, n_dim)
 
         # Laplace log-evidence with uniform priors over the declared bounds:
-        # log Z ~ -0.5*chi2_min - 0.5*d*ln(2*pi) - 0.5*ln(det Cov) + sum ln(1/range)
-        cov = np.cov(post.T) if post.shape[0] > 1 else np.diag((0.02 * span) ** 2)
-        cov = np.atleast_2d(cov) + np.eye(n_dim) * 1e-12
-        sign, logdet = np.linalg.slogdet(cov)
-        log_evidence = (-0.5 * best_chi2
-                        - 0.5 * n_dim * np.log(2 * np.pi)
-                        - 0.5 * logdet
-                        - np.sum(np.log(span)))
+        #   ln Z ~ ln L_max + (d/2) ln(2 pi) + (1/2) ln det C - sum ln(range)
+        # FIX(audit M1): the two Gaussian-normalisation terms had the WRONG SIGN
+        # (the code used -0.5 d ln 2pi - 0.5 ln det C), and det C was taken from
+        # the collapsed swarm, so log Z varied by 9.4 nats on identical data
+        # depending only on the iteration count. ln L_max = -chi2_min/2 drops
+        # the (constant) 1/sqrt(2 pi sigma^2) factors of the likelihood, so this
+        # is an evidence RATIO usable only between models sharing the same data
+        # and error bars.
+        if cov_ok:
+            _, logdet = np.linalg.slogdet(cov)
+            log_evidence = (-0.5 * best_chi2
+                            + 0.5 * n_dim * np.log(2 * np.pi)
+                            + 0.5 * logdet
+                            - np.sum(np.log(span)))
+        else:
+            log_evidence = float('nan')
 
         return InferenceResult(
             parameters=parameters,
@@ -306,8 +331,101 @@ class BayesianSwarmInference:
             reduced_chi_squared=best_chi2 / dof,
             log_evidence=float(log_evidence),
             posterior_samples=post,
-            convergence_achieved=True,
+            # FIX(audit M1): was hardcoded True. NOTE this flag means "the swarm
+            # stalled and a valid curvature was obtained", NOT "the global
+            # minimum was found": PSO can and does stall above the true
+            # chi^2 minimum, so a converged run can still be a local optimum.
+            convergence_achieved=bool(swarm_converged and cov_ok),
             n_evaluations=self.n_evaluations,
             wall_time=_time.time() - t0,
             method="swarm",
         )
+
+    # ------------------------------------------------------- uncertainties
+    def _hessian_covariance(self, theta: np.ndarray, observations: Dict,
+                            lo: np.ndarray, hi: np.ndarray,
+                            span: np.ndarray) -> Tuple[np.ndarray, bool]:
+        """
+        Covariance from the curvature of chi^2 at `theta`: C = 2 H^-1.
+
+        The step for each parameter is chosen adaptively so that the one-sided
+        chi^2 increment is of order unity (the scale on which the likelihood
+        actually varies); the Hessian is then formed with central differences.
+
+        Returns (covariance, ok). `ok` is False -- and the covariance is filled
+        with NaN -- when the Hessian is singular, not positive definite, or the
+        optimum sits against a parameter bound, i.e. whenever a Gaussian error
+        bar would be meaningless.
+        """
+        n = theta.size
+        chi2_0 = self._chi_squared(theta, observations)
+
+        # --- adaptive step per parameter -------------------------------------
+        steps = np.zeros(n)
+        for i in range(n):
+            h = 1e-3 * span[i]
+            for _ in range(40):
+                if h <= 0 or not np.isfinite(h):
+                    break
+                probe = theta.copy()
+                probe[i] = np.clip(theta[i] + h, lo[i], hi[i])
+                if probe[i] == theta[i]:
+                    probe[i] = np.clip(theta[i] - h, lo[i], hi[i])
+                d_chi2 = abs(self._chi_squared(probe, observations) - chi2_0)
+                if d_chi2 < 1e-2:
+                    h *= 2.0
+                elif d_chi2 > 4.0:
+                    h *= 0.5
+                else:
+                    break
+                if h > 0.5 * span[i]:
+                    h = 0.5 * span[i]
+                    break
+            steps[i] = h
+
+        # --- reject bound-limited optima -------------------------------------
+        at_bound = (theta - lo < steps) | (hi - theta < steps)
+        if np.any(at_bound):
+            import warnings as _warnings
+            _warnings.warn(
+                "best fit lies within one finite-difference step of a parameter "
+                "bound; the chi^2 curvature there is not a valid uncertainty, "
+                "so NaN error bars are returned", RuntimeWarning)
+            return np.full((n, n), np.nan), False
+
+        # --- central-difference Hessian of chi^2 ------------------------------
+        hess = np.zeros((n, n))
+        for i in range(n):
+            ei = np.zeros(n)
+            ei[i] = steps[i]
+            f_p = self._chi_squared(theta + ei, observations)
+            f_m = self._chi_squared(theta - ei, observations)
+            hess[i, i] = (f_p - 2.0 * chi2_0 + f_m) / steps[i] ** 2
+            for j in range(i + 1, n):
+                ej = np.zeros(n)
+                ej[j] = steps[j]
+                f_pp = self._chi_squared(theta + ei + ej, observations)
+                f_pm = self._chi_squared(theta + ei - ej, observations)
+                f_mp = self._chi_squared(theta - ei + ej, observations)
+                f_mm = self._chi_squared(theta - ei - ej, observations)
+                hess[i, j] = hess[j, i] = (
+                    (f_pp - f_pm - f_mp + f_mm) / (4.0 * steps[i] * steps[j]))
+
+        try:
+            cov = 2.0 * np.linalg.inv(hess)
+        except np.linalg.LinAlgError:
+            import warnings as _warnings
+            _warnings.warn("chi^2 Hessian is singular at the best fit; "
+                           "returning NaN uncertainties", RuntimeWarning)
+            return np.full((n, n), np.nan), False
+
+        eigenvalues = np.linalg.eigvalsh(0.5 * (cov + cov.T))
+        if not np.all(np.isfinite(cov)) or np.min(eigenvalues) <= 0:
+            import warnings as _warnings
+            _warnings.warn(
+                "chi^2 curvature at the best fit is not positive definite "
+                "(saddle point or degenerate parameters); returning NaN "
+                "uncertainties rather than an invented number", RuntimeWarning)
+            return np.full((n, n), np.nan), False
+
+        return cov, True

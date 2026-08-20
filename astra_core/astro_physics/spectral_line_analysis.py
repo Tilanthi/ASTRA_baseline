@@ -27,7 +27,7 @@ Date: 2026-08
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Any
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, brentq
 from scipy.special import wofz
 
 # Physical Constants (CGS)
@@ -386,30 +386,57 @@ class OpticalDepthCorrector:
         return hv_k / (np.exp(hv_k / temperature) - 1.0)
 
     def tau_from_ratio(self, t_main: float, t_satellite: float,
-                       strength_ratio: float) -> float:
+                       strength_ratio: float,
+                       tau_max: float = 300.0) -> float:
         """
-        Optical depth from main/satellite hyperfine line ratio:
+        Main-line optical depth from a hyperfine intensity ratio.
 
-            tau = -ln(1 - T_main / (T_ex * strength_ratio_frac))
+        Two hyperfine components sharing T_ex and line width have
+        optical depths tau_main = tau and tau_sat = s*tau, where
+        s = `strength_ratio` is the intrinsic (LTE) strength ratio.
+        Their brightness ratio is therefore
 
-        Simplified standard formula (when both lines share T_ex and
-        width, using the ratio T_sat/T_main against the optically thin
-        expectation):
-            tau = -ln(1 - r_thin_ratio_observed)
-        where r_obs = T_sat / T_main and r_thin is the catalog ratio.
+            r_obs = T_sat / T_main = (1 - e^{-s tau}) / (1 - e^{-tau})
+
+        which rises monotonically from s (tau -> 0) to 1 (tau -> inf).
+        This routine inverts it numerically (Brent).
+
+        FIX(audit C13): the previous implementation evaluated
+        `x = 1 - r_obs/s` and returned `inf` whenever x <= 0.  Because
+        r_obs >= s for *every* physical tau, x <= 0 always, so the
+        function returned `inf` for all inputs (verified at
+        tau = 0.1, 0.5, 1, 3, 10 with s = 0.2).
 
         Args:
             t_main: main-line brightness temperature (K)
             t_satellite: satellite brightness temperature (K)
             strength_ratio: satellite/main intrinsic strength (< 1)
+            tau_max: upper bracket, returned when the ratio saturates
+
+        Returns:
+            main-line optical depth; 0.0 in the thin limit and
+            `tau_max` when the observed ratio is saturated (r_obs -> 1)
         """
         if t_main <= 0 or strength_ratio <= 0 or strength_ratio >= 1:
             raise ValueError("Require t_main > 0 and 0 < strength_ratio < 1")
+        s = float(strength_ratio)
         ratio_observed = t_satellite / t_main
-        x = 1.0 - ratio_observed / strength_ratio
-        if x <= 0:
-            return np.inf  # optically thin limit
-        return -np.log(x)
+
+        if ratio_observed <= s:
+            # At or below the optically thin expectation.
+            return 0.0
+        if ratio_observed >= 1.0:
+            # Saturated: both components thick, tau unbounded above.
+            return float(tau_max)
+
+        def _ratio(tau: float) -> float:
+            return np.expm1(-s * tau) / np.expm1(-tau)
+
+        if _ratio(tau_max) <= ratio_observed:
+            return float(tau_max)
+
+        return float(brentq(lambda t: _ratio(t) - ratio_observed,
+                            1e-8, tau_max, xtol=1e-12, rtol=8.9e-16))
 
     def corrected_temperature(self, observed_tb: float, tau: float,
                               frequency_ghz: float, t_ex: float = 10.0,
@@ -479,6 +506,16 @@ class ColumnDensityCalculator:
         """
         N(H2) from 13CO J=1-0 integrated intensity (K km/s).
         """
+        # AUDIT-FLAG (C-worker B2.3/B2.8, NOT FIXED - outside this
+        # worker's scope): (i) `3.0e14 * T_ex * exp(-5.87/T_ex)` uses
+        # E_u/k = 5.87 K, but 13CO 1-0 has E_u/k = 5.289 K (5.87 K
+        # corresponds to a 122.3 GHz line that does not exist), and the
+        # Boltzmann factor has the opposite sign to the standard Garden
+        # et al. (1991) recipe (T_ex+0.88)/(1-exp(-5.29/T_ex));
+        # (ii) A_V = N_H2/1.87e21 under-estimates A_V by exactly 2x -
+        # Bohlin et al. (1978) give N_H/A_V = 1.87e21 with
+        # N_H = N(HI) + 2 N(H2), so molecular gas needs 2 N_H2/1.87e21.
+        # Use `lte_column` (fixed under C14) for quantitative work.
         x = x_13co if x_13co is not None else self.X_13CO_DEFAULT
         n_13co = 3.0e14 * t_ex * np.exp(-5.87 / t_ex) * \
             tau_13co / (1.0 - np.exp(-tau_13co)) * integrated_intensity
@@ -497,10 +534,29 @@ class ColumnDensityCalculator:
         Optically thin LTE molecular column density (cm^-2), Mangum &
         Shirley (2015) eq. 80:
 
-            N = (8 pi nu^2 / c^2 A_ul) (g_l/g_u) Q exp(E_u/kT_ex)
-                * [J(T_ex)-J(T_bg)]^-1 * W_RJ-integrated brightness
+            N = (8 pi nu^3 / (c^3 A_ul)) (Q/g_u) exp(E_u/kT_ex)
+                * [exp(h nu / k T_ex) - 1]^-1
+                * Int T_R dv / [J(T_ex) - J(T_bg)]
+
+        Derivation: for a line of optical depth tau,
+        Int tau dv = (c^3 A N_u / 8 pi nu^3)(e^{h nu/kT_ex} - 1) and
+        Int T_R dv = [J(T_ex) - J(T_bg)] Int (1 - e^{-tau}) dv, which
+        for tau << 1 gives N_u and hence N_tot = N_u (Q/g_u)
+        exp(E_u/kT_ex).
+
+        FIX(audit C14): the previous expression was wrong by a factor
+        1.4388e-05 = g_l * (h c / k) * 1e-5.  It used
+        (i)   8 pi nu^2 / c^2   instead of 8 pi nu^3 / c^3,
+        (ii)  a spurious factor g_lower,
+        (iii) a spurious factor h nu / k (J(T_ex) instead of
+              [exp(h nu/kT_ex) - 1]^-1), and
+        (iv)  fed W in K km/s straight into a CGS expression.
+        For CO 1-0 with W = 10 K km/s, T_ex = 10 K, Q = 3.968 it
+        returned 1.335e+11 cm^-2 against the correct 9.281e+15.
 
         `integrated_intensity` in K km/s (main-beam). Assumes tau << 1.
+        `g_lower` is retained in the signature for API compatibility
+        and is deliberately unused - it does not enter eq. 80.
         """
         nu = frequency_ghz * 1e9
         hv_k = h_planck * nu / k_B
@@ -509,10 +565,12 @@ class ColumnDensityCalculator:
         bright = j_ex - j_bg
         if bright <= 0:
             raise ValueError("T_ex produces no contrast against the CMB")
-        prefactor = 8.0 * np.pi * nu ** 2 / (c_light ** 2 * einstein_a)
-        n_line = prefactor * (g_lower / g_upper) * partition_function * \
-            np.exp(e_upper_k / t_ex) * (integrated_intensity / bright) * \
-            hv_k / (np.exp(hv_k / t_ex) - 1.0)
+        # FIX(audit C14): nu^3/c^3, no g_lower, K km/s -> K cm/s
+        prefactor = 8.0 * np.pi * nu ** 3 / (c_light ** 3 * einstein_a)
+        w_cgs = integrated_intensity * 1e5
+        n_line = prefactor * (partition_function / g_upper) * \
+            np.exp(e_upper_k / t_ex) * (w_cgs / bright) / \
+            np.expm1(hv_k / t_ex)
         return n_line
 
     def c18o_column(self, integrated_intensity: float, t_ex: float = 10.0,
