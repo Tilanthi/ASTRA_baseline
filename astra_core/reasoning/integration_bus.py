@@ -345,3 +345,15 @@ class IntegrationBus:
 
         for sub_id in subscription_ids:
             subscription = self.subscriptions.get(sub_id)
+
+
+# Singleton instance for consistent bus access across modules
+_integration_bus_instance: Optional["IntegrationBus"] = None
+
+
+def get_integration_bus() -> "IntegrationBus":
+    """Get or create the singleton integration bus instance."""
+    global _integration_bus_instance
+    if _integration_bus_instance is None:
+        _integration_bus_instance = IntegrationBus()
+    return _integration_bus_instance

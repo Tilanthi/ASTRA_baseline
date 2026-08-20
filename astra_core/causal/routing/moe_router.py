@@ -576,3 +576,66 @@ class ConditionalComputationEngine:
         # Execute only selected experts (conditional computation!)
         results = {}
         execution_times = {}
+
+        # Get routing decision
+        selected_experts = self.router.select_experts(task, context)
+
+        # Execute only selected experts (conditional computation!)
+        results = {}
+        execution_times = {}
+
+        def call_expert(func, expert_name):
+            """Adapt to (name, task, ctx) / (name, task) / (task) signatures."""
+            try:
+                return func(expert_name, task, context)
+            except TypeError:
+                pass
+            try:
+                return func(expert_name, task)
+            except TypeError:
+                pass
+            return func(task)
+
+        errors = {}
+        for expert_name, score in selected_experts:
+            func = task_func_map.get(expert_name)
+            if func is None:
+                continue
+            start = time.perf_counter()
+            try:
+                results[expert_name] = call_expert(func, expert_name)
+            except Exception as exc:
+                errors[expert_name] = str(exc)
+            execution_times[expert_name] = time.perf_counter() - start
+
+        return {
+            "task": task,
+            "selected_experts": [name for name, _ in selected_experts],
+            "expert_scores": {name: score for name, score in selected_experts},
+            "results": results,
+            "errors": errors,
+            "execution_times": execution_times,
+            "total_execution_time": sum(execution_times.values()),
+            "n_experts_available": len(task_func_map),
+            "n_experts_activated": len(results) + len(errors),
+        }
+
+# =============================================================================
+# FACTORY FUNCTIONS
+# (Re-implemented 2026-08; lost to file truncation before the audit.)
+# =============================================================================
+
+def create_moe_router(top_k: int = 3,
+                      min_score_threshold: float = 0.1) -> MoECapabilityRouter:
+    """Factory for the MoE capability router."""
+    return MoECapabilityRouter(top_k=top_k,
+                               min_score_threshold=min_score_threshold)
+
+
+def create_conditional_engine(top_k: int = 3,
+                              min_score_threshold: float = 0.1
+                              ) -> ConditionalComputationEngine:
+    """Factory for the conditional computation engine."""
+    return ConditionalComputationEngine(
+        router=MoECapabilityRouter(top_k=top_k,
+                                   min_score_threshold=min_score_threshold))

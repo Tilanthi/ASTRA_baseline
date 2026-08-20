@@ -1131,9 +1131,3 @@ def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, A
     return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
 
 
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-

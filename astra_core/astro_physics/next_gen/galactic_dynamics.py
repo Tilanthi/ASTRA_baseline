@@ -968,13 +968,3 @@ __all__ = [
 ]
 
 
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None

@@ -643,18 +643,6 @@ def test_predictive_modeling_function(data):
 
 
 
-def utility_function_17(*args, **kwargs):
-    """Utility function 17."""
-    return None
-
-
-
-def utility_function_2(*args, **kwargs):
-    """Utility function 2."""
-    return None
-
-
-
 # Test helper for quantum_reasoning
 def test_quantum_reasoning_function(data):
     """Test function for quantum_reasoning."""

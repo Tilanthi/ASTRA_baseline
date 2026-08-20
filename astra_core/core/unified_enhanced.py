@@ -77,6 +77,21 @@ except ImportError:
     COUNTERFACTUAL_AVAILABLE = False
     logger.warning("Counterfactual reasoning system not available")
 
+# Import orchestration system (NEW)
+try:
+    from ..orchestration import (
+        IntegratedOrchestrator,
+        create_integrated_orchestrator,
+        EventType,
+        DomainEvent
+    )
+    ORCHESTRATION_AVAILABLE = True
+except ImportError:
+    IntegratedOrchestrator = None
+    create_integrated_orchestrator = None
+    ORCHESTRATION_AVAILABLE = False
+    logger.warning("Orchestration system not available")
+
 
 # Define EnhancedUnifiedConfig based on whether UnifiedConfig is available
 if BASE_UNIFIED_AVAILABLE:
@@ -100,6 +115,12 @@ if BASE_UNIFIED_AVAILABLE:
 
         # Intuition development
         enable_intuition_development: bool = True
+
+        # Orchestration configuration (NEW)
+        enable_orchestration: bool = True
+        orchestration_preload_threshold: float = 0.5
+        orchestration_max_preloaded: int = 20
+        orchestration_optimization_interval: int = 300
 else:
     @dataclass
     class EnhancedUnifiedConfig:
@@ -127,6 +148,12 @@ else:
 
         # Intuition development
         enable_intuition_development: bool = True
+
+        # Orchestration configuration (NEW)
+        enable_orchestration: bool = True
+        orchestration_preload_threshold: float = 0.5
+        orchestration_max_preloaded: int = 20
+        orchestration_optimization_interval: int = 300
 
 
 class EnhancedUnifiedSTANSystem:
@@ -193,6 +220,21 @@ class EnhancedUnifiedSTANSystem:
             self.counterfactual_system = get_counterfactual_system()
             logger.info("Counterfactual reasoning system initialized")
 
+        # Initialize orchestration system (NEW)
+        self.orchestrator: Optional[IntegratedOrchestrator] = None
+        self._orchestrator_started = False
+        if self.config.enable_orchestration and ORCHESTRATION_AVAILABLE:
+            try:
+                self.orchestrator = create_integrated_orchestrator(
+                    preload_threshold=self.config.orchestration_preload_threshold,
+                    max_preloaded=self.config.orchestration_max_preloaded,
+                    optimization_interval=self.config.orchestration_optimization_interval
+                )
+                logger.info("Orchestration system initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize orchestration system: {e}")
+                self.orchestrator = None
+
         # Performance tracking
         self.performance_stats = {
             'queries_processed': 0,
@@ -200,7 +242,8 @@ class EnhancedUnifiedSTANSystem:
             'meta_adaptations': 0,
             'physics_computations': 0,
             'analogies_used': 0,
-            'counterfactual_queries': 0
+            'counterfactual_queries': 0,
+            'orchestrated_queries': 0  # NEW
         }
 
         logger.info("EnhancedUnifiedSTANSystem initialized")
@@ -315,6 +358,40 @@ class EnhancedUnifiedSTANSystem:
                 except Exception as e:
                     logger.warning(f"Failed to register features for {domain_name}: {e}")
 
+    async def start_orchestrator(self):
+        """Start the orchestration system if available"""
+        if self.orchestrator and not self._orchestrator_started:
+            try:
+                await self.orchestrator.start()
+
+                # Register domains with orchestrator
+                if self.domain_registry:
+                    for domain_name in self.domain_registry.list_domains():
+                        domain = self.domain_registry.get_domain(domain_name)
+                        if domain:
+                            self.orchestrator.register_capability(domain_name, domain)
+
+                self._orchestrator_started = True
+                logger.info("Orchestration system started")
+            except Exception as e:
+                logger.error(f"Failed to start orchestration system: {e}")
+
+    async def stop_orchestrator(self):
+        """Stop the orchestration system if running"""
+        if self.orchestrator and self._orchestrator_started:
+            try:
+                await self.orchestrator.stop()
+                self._orchestrator_started = False
+                logger.info("Orchestration system stopped")
+            except Exception as e:
+                logger.error(f"Failed to stop orchestration system: {e}")
+
+    def get_orchestration_metrics(self) -> Optional[Dict[str, Any]]:
+        """Get orchestration system metrics if available"""
+        if self.orchestrator and self._orchestrator_started:
+            return self.orchestrator.get_comprehensive_metrics()
+        return None
+
     def process_query(
         self,
         query: str,
@@ -335,6 +412,61 @@ class EnhancedUnifiedSTANSystem:
             Processing result with answer and metadata
         """
         context = context or {}
+
+        # ORCHESTRATION: Route through orchestrator if enabled and started
+        if self.orchestrator and self._orchestrator_started:
+            try:
+                # Import asyncio if not already imported
+                import asyncio
+
+                # Ensure we're in an async context or run in new event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # We're in an async context, create task
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            orchestration_result = executor.submit(
+                                asyncio.run,
+                                self.orchestrator.process_query(query, context)
+                            ).result()
+                    else:
+                        # No running loop, run directly
+                        orchestration_result = asyncio.run(
+                            self.orchestrator.process_query(query, context)
+                        )
+                except RuntimeError:
+                    # No event loop, run in new loop
+                    orchestration_result = asyncio.run(
+                        self.orchestrator.process_query(query, context)
+                    )
+
+                # Update performance stats
+                self.performance_stats['orchestrated_queries'] += 1
+
+                # Return orchestration result with enhanced metadata
+                return {
+                    'query': query,
+                    'mode': mode or 'orchestrated',
+                    'answer': orchestration_result.get('answer'),
+                    'confidence': orchestration_result.get('success', 0.7),
+                    'capabilities_used': ['orchestration_system'],
+                    'reasoning_trace': [{
+                        'step': 'orchestration',
+                        'decisions_made': orchestration_result.get('decisions_made', 0),
+                        'allocation': orchestration_result.get('allocation', {})
+                    }],
+                    'metadata': orchestration_result,
+                    'meta_cognitive': False,
+                    'data_sufficient': True,
+                    'orchestrated': True  # NEW flag
+                }
+
+            except Exception as e:
+                logger.warning(f"Orchestration failed, falling back to standard processing: {e}")
+                # Continue with standard processing
+
+        # Standard processing (original code)
         result = {
             'query': query,
             'mode': mode or 'auto',
@@ -344,7 +476,8 @@ class EnhancedUnifiedSTANSystem:
             'confidence': 0.0,
             'metadata': {},
             'meta_cognitive': False,
-            'data_sufficient': True
+            'data_sufficient': True,
+            'orchestrated': False  # NEW flag
         }
 
         # META-COGNITIVE CHECK: Evaluate data sufficiency BEFORE processing
@@ -874,17 +1007,55 @@ class EnhancedUnifiedSTANSystem:
         return []
 
 
-def create_enhanced_stan_system(config: Optional[EnhancedUnifiedConfig] = None) -> EnhancedUnifiedSTANSystem:
+def create_enhanced_stan_system(
+    config: Optional[EnhancedUnifiedConfig] = None,
+    auto_start_orchestrator: bool = True,
+    mode: Optional[str] = None
+) -> EnhancedUnifiedSTANSystem:
     """
     Factory function to create enhanced STAN system
 
     Args:
         config: Optional configuration
+        auto_start_orchestrator: Whether to automatically start the orchestrator (NEW)
+        mode: Optional system flavor - "v4" returns the V4 revolutionary
+              system (MCE/ASC/CRN/MMOL); "general"/"unified"/None return
+              the enhanced unified system (this factory's default).
 
     Returns:
-        EnhancedUnifiedSTANSystem instance
+        EnhancedUnifiedSTANSystem instance (or V4 system when mode="v4")
     """
-    return EnhancedUnifiedSTANSystem(config)
+    if mode == "v4":
+        try:
+            from ..revolutionary import create_v4_system
+            return create_v4_system()
+        except ImportError as e:
+            logger.warning(
+                f"V4 revolutionary system unavailable ({e}); "
+                "falling back to enhanced unified system")
+
+    system = EnhancedUnifiedSTANSystem(config)
+
+    # Auto-start orchestrator if enabled (NEW)
+    if auto_start_orchestrator and system.orchestrator:
+        try:
+            import asyncio
+            try:
+                # Try to get running event loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Loop is running, schedule start as task
+                    asyncio.create_task(system.start_orchestrator())
+                else:
+                    # Loop exists but not running, run directly
+                    loop.run_until_complete(system.start_orchestrator())
+            except RuntimeError:
+                # No event loop, create new one and run
+                asyncio.run(system.start_orchestrator())
+        except Exception as e:
+            logger.warning(f"Failed to auto-start orchestrator: {e}")
+
+    return system
 
 
 # Backwards compatibility alias

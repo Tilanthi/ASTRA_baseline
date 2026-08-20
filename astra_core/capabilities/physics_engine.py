@@ -44,12 +44,6 @@ def create_physics_engine():
 
 
 
-def utility_function_2(*args, **kwargs):
-    """Utility function 2."""
-    return None
-
-
-
 # Utility: Data Import
 def import_data(*args, **kwargs):
     """Utility function for import_data."""

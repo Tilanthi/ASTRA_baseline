@@ -19,49 +19,19 @@ import numpy as np
 import time
 
 # Import V60 components
-from .v60_predictive_world_models import (
-    PredictiveWorldModelSystem,
-    WorldModelLibrary,
-    create_world_model_system,
-    DomainType
-)
+from astra_core.reasoning.v60_predictive_world_models import PredictiveWorldModelSystem, WorldModelLibrary
+from astra_core.capabilities.cognitive.predictive_world_models import create_world_model_system, DomainType
 
-from .v60_grounded_representations import (
-    GroundedRepresentationSystem,
-    ConceptRepresentation,
-    create_representation_system,
-    CompositionType
-)
+from astra_core.capabilities.cognitive.grounded_representations import GroundedRepresentationSystem, ConceptRepresentation, create_representation_system, CompositionType
 
-from .v60_persistent_memory import (
-    PersistentMemorySystem,
-    WorkingMemory,
-    EpisodicMemory,
-    SemanticMemory,
-    create_memory_system,
-    RetrievalStrategy
-)
+from astra_core.capabilities.memory.persistent_memory import PersistentMemorySystem, WorkingMemory, EpisodicMemory, SemanticMemory, create_memory_system, RetrievalStrategy
 
-from .v60_active_knowledge import (
-    ActiveKnowledgeSystem,
-    KnowledgeGap,
-    Hypothesis,
-    create_active_knowledge_system
-)
+from astra_core.capabilities.multimodal.active_knowledge import ActiveKnowledgeSystem, create_active_knowledge_system
+from astra_core.reasoning.v60_active_knowledge import KnowledgeGap, Hypothesis
 
-from .v60_cognitive_self_modification import (
-    CognitiveSelfModificationSystem,
-    PerformanceMetric,
-    Strategy,
-    create_self_modification_system
-)
+from astra_core.capabilities.cognitive.cognitive_self_modification import CognitiveSelfModificationSystem, PerformanceMetric, Strategy, create_self_modification_system
 
-from .v60_active_inference import (
-    ActiveInferenceController,
-    Belief,
-    Policy,
-    create_active_inference_controller
-)
+from astra_core.capabilities.cognitive.active_inference import ActiveInferenceController, Belief, Policy, create_active_inference_controller
 
 
 class CognitiveMode(Enum):

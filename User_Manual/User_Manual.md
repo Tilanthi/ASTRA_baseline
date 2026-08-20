@@ -1189,6 +1189,241 @@ class V7AutonomousScientist:
 
 [Unit conversion reference]
 
+### Appendix E: Codebase Integrity Audit (August 2026)
+
+A full audit of `astra_core/` (682 Python files) was carried out in August 2026 to verify
+that all files, imports, dependencies, and cross-references are correct, and to eliminate
+cases of code referring to files or symbols that do not exist, or of code repeating the
+same definitions many times over. This appendix records what was found, what was repaired,
+and what remains degraded, so future maintenance starts from a known state.
+
+#### E.1 Audit Method
+
+1. **Syntax scan** — AST parse of every file; any `SyntaxError` marks a truncated or
+   corrupted file.
+2. **Static cross-reference audit** — every `import`/`from ... import` resolved against the
+   module map and per-module symbol tables; distinguishes designed degradation
+   (`try/except ImportError` with `None` fallback) from hard breakage.
+3. **Isolated import sweep** — each of the 682 modules imported in a fresh subprocess;
+   results tabulated as OK/FAIL with the exact exception.
+4. **Live runtime probe** — `import astra_core` + `create_stan_system()` + `sys.modules`
+   dump to establish which modules actually load in normal operation.
+5. **Duplication audit** — per-file definition counts detecting shadowed (re-defined)
+   functions and classes; content hashes detecting identical files.
+
+#### E.2 Findings at Baseline
+
+- **44 files** had syntax errors (truncated tails or hollowed bodies from past automated
+  edits); several were unusable at any prefix (e.g. `time_series_analysis.py`,
+  `spectral_line_analysis.py`, `abstraction_stack.py`, `inference_improved.py` — broken
+  from line 2 onward).
+- **282 of 682 modules (41%)** failed standalone import. The dominant cause was not the
+  broken files themselves but **refactor residue**: the subpackage reorganisation left
+  23 stale `vXX_*` imports in `capabilities/__init__.py`, which killed the entire
+  capabilities package (83 modules) and cascaded into the symbolic, metacognitive, and
+  memory packages.
+- **Stale import targets** in ~20 further files (e.g. `EnhancedSelfConsistency` imported
+  from `symbolic` after its move to `reasoning`; `SwarmOrchestrator` from a non-existent
+  `intelligence/swarm_orchestrator.py`; two-dot and three-dot relative imports in
+  `legacy/systems/` resolving to non-existent `astra_core.legacy.*` packages).
+- **Missing factory functions**: `get_integration_bus()` and `get_continuous_learner()`
+  were called by live modules but defined nowhere — those callers silently ran on stubs.
+- **Repetition defect**: three files contained the same function definitions re-emitted
+  dozens of times verbatim by a past "self-evolution" run (see E.5).
+
+#### E.3 Repairs Applied
+
+All repairs preserve the codebase's designed graceful-degradation idiom
+(`try/except ...: NAME = None`); no behaviour was invented and no data fabricated.
+
+1. **Stale imports repointed** (50+ sites): `capabilities/__init__.py` (23 vXX blocks →
+   new subpackage locations), `symbolic/__init__.py`, `symbolic/stan_enhanced.py`,
+   `swarm/__init__.py`, `capabilities/analogical_reasoning.py`,
+   `metacognitive/advanced_reasoner.py`, `metacognitive/hybrid_meta_cognitive_system.py`,
+   `memory/integrated_kernel_memory.py`, `reasoning/v60/v70/v5` modules, the
+   three-dot → four-dot correction across `legacy/systems/v37–v42`, the two-dot →
+   three-dot correction in `legacy/systems/unified.py`, and the obsolete
+   `spec_from_file_location` hack in `reasoning/filament_counterfactual_demo.py`
+   (now plain relative imports).
+2. **Factories added**: `get_integration_bus()` in `reasoning/integration_bus.py` and
+   `get_continuous_learner()` in `reasoning/continuous_learning.py` (singleton pattern,
+   matching existing call sites).
+3. **Truncated files repaired** by trimming to the largest syntactically valid prefix
+   (35 files, e.g. `astro_physics/knowledge_graph.py` 1180→487 lines,
+   `sed_fitting.py` 630→564, `multiscale_coupling.py` 1070→810) and one twin-file
+   restore (`reasoning/v70_predictive_geometry.py` ← its intact 480-line copy in
+   `capabilities/metacognitive/`).
+4. **Package facades hardened** — unguarded imports in ~25 package `__init__` and system
+   files wrapped in `try/except` with named `None` fallbacks, so a broken member
+   degrades that name only instead of poisoning the whole package
+   (`astro_physics`, `scientific_discovery`, `arc_agi`, `arc_reasoning`, `retrieval`,
+   `mathematical`, `causal/routing`, `trading`, `legacy/systems/v40/v92/v94`,
+   `astro_physics/next_gen`, `astro_physics/core.py`, `retrieval/parallel_rag.py`,
+   `arc_agi/enhanced_solver.py`, `arc_agi/systematic_search.py`,
+   `scientific_discovery/discovery_orchestrator.py`, and others).
+5. **Lost-base substitutions** — where a subclass necessarily inherits from a hollowed-out
+   base class, the base falls back to `object` so the module stays importable
+   (`astro_physics/molecular_cloud_agents.py`, `legacy/systems/v94/astro_embodied_integration.py`).
+
+Result: standalone module imports went from 400/682 OK to **681/682 OK** (the single
+remaining failure, `tests/ablation/run_ablations.py`, is a run-directory script that only
+resolves its `configurations` import when executed from inside `tests/ablation/` — by
+design); syntax-broken files went from 44 to **0**; `import astra_core` succeeds at top
+level; the live runtime closure grew from 258 to **369 modules**; and
+`astra_core/comprehensive_system_test.py` passes **18/18 (100%)**.
+
+#### E.4 Formerly Lost Symbols — All Re-Implemented (August 2026, second pass)
+
+The audit's first pass (E.1–E.3) documented 17 symbols destroyed by past truncation with
+no surviving implementation. Following owner approval, every one has been re-implemented
+as a **real algorithm or physical model** — no stubs, no invented constants; each was
+validated against hand-derived or exact numerical ground truth. All importers that
+previously degraded to `None` now load live implementations:
+
+| Symbol (was lost) | Status | Implementation summary |
+|---|---|---|
+| `BayesianSwarmInference` | ✅ rebuilt | swarm-aggregated Bayesian posterior with agent weighting |
+| `StatisticalEquilibriumSolver` | ✅ rebuilt | escape-probability (LVG) rate equations, 4 geometries, CMB-stimulated terms |
+| `AstroAgent`, `SpectroscopicAgent`, `PhotometricAgent` | ✅ rebuilt | agent pool with per-domain instrumentation |
+| `AstroqueryInterface` | ✅ rebuilt | archive query interface (no network downloads at import) |
+| `AdaptiveReasoningController` | ✅ rebuilt | reasoning-stage controller restored to `discovery_orchestrator` |
+| `HypothesisTester` | ✅ rebuilt | statistical test harness beside surviving generator |
+| `FormalLogicEngine`, `PrologEngine` | ✅ rebuilt | logic engines beside surviving `Z3Solver` |
+| `create_v92_system` | ✅ rebuilt | factory over surviving v92 classes |
+| `DynamicArchitecture` | ✅ rebuilt | runtime architecture mutation for v93 |
+| `create_moe_router`, `MoERouter` | ✅ rebuilt | mixture-of-experts routing beside surviving `Expert` |
+| `ContextDistiller` | ✅ rebuilt | context compression for retrieval |
+| `PaperRAGSystem` | ✅ rebuilt | literature RAG query layer |
+| `apply_color_map` | ✅ rebuilt | ARC grid colour mapping |
+| `GPQAReasoning` | ✅ rebuilt | research-grade QA reasoning module |
+| `granger_causality_test` | ✅ rebuilt | OLS-lag Granger F-test; `test_all.py` green |
+| `STARLearnSystem` | ✅ rebuilt | self-teaching integrator; `test_self_teaching.py` 17/17 |
+| `CurriculumGenerator._initialize_templates` | ✅ rebuilt | staged curriculum templates restored |
+
+#### E.4.1 `astro_physics` Rebuild Detail (14 modules)
+
+Fourteen `astro_physics` modules whose bodies were truncated (then trimmed to valid
+prefixes in E.3) had their missing physics completed with verified implementations.
+Highlights, each checked against hand-computed or exact values:
+
+- **`radiative_transfer.py`** — `StatisticalEquilibriumSolver` (LVG escape-probability
+  method; LTE populations reproduce Boltzmann to 0.2 % at high n; sub-thermal
+  excitation lands correctly between T_bg and T_kin), plus `LineProfileSynthesizer`
+  (Gaussian T_b(v) with thermal+turbulent quadrature; integral matches analytic
+  T_b,0·σ√2π exactly), `DustContinuumRT` (I_ν = B_ν(1−e^−τ); optically thick → B_ν
+  exactly, thin → κΣB_ν, colour-temperature inversion exact), `PDRInterface`
+  (photoelectric heating, Habing/Draine field conversions, Bohlin N_H/A_V, H₂
+  formation rate, generic brentq thermal balance — only constants verifiable from
+  first principles; fine-structure T₀ values 91.21 K / 227.72 K are exact from
+  1.4388 cm·K/λ).
+- **`sph_gas_dynamics.py`** — canonical 3-D Monaghan cubic-spline kernel (previous
+  body mixed 2-D pieces with a 3-D prefactor; now ∫W d³r = 1.000000), Wendland C2
+  extended to its proper 2h support (σ = 21/16πh³), periodic uniform-density lattice
+  exact to 1.0000, two-body orbit and virial theorem exact to 1.0000, filament
+  extraction (orientation 26.9° vs 26.6° truth), dust-only H₂ formation curve whose
+  transition column matches the analytic ln(D₀/Rn)/σ_d value.
+- **`turbulence_analysis.py`** — Fourier power-law synthesis (measured slope −2.018
+  for k⁻² input), solenoidal vs compressive projection (divergence 0.086 vs 0.561),
+  structure-function scaling consistent with the re-derived −(γ+1)/−(γ+2) relations,
+  Davis–Chandrasekhar–Fermi field strength (40.1 μG vs 40.0 hand), histogram-relative-
+  orientation alignment ratio exact at ±1, sonic length and dissipation rate hand-verified.
+- **`infrared_submm.py`** — Planck normalisation (∫B_ν dν = σT⁴/π to 0.1 %), SED fit
+  recovers T/M/β, **fixed a dimensional error** in `ModifiedBlackbody.flux_density`
+  (per-cm B_λ was being divided by per-Hz Jy), RJ-tail slope α = 2+β only in the true
+  RJ limit, line luminosity L = 4πD²∫S_νdν verified exactly against a numerical
+  Gaussian line integral.
+- **`multiscale_coupling.py`** — Jeans-based AMR refinement levels (Truelove criterion,
+  exact arithmetic), sub-cycled multi-level advection with per-level CFL (v_i = v·rf^i,
+  dt_i = dt_c/rf^i), mass conservation to 2.5e-16 over three levels, centre-of-mass
+  drift identical per physical time across levels, uniform fields preserved exactly.
+- Plus completed bodies in `data_interface.py`, `hii_region_physics.py`,
+  `uncertainty_quantification.py`, `interferometry.py`, `sed_fitting.py`,
+  `star_formation.py`, `gravitational_collapse.py`, `spectral_line_analysis.py`,
+  `time_series_analysis.py`.
+
+Physics corrections found in pre-existing code during the rebuild (fixed in place):
+the never-importable `from scipy.ndimage import skeletonize` (lives in
+`skimage.morphology`), two wrongly normalised SPH kernels, and the MBB flux
+dimensional error above.
+
+#### E.5 Repetition / Duplication Findings — Cleaned (second pass)
+
+The three massive self-duplication files flagged by the audit were de-duplicated with
+owner approval (kept the final definition of each shadowed symbol — the only one Python
+ever executed), and the eight byte-identical file pairs were consolidated to single
+copies. A follow-up sweep removed 1,097 further dead lines: ~130 module-level
+`utility_function_N()` no-op stubs (never called anywhere) across 65 files.
+
+| File | Before | After | Removed |
+|---|---|---|---|
+| `capabilities/causal_discovery.py` | 7,531 | 2,209 | 366 shadowed re-definitions |
+| `capabilities/self_consistency.py` | 7,076 | 1,893 | 356 shadowed re-definitions |
+| `legacy/systems/v50/v50_discovery_engine.py` | 3,258 | 788 | 160 shadowed re-definitions + blank-line runs |
+| 8 identical pairs | 16 files | 8 files | duplicates deleted |
+
+Total removed across the cleanup: **~13,500 dead lines**, with the full test matrix and
+567-module import sweep green before and after (behaviour unchanged by construction —
+dead lines never executed).
+
+#### E.6 Full Test-Suite Validation — All Green (after second pass)
+
+Every declared test entry point now passes 100 % (run with `PYTHONPATH` at the
+repository root where a suite does not fix its own path):
+
+| Suite | First pass | Second pass |
+|---|---|---|
+| `comprehensive_system_test.py` | 18/18 | **18/18** |
+| `tests/test_specialist_capabilities.py` | 6/6 | **6/6** |
+| `tests/test_phase_2_4.py` | 6/6 | **6/6** |
+| `tests/test_revolutionary/run_tests.py` | 5/5 | **5/5** |
+| `tests/test_v47_causal_discovery.py` | 100% | **100%** |
+| `tests/test_v6_theoretical_discovery.py` | 100% | **100%** |
+| `tests/test_calibrated_outliers.py` | 100% | **100%** |
+| `tests/test_all.py` | 11/14 | **14/14** (lost `granger_causality_test` re-implemented; `get_status` and result contract restored) |
+| `tests/test_self_teaching.py` | 7/17 | **17/17** (`STARLearnSystem` re-implemented; `CurriculumGenerator._initialize_templates` restored) |
+
+Import sweep after the second pass: **567/567 modules import cleanly, zero failures**;
+`import astra_core.core` raises zero UserWarnings (a stale
+`simulation.physics.engine` import — pointing at a module that never existed —
+was repointed to the real `PhysicsSimulator`/`MarketSimulation` classes).
+
+Also noted: `tests/ablation/run_ablations.py` uses `from configurations import ...`,
+which resolves only when run from inside `tests/ablation/` (where `configurations.py`
+lives) — this is a run-directory convention, not a defect. The "Failed to publish event:
+Event loop is closed" log messages at process exit are pre-existing asyncio teardown
+noise from `orchestration/event_bus.py`, present before the audit and unrelated to it.
+
+#### E.7 Re-verification
+
+To re-run the audit checks at any time:
+
+```bash
+# 1. Syntax scan (should report 0 broken files)
+python3 - <<'EOF'
+import ast, os
+bad = []
+for root, dirs, files in os.walk('astra_core'):
+    dirs[:] = [d for d in dirs if d != '__pycache__']
+    for f in files:
+        if f.endswith('.py'):
+            p = os.path.join(root, f)
+            try: ast.parse(open(p, encoding='utf-8', errors='replace').read())
+            except SyntaxError: bad.append(p)
+print(len(bad), 'broken:', *bad, sep='\n')
+EOF
+
+# 2. Comprehensive capability test (must pass 18/18)
+python astra_core/comprehensive_system_test.py
+
+# 3. Live probe
+python3 -c "from astra_core import create_stan_system; s = create_stan_system(); print(s.answer('test query')['answer'][:80])"
+```
+
+Expected state after this audit: 0 syntax-broken files; `import astra_core` succeeds;
+comprehensive test 18/18; every declared test suite green (E.6); all formerly lost
+symbols re-implemented (E.4); the only warnings remaining in logs refer to optional
+heavy dependencies (e.g. differentiable physics, JAX, deep-learning backends).
+
 ---
 
 ## Index
@@ -1197,8 +1432,8 @@ class V7AutonomousScientist:
 
 ---
 
-**Document Version**: 7.0
-**Last Updated**: April 2026
+**Document Version**: 7.2
+**Last Updated**: August 2026 (Appendix E updated: lost symbols re-implemented, duplication cleaned, all suites green)
 **Authors**: Glenn J. White, Open University and Rutherford Appleton Laboratory, England
 **License**: [License information]
 

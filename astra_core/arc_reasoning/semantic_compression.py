@@ -573,12 +573,6 @@ def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, A
 
 
 
-def utility_function_12(*args, **kwargs):
-    """Utility function 12."""
-    return None
-
-
-
 # Utility: Computation Logging
 def log_computation(*args, **kwargs):
     """Utility function for log_computation."""

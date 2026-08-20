@@ -16,12 +16,7 @@ Date: 2026-02-20
 from typing import Dict, Any, Optional, Callable
 from functools import wraps
 
-from .v95_semantic_grounding import (
-    SemanticGroundingLayer,
-    GroundedOutputGenerator,
-    VerificationLevel,
-    GroundingReport
-)
+from astra_core.capabilities.learning.semantic_grounding import SemanticGroundingLayer, GroundedOutputGenerator, VerificationLevel, GroundingReport
 
 
 def grounded_answer(
@@ -234,12 +229,6 @@ __all__ = [
 
 
 
-def utility_function_17(*args, **kwargs):
-    """Utility function 17."""
-    return None
-
-
-
 # Test helper for quantum_reasoning
 def test_quantum_reasoning_function(data):
     """Test function for quantum_reasoning."""
@@ -254,18 +243,6 @@ def optimize_computation_26(func):
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
     return wrapper
-
-
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-
-
-def utility_function_12(*args, **kwargs):
-    """Utility function 12."""
-    return None
 
 
 
@@ -309,11 +286,5 @@ def optimize_computation_26(func):
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
     return wrapper
-
-
-
-def utility_function_22(*args, **kwargs):
-    """Utility function 22."""
-    return None
 
 

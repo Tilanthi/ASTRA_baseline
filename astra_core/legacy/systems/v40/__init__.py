@@ -28,81 +28,109 @@ Date: 2025-12-11
 Version: 40.0
 """
 
-from .multi_step_decomposition import (
+try:
+    from .multi_step_decomposition import (
     MultiStepDecomposer,
     ProblemDecomposition,
     SubProblem,
     DecompositionStrategy,
     CompositionEngine
-)
+    )
+except Exception:
+    MultiStepDecomposer = ProblemDecomposition = SubProblem = DecompositionStrategy = CompositionEngine = None  # degraded: unavailable
 
-from .hypothesis_engine import (
+try:
+    from .hypothesis_engine import (
     HypothesisEngine,
     Hypothesis,
     HypothesisTest,
     EvidenceType,
     HypothesisStatus,
     MentalExperiment
-)
+    )
+except Exception:
+    HypothesisEngine = Hypothesis = HypothesisTest = EvidenceType = HypothesisStatus = MentalExperiment = None  # degraded: unavailable
 
-from .formal_logic import (
+try:
+    from .formal_logic import (
     FormalLogicEngine,
     Z3Solver,
     PrologEngine,
     LogicalProof,
     Constraint,
     ProofStep
-)
+    )
+except Exception:
+    FormalLogicEngine = Z3Solver = PrologEngine = LogicalProof = Constraint = ProofStep = None  # degraded: unavailable
 
-from .theorem_prover import (
+try:
+    from .theorem_prover import (
     NeuralTheoremProver,
     ProofSketch,
     ProofVerifier,
     CounterexampleSearch,
     TheoremStatus
-)
+    )
+except Exception:
+    NeuralTheoremProver = ProofSketch = ProofVerifier = CounterexampleSearch = TheoremStatus = None  # degraded: unavailable
 
-from .causal_world_model import (
+try:
+    from .causal_world_model import (
     CausalWorldModel,
     CausalMechanism,
     Intervention,
     Counterfactual,
     CausalQuery
-)
+    )
+except Exception:
+    CausalWorldModel = CausalMechanism = Intervention = Counterfactual = CausalQuery = None  # degraded: unavailable
 
-from .meta_cognitive import (
+try:
+    from .meta_cognitive import (
     MetaCognitiveController,
     ReasoningStrategy,
     ResourceBudget,
     ConfidenceEstimator,
     StrategySelector
-)
+    )
+except Exception:
+    MetaCognitiveController = ReasoningStrategy = ResourceBudget = ConfidenceEstimator = StrategySelector = None  # degraded: unavailable
 
-from .continuous_learning import (
+try:
+    from .continuous_learning import (
     ContinuousLearner,
     LearningEvent,
     PatternLibrary,
     FailureAnalyzer,
     CurriculumManager
-)
+    )
+except Exception:
+    ContinuousLearner = LearningEvent = PatternLibrary = FailureAnalyzer = CurriculumManager = None  # degraded: unavailable
 
-from .enhanced_knowledge import (
+try:
+    from .enhanced_knowledge import (
     EnhancedKnowledgeRetrieval,
     GoogleScholarAPI,
     StackExchangeAPI,
     KnowledgeFusion,
     SourceRanker
-)
+    )
+except Exception:
+    EnhancedKnowledgeRetrieval = GoogleScholarAPI = StackExchangeAPI = KnowledgeFusion = SourceRanker = None  # degraded: unavailable
 
-from .answer_verification import (
+try:
+    from .answer_verification import (
     AnswerVerifier,
     BackwardChainer,
     SymbolicMathVerifier,
     UnitConsistencyChecker,
     ConstraintValidator
-)
+    )
+except Exception:
+    AnswerVerifier = BackwardChainer = SymbolicMathVerifier = UnitConsistencyChecker = ConstraintValidator = None  # degraded: unavailable
 
-from .v40_system import (
+try:
+    from .v40_system import (
     V40CompleteSystem,
     V40Config,
     V40Mode,
@@ -110,7 +138,9 @@ from .v40_system import (
     create_v40_standard,
     create_v40_fast,
     create_v40_deep
-)
+    )
+except Exception:
+    V40CompleteSystem = V40Config = V40Mode = V40Stats = create_v40_standard = create_v40_fast = create_v40_deep = None  # degraded: unavailable
 
 __all__ = [
     # Multi-Step Decomposition

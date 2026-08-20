@@ -14,52 +14,32 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from typing import Dict, Any, List, Optional
 
-# Import from unified_world_model using absolute path
-import importlib.util
-spec = importlib.util.spec_from_file_location(
-    "unified_world_model",
-    os.path.join(os.path.dirname(__file__), "unified_world_model.py")
+# Package imports (the old spec_from_file_location hack is no longer needed
+# now that astra_core.reasoning imports resolve normally)
+from .unified_world_model import (
+    get_world_model,
+    UnifiedWorldModel,
+    CausalGraph,
+    CausalEdge,
+    Hypothesis,
+    Belief,
+    BeliefType
 )
-unified_world_model = importlib.util.module_from_spec(spec)
-sys.modules["unified_world_model"] = unified_world_model
-spec.loader.exec_module(unified_world_model)
 
-get_world_model = unified_world_model.get_world_model
-UnifiedWorldModel = unified_world_model.UnifiedWorldModel
-CausalGraph = unified_world_model.CausalGraph
-CausalEdge = unified_world_model.CausalEdge
-Hypothesis = unified_world_model.Hypothesis
-Belief = unified_world_model.Belief
-BeliefType = unified_world_model.BeliefType
-
-# Import integration bus stub
-spec2 = importlib.util.spec_from_file_location(
-    "integration_bus_stub",
-    os.path.join(os.path.dirname(__file__), "integration_bus_stub.py")
-)
-integration_bus_stub = importlib.util.module_from_spec(spec2)
-sys.modules["integration_bus_stub"] = integration_bus_stub
-spec2.loader.exec_module(integration_bus_stub)
+from . import integration_bus_stub
 
 IntegrationBus = integration_bus_stub.IntegrationBus
 EventType = integration_bus_stub.EventType
 get_integration_bus = integration_bus_stub.get_integration_bus
 
-# Import counterfactual reasoning
-spec3 = importlib.util.spec_from_file_location(
-    "counterfactual_reasoning",
-    os.path.join(os.path.dirname(__file__), "counterfactual_reasoning.py")
+from .counterfactual_reasoning import (
+    CounterfactualEngine,
+    CounterfactualQuery,
+    Intervention,
+    InterventionType,
+    QueryType,
+    CounterfactualResult
 )
-counterfactual_reasoning = importlib.util.module_from_spec(spec3)
-sys.modules["counterfactual_reasoning"] = counterfactual_reasoning
-spec3.loader.exec_module(counterfactual_reasoning)
-
-CounterfactualEngine = counterfactual_reasoning.CounterfactualEngine
-CounterfactualQuery = counterfactual_reasoning.CounterfactualQuery
-Intervention = counterfactual_reasoning.Intervention
-InterventionType = counterfactual_reasoning.InterventionType
-QueryType = counterfactual_reasoning.QueryType
-CounterfactualResult = counterfactual_reasoning.CounterfactualResult
 
 
 class CounterfactualReasoning:

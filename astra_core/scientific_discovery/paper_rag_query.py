@@ -111,243 +111,93 @@ class QueryResult:
 # RAG Query System
 # =============================================================================
 
+
 class PaperRAGSystem:
     """
-    Retrieval-Augmented Generation system for paper library.
+    RAG query interface over the astronomical paper library.
 
-    Combines:
-    1. Vector similarity search
-    2. Keyword search
-    3. LLM-based answer generation
-    4. Proper citation tracking
+    Retrieves the most relevant passages with lexical TF-IDF search and
+    packages them, with citations, either as a QueryResult or as a
+    ready-to-paste LLM prompt (``format_context_for_llm``).  The answer
+    field is extractive (best-matching passages with citations) - the
+    generative step is delegated to the caller's LLM.
     """
 
-    def __init__(self,
-                 library_path: str = None,
-                 embedding_model: str = "local"):
-        """
-        Initialize RAG system.
-
-        Args:
-            library_path: Path to paper library
-            embedding_model: "local", "openai", or "cohere"
-        """
+    def __init__(self, library_path: Optional[str] = None):
         self.library = PaperLibrary(library_path=library_path)
-        self.embedding_model = embedding_model
 
-        logger.info(f"PaperRAGSystem initialized")
-        logger.info(f"  Papers in library: {len(self.library.papers)}")
-        logger.info(f"  Chunks in library: {len(self.library.chunks)}")
-
-    def retrieve(self,
-                query: str,
-                top_k: int = 10,
-                method: str = "hybrid") -> RetrievedContext:
-        """
-        Retrieve relevant context for query.
-
-        Args:
-            query: User's question
-            top_k: Number of chunks to retrieve
-            method: "keyword", "vector", or "hybrid"
-
-        Returns:
-            RetrievedContext with relevant chunks
-        """
-        logger.info(f"Retrieving context for query: {query[:50]}...")
-
-        if method == "keyword":
-            chunks = self._keyword_search(query, top_k)
-        elif method == "vector":
-            chunks = self._vector_search(query, top_k)
-        else:  # hybrid
-            chunks_keyword = self._keyword_search(query, top_k // 2)
-            chunks_vector = self._vector_search(query, top_k // 2)
-
-            # Combine and deduplicate
-            chunks = self._merge_results(chunks_keyword, chunks_vector, top_k)
-
-        # Get papers for these chunks
-        paper_ids = set(c.paper_id for c in chunks)
-        papers = {pid: self.library.get_paper(pid) for pid in paper_ids}
+    # ------------------------------------------------------------------ query
+    def query(self, question: str, k: int = 5) -> QueryResult:
+        """Retrieve and package context for a natural-language question."""
+        results = self.library.search(question, k=k)
+        chunks = [chunk for chunk, _score in results]
+        papers: Dict[str, Paper] = {}
+        for chunk in chunks:
+            if chunk.paper_id not in papers:
+                paper = self.library.get_paper(chunk.paper_id)
+                if paper is not None:
+                    papers[paper.paper_id] = paper
 
         context = RetrievedContext(
             chunks=chunks,
-            papers={k: v for k, v in papers.items() if v is not None},
-            query=query,
-            retrieval_method=method
+            papers=papers,
+            query=question,
+            retrieval_method="tfidf",
         )
+        answer = self._extractive_answer(question, context)
+        sources = [self._source_entry(chunk, score, papers)
+                   for chunk, score in results]
+        confidence = min(1.0, results[0][1] / 50.0) if results else 0.0
 
-        logger.info(f"Retrieved {len(chunks)} chunks from {len(papers)} papers")
-
-        return context
-
-    def _keyword_search(self, query: str, top_k: int) -> List[PaperChunk]:
-        """Keyword-based search through chunks."""
-        query_lower = query.lower()
-        query_words = set(query_lower.split())
-
-        scored_chunks = []
-
-        for chunk_id, chunk in self.library.chunks.items():
-            text = chunk.text.lower()
-
-            score = 0.0
-
-            # Exact phrase match
-            if query_lower in text:
-                score += 2.0
-
-            # Word matches
-            word_matches = sum(1 for w in query_words if w in text)
-            if word_matches > 0:
-                score += word_matches * 0.1
-
-            # Title/abstract bonus
-            paper = self.library.get_paper(chunk.paper_id)
-            if paper:
-                if query_lower in paper.title.lower():
-                    score += 1.0
-                if query_lower in paper.abstract.lower():
-                    score += 0.5
-
-            if score > 0:
-                scored_chunks.append((chunk, score))
-
-        # Sort by score
-        scored_chunks.sort(key=lambda x: x[1], reverse=True)
-
-        return [c[0] for c in scored_chunks[:top_k]]
-
-    def _vector_search(self, query: str, top_k: int) -> List[PaperChunk]:
-        """
-        Vector similarity search.
-
-        NOTE: This is a simplified version. For production use:
-        - Use proper embedding model (OpenAI, sentence-transformers)
-        - Use FAISS or Milvus for efficient search
-        - Implement proper chunk embeddings
-        """
-        # For now, fallback to keyword search
-        # In production, this would:
-        # 1. Embed the query
-        # 2. Search vector database
-        # 3. Return top-k chunks
-        return self._keyword_search(query, top_k)
-
-    def _merge_results(self,
-                      chunks1: List[PaperChunk],
-                      chunks2: List[PaperChunk],
-                      top_k: int) -> List[PaperChunk]:
-        """Merge and deduplicate results from multiple search methods."""
-        seen = set()
-        merged = []
-
-        for chunk in chunks1 + chunks2:
-            if chunk.chunk_id not in seen:
-                merged.append(chunk)
-                seen.add(chunk.chunk_id)
-
-        return merged[:top_k]
-
-    def query(self,
-             query: str,
-             top_k: int = 10,
-             llm_callback: Optional[callable] = None) -> QueryResult:
-        """
-        Query the paper library and generate answer.
-
-        Args:
-            query: User's question
-            top_k: Number of context chunks to retrieve
-            llm_callback: Optional function to call with prompt
-
-        Returns:
-            QueryResult with answer and sources
-        """
-        logger.info(f"Processing query: {query}")
-
-        # Retrieve relevant context
-        context = self.retrieve(query, top_k=top_k, method="hybrid")
-
-        # Format context for LLM
-        context_text = context.format_for_llm()
-
-        # Build prompt
-        prompt = self._build_prompt(query, context_text)
-
-        # Get answer (either via callback or return prompt for manual LLM call)
-        if llm_callback:
-            answer = llm_callback(prompt)
-        else:
-            # Return prompt for manual LLM invocation
-            answer = None
-
-        # Extract sources
-        sources = []
-        for paper_id, paper in context.papers.items():
-            sources.append({
-                'paper_id': paper_id,
-                'title': paper.title,
-                'authors': paper.authors,
-                'year': paper.year,
-                'journal': paper.journal,
-                'doi': paper.doi,
-                'arxiv_id': paper.arxiv_id,
-            })
-
-        result = QueryResult(
-            answer=answer if answer else prompt,
+        return QueryResult(
+            answer=answer,
             context=context,
             sources=sources,
-            confidence=len(context.chunks) / top_k,  # Simple confidence metric
-            query=query
+            confidence=confidence,
+            query=question,
         )
 
-        logger.info(f"Query complete: {len(sources)} sources, confidence={result.confidence:.2f}")
+    def ask(self, question: str, k: int = 5) -> str:
+        """Convenience wrapper returning only the answer string."""
+        return self.query(question, k=k).answer
 
-        return result
+    def format_context_for_llm(self, question: str, k: int = 5,
+                               max_chars: int = 8000) -> str:
+        """Retrieve context formatted as an LLM prompt supplement."""
+        return self.query(question, k=k).context.format_for_llm(max_chars)
 
-    def _build_prompt(self, query: str, context: str) -> str:
-        """Build prompt for LLM."""
-        prompt = f"""You are an expert astronomy research assistant with access to a specialized library of scientific papers.
+    # -------------------------------------------------------------- internals
+    @staticmethod
+    def _citation(paper: Paper) -> str:
+        first = paper.authors[0] if paper.authors else 'Unknown'
+        cite = f"{first} et al. ({paper.year})"
+        if paper.journal:
+            cite += f", {paper.journal}"
+        return cite
 
-USER QUESTION: {query}
+    def _extractive_answer(self, question: str,
+                           context: RetrievedContext) -> str:
+        """Best-matching passages with citations (no generation)."""
+        if not context.chunks:
+            return (f"No relevant passages found in the paper library "
+                    f"for: '{question}'")
+        parts = [f"Top passages relevant to '{question}':"]
+        for chunk in context.chunks[:3]:
+            paper = context.papers.get(chunk.paper_id)
+            cite = self._citation(paper) if paper else chunk.paper_id
+            excerpt = ' '.join(chunk.text.split())[:300]
+            parts.append(f"- [{cite}] {excerpt}")
+        parts.append("(Passages above are verbatim extracts; use "
+                     "format_context_for_llm for the full prompt context.)")
+        return "\n".join(parts)
 
-{context}
-
-INSTRUCTIONS:
-1. Answer the question using ONLY the information provided in the relevant passages above.
-2. If the passages don't contain enough information to answer the question completely, state this clearly.
-3. Cite specific papers using the format: (Author et al., Year)
-4. If multiple papers present different views, describe each view.
-5. Do not make up information or use outside knowledge.
-6. Be precise and specific in your answer.
-
-ANSWER:"""
-
-        return prompt
-
-    def batch_add_papers(self,
-                        directory: str,
-                        num_at_time: int = 10) -> int:
-        """
-        Add papers in batches for incremental building.
-
-        Args:
-            directory: Directory containing PDFs
-            num_at_time: Number of papers to process per batch
-
-        Returns:
-            Number of papers added
-        """
-        directory = Path(directory)
-        pdf_files = list(directory.rglob('*.pdf'))
-
-        logger.info(f"Found {len(pdf_files)} PDFs")
-        logger.info(f"Processing in batches of {num_at_time}")
-
-        added_count = 0
-        for i, pdf_file in enumerate(pdf_files):
-            # Check if already in library
-            existing_papers = [p for p in self.library.papers.values()
+    def _source_entry(self, chunk: PaperChunk, score: float,
+                      papers: Dict[str, Paper]) -> Dict[str, Any]:
+        paper = papers.get(chunk.paper_id)
+        return {
+            'paper_id': chunk.paper_id,
+            'title': paper.title if paper else '',
+            'citation': self._citation(paper) if paper else chunk.paper_id,
+            'chunk_id': chunk.chunk_id,
+            'score': round(float(score), 3),
+        }

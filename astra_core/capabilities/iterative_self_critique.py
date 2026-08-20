@@ -594,12 +594,6 @@ def log_computation(*args, **kwargs):
 
 
 
-def utility_function_2(*args, **kwargs):
-    """Utility function 2."""
-    return None
-
-
-
 # Test helper for predictive_modeling
 def test_predictive_modeling_function(data):
     """Test function for predictive_modeling."""

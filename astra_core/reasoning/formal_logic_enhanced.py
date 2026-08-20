@@ -94,19 +94,3 @@ class LogicalProof:
             'status': self.status.value,
             'verified': self.verified
         }
-
-
-class Z3Solver:
-    """
-    Z3 SMT Solver Interface.
-
-    Provides constraint solving for:
-    - Linear arithmetic
-    - Boolean satisfiability
-    - Array theory
-    - Quantifiers
-
-    Note: Uses pure Python fallback when Z3 not available.
-    """
-
-    def __init__(self):

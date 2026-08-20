@@ -40,134 +40,219 @@ Version: 3.1.0 (V44)
 """
 
 # Core components (using relative imports)
-from .core import AstroSwarmSystem
-from .physics import PhysicsEngine, AstrophysicalConstraints
-from .knowledge_graph import AstronomicalKnowledgeGraph
-from .inference import BayesianSwarmInference
-from .agents import AstroAgent, SpectroscopicAgent, PhotometricAgent, DynamicalAgent
+try:
+    from .core import AstroSwarmSystem
+except Exception:
+    AstroSwarmSystem = None  # degraded: unavailable
+try:
+    from .physics import PhysicsEngine, AstrophysicalConstraints
+except Exception:
+    PhysicsEngine = AstrophysicalConstraints = None  # degraded: unavailable
+try:
+    from .knowledge_graph import AstronomicalKnowledgeGraph
+except Exception:
+    AstronomicalKnowledgeGraph = None  # degraded: unavailable
+try:
+    from .inference import BayesianSwarmInference
+except Exception:
+    BayesianSwarmInference = None  # degraded: unavailable
+try:
+    from .agents import AstroAgent, SpectroscopicAgent, PhotometricAgent, DynamicalAgent
+except Exception:
+    AstroAgent = SpectroscopicAgent = PhotometricAgent = DynamicalAgent = None  # degraded: unavailable
 
 # Extended capability modules
-from .radiative_transfer import (
+try:
+    from .radiative_transfer import (
     StatisticalEquilibriumSolver, LineProfileSynthesizer,
     DustContinuumRT, PDRInterface
-)
-from .data_interface import (
+    )
+except Exception:
+    StatisticalEquilibriumSolver = LineProfileSynthesizer = DustContinuumRT = PDRInterface = None  # degraded: unavailable
+try:
+    from .data_interface import (
     FITSHandler, SpectralCubeHandler, VOTableHandler,
     RegionHandler, CASAInterface
-)
-from .uncertainty_quantification import (
+    )
+except Exception:
+    FITSHandler = SpectralCubeHandler = VOTableHandler = RegionHandler = CASAInterface = None  # degraded: unavailable
+try:
+    from .uncertainty_quantification import (
     PriorSet, GaussianLikelihood, MetropolisHastings,
     EnsembleSampler, NestedSampler, FisherMatrix
-)
-from .sed_fitting import (
+    )
+except Exception:
+    PriorSet = GaussianLikelihood = MetropolisHastings = EnsembleSampler = NestedSampler = FisherMatrix = None  # degraded: unavailable
+try:
+    from .sed_fitting import (
     FilterLibrary, ModifiedBlackbody, StellarPopulation,
     AGNTemplate, CompositeSED, SEDFitter
-)
-from .chemical_networks import (
+    )
+except Exception:
+    FilterLibrary = ModifiedBlackbody = StellarPopulation = AGNTemplate = CompositeSED = SEDFitter = None  # degraded: unavailable
+try:
+    from .chemical_networks import (
     ReactionNetwork, ChemistrySolver, PDRChemistry,
     GrainChemistry, HotCoreChemistry
-)
-from .interferometry import (
+    )
+except Exception:
+    ReactionNetwork = ChemistrySolver = PDRChemistry = GrainChemistry = HotCoreChemistry = None  # degraded: unavailable
+try:
+    from .interferometry import (
     ArrayConfiguration, UVSimulator, Imager,
     CLEANDeconvolver, SelfCalibrator, VisibilityModeler
-)
-from .advanced_lensing import (
+    )
+except Exception:
+    ArrayConfiguration = UVSimulator = Imager = CLEANDeconvolver = SelfCalibrator = VisibilityModeler = None  # degraded: unavailable
+try:
+    from .advanced_lensing import (
     Cosmology, SIEProfile, NFWProfile, CompositeLensModel,
     TimeDelayCosmography, SubstructureDetector
-)
-from .turbulence_analysis import (
+    )
+except Exception:
+    Cosmology = SIEProfile = NFWProfile = CompositeLensModel = TimeDelayCosmography = SubstructureDetector = None  # degraded: unavailable
+try:
+    from .turbulence_analysis import (
     StructureFunctionAnalysis, PowerSpectrumAnalysis,
     VelocityAnalysis, SpectralPCA, DavisChandrasekharFermi,
     HistogramRelativeOrientations, TurbulenceStatistics
-)
-from .spectroscopic_databases import (
+    )
+except Exception:
+    StructureFunctionAnalysis = PowerSpectrumAnalysis = VelocityAnalysis = SpectralPCA = DavisChandrasekharFermi = HistogramRelativeOrientations = TurbulenceStatistics = None  # degraded: unavailable
+try:
+    from .spectroscopic_databases import (
     CDMSDatabase, JPLDatabase, LAMDADatabase,
     SplatalogueInterface, HITRANDatabase, UnifiedSpectroscopyQuery,
     SpectralLine, MoleculeData, CollisionPartner
-)
-from .multiscale_coupling import (
+    )
+except Exception:
+    CDMSDatabase = JPLDatabase = LAMDADatabase = SplatalogueInterface = HITRANDatabase = UnifiedSpectroscopyQuery = SpectralLine = MoleculeData = CollisionPartner = None  # degraded: unavailable
+try:
+    from .multiscale_coupling import (
     MultiScaleSimulation, ZoomRegion, ScaleCoupler,
     TurbulentPressureModel, StarFormationModel,
     StellarFeedbackModel, AGNFeedbackModel,
     CoolingFunction, HierarchicalRefinement
-)
+    )
+except Exception:
+    MultiScaleSimulation = ZoomRegion = ScaleCoupler = TurbulentPressureModel = StarFormationModel = StellarFeedbackModel = AGNFeedbackModel = CoolingFunction = HierarchicalRefinement = None  # degraded: unavailable
 
 # V43: Core ISM Physics
-from .gravitational_collapse import (
+try:
+    from .gravitational_collapse import (
     JeansAnalysis, VirialAnalysis, FreefallCollapse,
     FragmentationCriterion, AccretionRates,
     get_jeans_analyzer, get_virial_analyzer
-)
-from .shock_physics import (
+    )
+except Exception:
+    JeansAnalysis = VirialAnalysis = FreefallCollapse = FragmentationCriterion = AccretionRates = get_jeans_analyzer = get_virial_analyzer = None  # degraded: unavailable
+try:
+    from .shock_physics import (
     RankineHugoniot, JShock, CShock, ShockChemistry,
     OutflowShockAnalysis, get_shock_chemistry
-)
-from .hii_region_physics import (
+    )
+except Exception:
+    RankineHugoniot = JShock = CShock = ShockChemistry = OutflowShockAnalysis = get_shock_chemistry = None  # degraded: unavailable
+try:
+    from .hii_region_physics import (
     StromgrenSphere, NebularDiagnosticsCalculator,
     RecombinationLines, FreeFreeEmission,
     stromgren_radius, get_diagnostics_calculator
-)
-from .supernova_remnant_physics import (
+    )
+except Exception:
+    StromgrenSphere = NebularDiagnosticsCalculator = RecombinationLines = FreeFreeEmission = stromgren_radius = get_diagnostics_calculator = None  # degraded: unavailable
+try:
+    from .supernova_remnant_physics import (
     SedovTaylorBlastwave, SNREvolution, SynchrotronEmission,
     XRayThermalEmission, get_snr_evolution
-)
+    )
+except Exception:
+    SedovTaylorBlastwave = SNREvolution = SynchrotronEmission = XRayThermalEmission = get_snr_evolution = None  # degraded: unavailable
 
 # V43: Data Analysis Infrastructure
-from .spectral_line_analysis import (
+try:
+    from .spectral_line_analysis import (
     GaussianLineFitter, VoigtProfileFitter, HyperfineStructureFitter,
     LineIdentifier, OpticalDepthCorrector, ColumnDensityCalculator,
     fit_gaussian_line, identify_line
-)
-from .source_extraction import (
+    )
+except Exception:
+    GaussianLineFitter = VoigtProfileFitter = HyperfineStructureFitter = LineIdentifier = OpticalDepthCorrector = ColumnDensityCalculator = fit_gaussian_line = identify_line = None  # degraded: unavailable
+try:
+    from .source_extraction import (
     SourceDetector, AperturePhotometry, PSFPhotometry,
     DendrogramExtractor, FilamentFinder, CoreCatalogBuilder,
     detect_sources, extract_dendrogram, find_filaments
-)
-from .kinematic_analysis import (
+    )
+except Exception:
+    SourceDetector = AperturePhotometry = PSFPhotometry = DendrogramExtractor = FilamentFinder = CoreCatalogBuilder = detect_sources = extract_dendrogram = find_filaments = None  # degraded: unavailable
+try:
+    from .kinematic_analysis import (
     MomentMapGenerator, PVDiagramExtractor, RotationCurveAnalyzer,
     InfallSignatureDetector, OutflowAnalyzer, TurbulentFieldDecomposer,
     make_moment_maps, extract_pv_diagram, detect_infall
-)
+    )
+except Exception:
+    MomentMapGenerator = PVDiagramExtractor = RotationCurveAnalyzer = InfallSignatureDetector = OutflowAnalyzer = TurbulentFieldDecomposer = make_moment_maps = extract_pv_diagram = detect_infall = None  # degraded: unavailable
 
 # V44: Extended Astrophysics Capabilities
-from .radio_surveys import (
+try:
+    from .radio_surveys import (
     RadioSource, SurveyCatalog, RadioSourceType, SurveyType,
     RadioSurveyAnalyzer, VariabilityAnalyzer,
     create_analyzer, get_cross_match_tolerance, load_survey_catalog, estimate_luminosity
-)
-from .star_formation import (
+    )
+except Exception:
+    RadioSource = SurveyCatalog = RadioSourceType = SurveyType = RadioSurveyAnalyzer = VariabilityAnalyzer = create_analyzer = get_cross_match_tolerance = load_survey_catalog = estimate_luminosity = None  # degraded: unavailable
+try:
+    from .star_formation import (
     StellarPhase, RemnantType, SFTRindicator,
     StellarPopulation, Star,
     InitialMassFunction, StarFormationLaw, StarFormationRateTracer,
     StellarEvolution, SupernovaFeedback,
     create_stellar_population, sample_masses_from_imf, calculate_sfr_from_luminosity
-)
-from .sph_gas_dynamics import (
+    )
+except Exception:
+    StellarPhase = RemnantType = SFTRindicator = StellarPopulation = Star = InitialMassFunction = StarFormationLaw = StarFormationRateTracer = StellarEvolution = SupernovaFeedback = create_stellar_population = sample_masses_from_imf = calculate_sfr_from_luminosity = None  # degraded: unavailable
+try:
+    from .sph_gas_dynamics import (
     SPHParticle, SPHKernel, KernelType, Filament,
     SPHSimulation, FilamentFinder, MolecularCloudFormation,
     TurbulentDriver, GravitySolver,
     create_sph_simulation, find_filaments_in_data, get_h2_fraction
-)
-from .infrared_submm import (
+    )
+except Exception:
+    SPHParticle = SPHKernel = KernelType = Filament = SPHSimulation = FilamentFinder = MolecularCloudFormation = TurbulentDriver = GravitySolver = create_sph_simulation = find_filaments_in_data = get_h2_fraction = None  # degraded: unavailable
+try:
+    from .infrared_submm import (
     IRBand, PAHFeature,
     IRPhotometry, PAHSpectrum, DustProperties,
     ModifiedBlackbody, IRColorAnalysis, SubmillimeterAnalysis, LineCooling,
     fit_dust_sed, calculate_gas_mass, get_ir_color
-)
-from .time_series_analysis import (
+    )
+except Exception:
+    IRBand = PAHFeature = IRPhotometry = PAHSpectrum = DustProperties = ModifiedBlackbody = IRColorAnalysis = SubmillimeterAnalysis = LineCooling = fit_dust_sed = calculate_gas_mass = get_ir_color = None  # degraded: unavailable
+try:
+    from .time_series_analysis import (
     SignalType, TimeSeries, PeriodogramResult,
     PowerSpectrumAnalyzer, VariabilityDetector, WaveletAnalyzer,
     CrossCorrelationAnalyzer, BurstDetector,
     analyze_power_spectrum, detect_periodicity, compute_structure_function, cross_correlate_series
-)
-from .data_visualization import (
+    )
+except Exception:
+    SignalType = TimeSeries = PeriodogramResult = PowerSpectrumAnalyzer = VariabilityDetector = WaveletAnalyzer = CrossCorrelationAnalyzer = BurstDetector = analyze_power_spectrum = detect_periodicity = compute_structure_function = cross_correlate_series = None  # degraded: unavailable
+try:
+    from .data_visualization import (
     VisualizationType, DataCube, Spectrum,
     CubeVisualizer, SpectrumVisualizer, MultiPanelFigure,
     create_moment_map_cube, plot_spectrum
-)
+    )
+except Exception:
+    VisualizationType = DataCube = Spectrum = CubeVisualizer = SpectrumVisualizer = MultiPanelFigure = create_moment_map_cube = plot_spectrum = None  # degraded: unavailable
 
 # V45: Deep Learning Integration (Phase 1)
-from .deep_learning import (
+try:
+    from .deep_learning import (
     DLConfig,
     GalaxyMorphologyCNN,
     ISMStructureCNN,
@@ -180,24 +265,33 @@ from .deep_learning import (
     train_autoencoder,
     SpectralDataset,
     ImageDataset
-)
-from .deep_learning.filament_detector import (
+    )
+except Exception:
+    DLConfig = GalaxyMorphologyCNN = ISMStructureCNN = SpectralAutoencoder = LightCurveAutoencoder = TimeSeriesTransformer = RadiativeTransferPINN = StellarStructurePINN = CrossModalMatcher = train_autoencoder = SpectralDataset = ImageDataset = None  # degraded: unavailable
+try:
+    from .deep_learning.filament_detector import (
     FilamentDetector,
     VelocityCoherentFilamentDetector,
     FilamentProperties,
     FilamentDetectionHead,
     FilamentEncoder,
     train_filament_detector
-)
-from .deep_learning.molecular_cloud_segmenter import (
+    )
+except Exception:
+    FilamentDetector = VelocityCoherentFilamentDetector = FilamentProperties = FilamentDetectionHead = FilamentEncoder = train_filament_detector = None  # degraded: unavailable
+try:
+    from .deep_learning.molecular_cloud_segmenter import (
     MolecularCloudSegmenter,
     VelocityCubeSegmenter,
     CloudProperties,
     CloudPropertyHead,
     MaskRCNNBackbone,
     train_cloud_segmenter
-)
-from .deep_learning.shock_detector import (
+    )
+except Exception:
+    MolecularCloudSegmenter = VelocityCubeSegmenter = CloudProperties = CloudPropertyHead = MaskRCNNBackbone = train_cloud_segmenter = None  # degraded: unavailable
+try:
+    from .deep_learning.shock_detector import (
     InterstellarShockDetector,
     SpectralLineShockDetector,
     TemporalShockDetector,
@@ -205,10 +299,13 @@ from .deep_learning.shock_detector import (
     ShockTypeClassifier,
     ShockParameterRegressor,
     train_shock_detector
-)
+    )
+except Exception:
+    InterstellarShockDetector = SpectralLineShockDetector = TemporalShockDetector = ShockProperties = ShockTypeClassifier = ShockParameterRegressor = train_shock_detector = None  # degraded: unavailable
 
 # V45: Real-Time Processing (Phase 2)
-from .streaming.streaming_alert_processor import (
+try:
+    from .streaming.streaming_alert_processor import (
     StreamingAlertProcessor,
     AlertClassifier,
     AlertPrioritizer,
@@ -217,8 +314,11 @@ from .streaming.streaming_alert_processor import (
     AlertSource,
     TransientType,
     create_alert_processor
-)
-from .streaming.real_time_anomaly_detection import (
+    )
+except Exception:
+    StreamingAlertProcessor = AlertClassifier = AlertPrioritizer = AlertMetadata = ProcessedAlert = AlertSource = TransientType = create_alert_processor = None  # degraded: unavailable
+try:
+    from .streaming.real_time_anomaly_detection import (
     RealTimeAnomalyDetector,
     LightCurveAnomalyDetector,
     SpectralAnomalyDetector,
@@ -226,10 +326,13 @@ from .streaming.real_time_anomaly_detection import (
     IsolationForestOnline,
     OnlineStandardScaler,
     create_anomaly_detector
-)
+    )
+except Exception:
+    RealTimeAnomalyDetector = LightCurveAnomalyDetector = SpectralAnomalyDetector = AnomalyReport = IsolationForestOnline = OnlineStandardScaler = create_anomaly_detector = None  # degraded: unavailable
 
 # V45: Multi-Messenger Joint Inference (Phase 3)
-from .multi_messenger.gw_em_correlation import (
+try:
+    from .multi_messenger.gw_em_correlation import (
     GWEMCorrelator,
     TemporalCorrelation,
     SpatialCorrelation,
@@ -240,8 +343,11 @@ from .multi_messenger.gw_em_correlation import (
     EMCounterpart,
     JointGWEMDetection,
     create_gw_em_correlator
-)
-from .multi_messenger.joint_lightcurve_modeling import (
+    )
+except Exception:
+    GWEMCorrelator = TemporalCorrelation = SpatialCorrelation = DistanceConsistency = KilonovaModel = MultiEpochCorrelation = GWTrigger = EMCounterpart = JointGWEMDetection = create_gw_em_correlator = None  # degraded: unavailable
+try:
+    from .multi_messenger.joint_lightcurve_modeling import (
     JointLightCurveFitter,
     GWStrainModel,
     KilonovaLightCurveModel,
@@ -251,17 +357,22 @@ from .multi_messenger.joint_lightcurve_modeling import (
     MultiMessengerData,
     PhysicalParameters,
     create_joint_fitter
-)
+    )
+except Exception:
+    JointLightCurveFitter = GWStrainModel = KilonovaLightCurveModel = GRBAfterglowModel = NeutrinoFluenceModel = JointLikelihood = MultiMessengerData = PhysicalParameters = create_joint_fitter = None  # degraded: unavailable
 
 # V45: Causal Discovery for Astronomy (Phase 4)
-from ..causal.discovery.astro_causal_discovery import (
+try:
+    from ..causal.discovery.astro_causal_discovery import (
     AstroFCI,
     TemporalCausalDiscovery,
     AstronomicalConditionalIndependence,
     CausalGraph,
     create_astro_fci,
     create_temporal_discovery
-)
+    )
+except Exception:
+    AstroFCI = TemporalCausalDiscovery = AstronomicalConditionalIndependence = CausalGraph = create_astro_fci = create_temporal_discovery = None  # degraded: unavailable
 
 __version__ = "4.0.0"  # V45 - Deep Learning & Multi-Messenger Integration
 __all__ = [
@@ -551,17 +662,5 @@ __all__ = [
     'create_astro_fci',
     'create_temporal_discovery',
 ]
-
-
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
 
 

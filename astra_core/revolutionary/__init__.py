@@ -105,7 +105,7 @@ def create_v4_system(config: Optional[Dict[str, Any]] = None):
         Either V4RevolutionarySystem or V4IntegrationCoordinator instance
 
     Example:
-        >>> from astra_core.v4_revolutionary import create_v4_system
+        >>> from astra_core.revolutionary import create_v4_system
         >>> system = create_v4_system()
         >>> capabilities = system.get_available_capabilities()
         >>> print(f"Available: {capabilities}")

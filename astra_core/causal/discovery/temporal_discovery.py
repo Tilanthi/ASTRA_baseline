@@ -98,3 +98,75 @@ class TemporalCausalDiscovery:
         # Extract Granger causalities
         for effect_var in data.columns:
             pass  # Granger causality extraction needed
+
+
+# =============================================================================
+# GRANGER CAUSALITY TEST
+# (re-implemented 2026-08; the original public function was lost to file
+#  truncation before the August 2026 audit. The F-test formulation matches
+#  the internal version in astro_causal_discovery.py.)
+# =============================================================================
+
+def granger_causality_test(x: np.ndarray,
+                           y: np.ndarray,
+                           max_lag: int = 5,
+                           significance: float = 0.05) -> Tuple[bool, int, float]:
+    """
+    Test whether x Granger-causes y, scanning lags 1..max_lag.
+
+    For each lag L two OLS models are fit (both with an intercept):
+
+        restricted:  y_t ~ 1 + sum_{i=1..L} a_i y_{t-i}
+        full:        y_t ~ 1 + sum_{i=1..L} a_i y_{t-i} + sum_{i=1..L} b_i x_{t-i}
+
+    and compared with the standard F-test.  The lag with the smallest
+    p-value is reported.
+
+    Args:
+        x: putative cause series
+        y: effect series
+        max_lag: maximum lag to consider
+        significance: p-value threshold for declaring causation
+
+    Returns:
+        (causes, best_lag, p_value) where causes is p < significance
+    """
+    x = np.asarray(x, dtype=float).ravel()
+    y = np.asarray(y, dtype=float).ravel()
+    n = min(len(x), len(y))
+    x, y = x[:n], y[:n]
+
+    best_p, best_lag = 1.0, 1
+    first_significant = None
+    for lag in range(1, max_lag + 1):
+        if n <= 2 * lag + 2:
+            break
+        Y_target = y[lag:]
+        # lag-i columns end at index n-i-1 for target index lag..n-1
+        y_lag = np.column_stack([y[lag - i: n - i] for i in range(1, lag + 1)])
+        x_lag = np.column_stack([x[lag - i: n - i] for i in range(1, lag + 1)])
+        ones = np.ones((len(Y_target), 1))
+
+        restricted = np.hstack([ones, y_lag])
+        full = np.hstack([ones, y_lag, x_lag])
+
+        beta_r = np.linalg.lstsq(restricted, Y_target, rcond=None)[0]
+        beta_f = np.linalg.lstsq(full, Y_target, rcond=None)[0]
+        rss_r = float(np.sum((Y_target - restricted @ beta_r) ** 2))
+        rss_f = float(np.sum((Y_target - full @ beta_f) ** 2))
+
+        df1 = lag                      # number of added regressors
+        df2 = n - 2 * lag - 1          # residual dof of the full model
+        if df2 <= 0 or rss_f <= 0 or rss_r <= 0:
+            continue
+        F_stat = ((rss_r - rss_f) / df1) / (rss_f / df2)
+        p = float(stats.f.sf(F_stat, df1, df2))
+        if p < significance and first_significant is None:
+            first_significant = (lag, p)   # parsimonious lag order
+        if p < best_p:
+            best_p, best_lag = p, lag
+
+    if first_significant is not None:
+        lag_s, p_s = first_significant
+        return True, lag_s, p_s
+    return False, best_lag, best_p

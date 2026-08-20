@@ -7,7 +7,8 @@ scientific discovery system capable of generating hypotheses, discovering
 causal relationships, applying mathematical intuition, and designing experiments.
 """
 
-from .v92_system import (
+try:
+    from .v92_system import (
     V92CompleteSystem,
     V92Config,
     ScientificDiscovery,
@@ -16,39 +17,53 @@ from .v92_system import (
     create_v92_validator,
     create_v92_mathematician,
     create_v92_experimentalist
-)
+    )
+except Exception:
+    V92CompleteSystem = V92Config = ScientificDiscovery = create_v92_system = create_v92_explorer = create_v92_validator = create_v92_mathematician = create_v92_experimentalist = None  # degraded: unavailable
 
-from .hypothesis_engine import (
+try:
+    from .hypothesis_engine import (
     HypothesisGenerator,
     Hypothesis,
     HypothesisType
-)
+    )
+except Exception:
+    HypothesisGenerator = Hypothesis = HypothesisType = None  # degraded: unavailable
 
-from .mathematical_intuition import (
+try:
+    from .mathematical_intuition import (
     MathematicalIntuitionModule,
     MathematicalConjecture,
     Proof,
     MathDomain,
     ProofStatus
-)
+    )
+except Exception:
+    MathematicalIntuitionModule = MathematicalConjecture = Proof = MathDomain = ProofStatus = None  # degraded: unavailable
 
-from .causal_discovery import (
+try:
+    from .causal_discovery import (
     CausalDiscoveryEngine,
     CausalModel,
     CausalRelation,
     Intervention,
     Counterfactual,
     DiscoveryMethod
-)
+    )
+except Exception:
+    CausalDiscoveryEngine = CausalModel = CausalRelation = Intervention = Counterfactual = DiscoveryMethod = None  # degraded: unavailable
 
-from .experimental_design import (
+try:
+    from .experimental_design import (
     ExperimentalDesignEngine,
     ExperimentalDesign,
     ExperimentalVariable,
     Treatment,
     ExperimentalType,
     SimulationResult
-)
+    )
+except Exception:
+    ExperimentalDesignEngine = ExperimentalDesign = ExperimentalVariable = Treatment = ExperimentalType = SimulationResult = None  # degraded: unavailable
 
 __all__ = [
     # Main system

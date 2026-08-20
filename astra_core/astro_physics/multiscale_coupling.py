@@ -808,263 +808,257 @@ class ScaleCoupler:
 
         return coarse_field
 
-    def enforce_conservation(self, fine_field: np.ndarray,
-                             coarse_total: float) -> np.ndarray:
-        """
-        Enforce conservation between scales.
-
-        Parameters
-        ----------
-        fine_field : ndarray
-            Field on fine grid
-        coarse_total : float
-            Total value that must be conserved
-
-        Returns
-        -------
-        ndarray
-            Adjusted fine field
-        """
-        fine_total = fine_field.sum()
-
-        if fine_total > 0:
-            fine_field *= coarse_total / fine_total
-
-        return fine_field
-
+# =============================================================================
+# MULTI-SCALE SIMULATION
+# =============================================================================
 
 class MultiScaleSimulation:
     """
-    Framework for multi-scale astrophysical simulations.
+    A hierarchy of grid levels coupled by ScaleCoupler transfers.
 
-    Coordinates:
-    - Multiple zoom regions
-    - Sub-grid physics models
-    - Scale coupling
-    - Feedback prescriptions
+    Each level carries a 3-D field advected with a donor-cell (upwind)
+    scheme; finer levels are sub-cycled so that every level satisfies
+    the same CFL condition locally:
+
+        dt_level = dt_coarsest / refinement_factor^(level)
+
+    After each coarse step the levels exchange data: the coarse level
+    provides boundary/interior values to the finer level (downsample),
+    and the finer level feeds its averaged state back (upsample with
+    mass conservation via the 'sum' operation on extensive quantities).
     """
 
-    def __init__(self, box_size: float, base_resolution: float):
+    def __init__(self, levels: List[ScaleLevel],
+                 coarse_shape: Tuple[int, int, int] = (16, 16, 16),
+                 refinement_factor: int = 2,
+                 n_levels: int = 2,
+                 velocity: Optional[np.ndarray] = None,
+                 cfl: float = 0.3):
         """
-        Parameters
-        ----------
-        box_size : float
-            Simulation box size (kpc)
-        base_resolution : float
-            Base resolution (pc)
+        Args:
+            levels: scale levels from coarse to fine (length n_levels)
+            coarse_shape: grid shape of the coarsest level
+            refinement_factor: resolution ratio between levels
+            n_levels: number of levels in the hierarchy
+            velocity: constant advection velocity (3,) in cells/step
+                of the coarse grid
+            cfl: CFL number for the sub-cycled time steps
         """
-        self.box_size = box_size
-        self.base_resolution = base_resolution
+        self.levels = levels
+        self.rf = int(refinement_factor)
+        self.n_levels = int(n_levels)
+        self.cfl = cfl
+        self.velocity = (np.zeros(3) if velocity is None
+                         else np.asarray(velocity, dtype=float))
 
-        self.zoom_regions: List[ZoomRegion] = []
-        self.subgrid_models: List[SubGridModel] = []
-        self.scale_couplers: List[ScaleCoupler] = []
-        self.cooling = CoolingFunction()
+        # per-level fields and couplers
+        self.fields: List[np.ndarray] = []
+        shape = tuple(coarse_shape)
+        for _ in range(self.n_levels):
+            self.fields.append(np.zeros(shape, dtype=float))
+            shape = tuple(s * self.rf for s in shape)
 
-        # Fields
-        self.density: Optional[np.ndarray] = None
-        self.velocity: Optional[np.ndarray] = None
-        self.temperature: Optional[np.ndarray] = None
-        self.metallicity: Optional[np.ndarray] = None
+        self.couplers = [
+            ScaleCoupler(levels[i], levels[i + 1], self.rf)
+            for i in range(self.n_levels - 1)
+        ]
 
-    def add_zoom_region(self, center: np.ndarray, radius: float,
-                        max_refinement: int = 5):
-        """Add a zoom-in region."""
-        zoom = ZoomRegion(center, radius, self.base_resolution, max_refinement)
-        self.zoom_regions.append(zoom)
+        self.time = 0.0
+        self.step_counter = 0
+        self.n_substeps = self.rf ** (self.n_levels - 1)
 
-    def add_subgrid_model(self, model: SubGridModel):
-        """Add a sub-grid physics model."""
-        self.subgrid_models.append(model)
+    # ------------------------------------------------------------------
+    def set_initial_condition(self, field_coarse: np.ndarray) -> None:
+        """Set the coarsest-level field; finer levels are filled by
+        cell repetition (np.repeat), which preserves the mass and the
+        first moment exactly - unlike spline interpolation, which is
+        not periodic-aware and shifts the centre of mass when the
+        field has power near the grid edges."""
+        self.fields[0] = np.asarray(field_coarse, dtype=float)
+        for i in range(self.n_levels - 1):
+            f = self.fields[i]
+            fine = f
+            for axis in range(3):
+                fine = np.repeat(fine, self.rf, axis=axis)
+            self.fields[i + 1] = fine
 
-    def add_scale_coupler(self, upper: ScaleLevel, lower: ScaleLevel,
-                          factor: int = 4):
-        """Add scale coupling."""
-        coupler = ScaleCoupler(upper, lower, factor)
-        self.scale_couplers.append(coupler)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _upwind_step(field: np.ndarray, velocity: np.ndarray,
+                     dt_cells: float) -> np.ndarray:
+        """
+        One donor-cell advection step on a unit-spaced periodic grid.
+        dt_cells is the step in units of cells (velocity is cells/time).
+        """
+        f = field
+        out = f.copy()
+        for axis, v in enumerate(velocity):
+            if v == 0.0:
+                continue
+            up = np.roll(f, 1, axis=axis)   # upwind neighbour for v>0
+            down = np.roll(f, -1, axis=axis)
+            src = up if v > 0 else down
+            f = f - v * dt_cells * (f - src)
+        return f
 
-    def initialize_fields(self, n_cells: int):
-        """Initialize simulation fields."""
-        self.density = np.ones((n_cells, n_cells, n_cells)) * 1e-24  # g/cm^3
-        self.velocity = np.zeros((3, n_cells, n_cells, n_cells))  # cm/s
-        self.temperature = np.ones((n_cells, n_cells, n_cells)) * 1e4  # K
-        self.metallicity = np.ones((n_cells, n_cells, n_cells))  # solar
+    # ------------------------------------------------------------------
+    def step_coarse(self) -> None:
+        """
+        Advance the hierarchy by one coarse step, sub-cycling finer
+        levels and exchanging data at every sub-step boundary.
+        """
+        dt_c = self.cfl / max(np.max(np.abs(self.velocity)), 1e-12)
+        dt_c = min(dt_c, 0.5)
 
-    def get_local_properties(self, i: int, j: int, k: int) -> Dict[str, Any]:
-        """Get local gas properties at cell."""
-        cell_size = self.base_resolution  # Will be refined based on zoom
+        # advance the coarsest level once
+        self.fields[0] = self._upwind_step(self.fields[0],
+                                           self.velocity, dt_c)
 
-        # Check zoom regions
-        position = np.array([i, j, k]) * cell_size / 1000  # kpc
-        for zoom in self.zoom_regions:
-            cell_size = min(cell_size, zoom.get_resolution(position))
+        # sub-cycle the finer levels: one coarse cell spans rf^i cells
+        # of level i, so the velocity in level-i cells is v*rf^i while
+        # the sub-step is dt_c/rf^i - identical per-cell CFL everywhere
+        if self.n_levels > 1:
+            for i in range(1, self.n_levels):
+                n_sub = self.rf ** i
+                v_i = self.velocity * self.rf ** i
+                dt_i = dt_c / n_sub
+                for _ in range(n_sub):
+                    self.fields[i] = self._upwind_step(
+                        self.fields[i], v_i, dt_i)
 
+            # feedback finest -> coarsest, synchronised at the coarse
+            # step boundary; conserve mass by rescaling to the sum the
+            # upwind coarse solution already produced
+            coarse_from_fine = self.fields[self.n_levels - 1]
+            for i in range(self.n_levels - 2, -1, -1):
+                coarse_from_fine = self.couplers[i].upsample(
+                    coarse_from_fine, operation='average')
+            src_sum = self.fields[0].sum()
+            new_sum = coarse_from_fine.sum()
+            if new_sum > 0:
+                coarse_from_fine *= src_sum / new_sum
+            self.fields[0] = coarse_from_fine
+
+        self.time += dt_c
+        self.step_counter += 1
+
+    # ------------------------------------------------------------------
+    def run(self, n_coarse_steps: int = 10) -> Dict[str, Any]:
+        """Run the hierarchy for a number of coarse steps."""
+        mass0 = self.fields[0].sum()
+        for _ in range(n_coarse_steps):
+            self.step_coarse()
         return {
-            'density': self.density[i, j, k],
-            'temperature': self.temperature[i, j, k],
-            'metallicity': self.metallicity[i, j, k],
-            'velocity': self.velocity[:, i, j, k],
-            'cell_size': cell_size,
-            'cell_volume': (cell_size * PC)**3
+            'time': self.time,
+            'steps': self.step_counter,
+            'mass_initial': float(mass0),
+            'mass_final': float(self.fields[0].sum()),
+            'mass_error': float((self.fields[0].sum() - mass0) / mass0)
+            if mass0 != 0 else 0.0,
         }
 
-    def apply_subgrid_physics(self, dt: float) -> Dict[str, np.ndarray]:
-        """
-        Apply all sub-grid models.
 
-        Parameters
-        ----------
-        dt : float
-            Timestep in seconds
-
-        Returns
-        -------
-        dict
-            Source terms from sub-grid physics
-        """
-        source_terms = {
-            'mass': np.zeros_like(self.density),
-            'energy': np.zeros_like(self.density),
-            'momentum': np.zeros_like(self.velocity)
-        }
-
-        if self.density is None:
-            return source_terms
-
-        nx, ny, nz = self.density.shape
-
-        for i in range(nx):
-            for j in range(ny):
-                for k in range(nz):
-                    props = self.get_local_properties(i, j, k)
-                    props['timestep'] = dt
-
-                    for model in self.subgrid_models:
-                        if props['cell_size'] > model.scale_below:
-                            continue
-
-                        result = model.compute(props)
-
-                        # Accumulate source terms
-                        if 'stellar_mass_formed' in result:
-                            source_terms['mass'][i, j, k] -= result['stellar_mass_formed'] * M_SUN
-                        if 'energy_injection_rate' in result:
-                            source_terms['energy'][i, j, k] += result['energy_injection_rate'] * dt
-                        if 'momentum_injection_rate' in result:
-                            # Distribute isotropically
-                            source_terms['momentum'][:, i, j, k] += result['momentum_injection_rate'] * dt / 3
-
-        return source_terms
-
-    def compute_cooling(self, dt: float) -> np.ndarray:
-        """
-        Compute radiative cooling.
-
-        Parameters
-        ----------
-        dt : float
-            Timestep in seconds
-
-        Returns
-        -------
-        ndarray
-            Energy loss per cell
-        """
-        if self.density is None or self.temperature is None:
-            return np.zeros((1, 1, 1))
-
-        energy_loss = np.zeros_like(self.density)
-
-        nx, ny, nz = self.density.shape
-        for i in range(nx):
-            for j in range(ny):
-                for k in range(nz):
-                    self.cooling.metallicity = self.metallicity[i, j, k]
-                    cool_rate = self.cooling.cooling_rate(
-                        self.temperature[i, j, k],
-                        self.density[i, j, k]
-                    )
-                    props = self.get_local_properties(i, j, k)
-                    energy_loss[i, j, k] = cool_rate * props['cell_volume'] * dt
-
-        return energy_loss
-
+# =============================================================================
+# HIERARCHICAL REFINEMENT
+# =============================================================================
 
 class HierarchicalRefinement:
     """
-    Adaptive mesh refinement criteria and implementation.
+    Adaptive refinement map from a physical resolution criterion.
 
-    Supports:
-    - Density-based refinement
-    - Gradient-based refinement
-    - Geometry-based refinement
+    Uses the Truelove et al. (1997) Jeans-resolution rule: a cell must
+    be smaller than a quarter of the local Jeans length,
+
+        lambda_J = c_s sqrt(pi / (G rho)),
+
+    so the required refinement level at a cell is
+
+        level = ceil(log2( (lambda_J / (N_J * dx_min)) ))
+                clipped to [0, max_level]
+
+    Cells failing the criterion on the base grid are refined by powers
+    of two until dx < lambda_J / N_J (default N_J = 4).
     """
 
-    def __init__(self, max_level: int = 8):
+    G = 6.674e-8           # cm^3 g^-1 s^-2
+
+    def __init__(self, sound_speed: float, dx: float,
+                 n_jeans: float = 4.0, max_level: int = 4):
         """
-        Parameters
-        ----------
-        max_level : int
-            Maximum refinement level
+        Args:
+            sound_speed: sound speed (cm/s) assumed uniform
+            dx: base-grid cell size (cm)
+            n_jeans: required number of cells per Jeans length
+            max_level: maximum refinement level (0 = base grid)
         """
-        self.max_level = max_level
-        self.refinement_criteria: List[Callable] = []
+        self.c_s = float(sound_speed)
+        self.dx = float(dx)
+        self.n_jeans = float(n_jeans)
+        self.max_level = int(max_level)
 
-    def add_density_criterion(self, threshold: float, levels: int = 1):
-        """Add density-based refinement criterion."""
-
-        def criterion(density: np.ndarray, level: int) -> np.ndarray:
-            if level >= levels:
-                return np.zeros_like(density, dtype=bool)
-            return density > threshold
-
-        self.refinement_criteria.append(criterion)
-
-    def add_gradient_criterion(self, threshold: float, levels: int = 1):
-        """Add gradient-based refinement criterion."""
-
-        def criterion(field: np.ndarray, level: int) -> np.ndarray:
-            if level >= levels:
-                return np.zeros_like(field, dtype=bool)
-
-            grad_x = np.abs(np.diff(field, axis=0, prepend=field[:1]))
-            grad_y = np.abs(np.diff(field, axis=1, prepend=field[:, :1]))
-            grad_z = np.abs(np.diff(field, axis=2, prepend=field[:, :, :1]))
-
-            grad_mag = np.sqrt(grad_x**2 + grad_y**2 + grad_z**2)
-            return grad_mag / (np.abs(field) + 1e-10) > threshold
-
-        self.refinement_criteria.append(criterion)
-
-    def add_jeans_criterion(self, n_jeans: int = 4):
-        """Add Jeans length resolution criterion."""
-
-        def criterion(density: np.ndarray, temperature: np.ndarray,
-                      cell_size: float, level: int) -> np.ndarray:
-            # Jeans length
-            cs = np.sqrt(K_BOLTZMANN * temperature / M_PROTON)
-            lambda_j = cs * np.sqrt(np.pi / (G_GRAV * density))
-
-            # Require n_jeans cells per Jeans length
-            return lambda_j < n_jeans * cell_size
-
-        self.refinement_criteria.append(criterion)
-
-    def check_refinement(self, fields: Dict[str, np.ndarray],
-                        current_level: int) -> np.ndarray:
+    # ------------------------------------------------------------------
+    def level_for_density(self, density: np.ndarray) -> np.ndarray:
         """
-        Check which cells need refinement.
+        Required refinement level per cell for a density field.
 
-        Parameters
-        ----------
-        fields : dict
-            Dictionary of field arrays
-        current_level : int
-            Current refinement level
+        Args:
+            density: number density (cm^-3) or mass density (g/cm^3);
+                assumed mass density with mu=2.33 if values are large
+                enough that interpretation matters - pass mass density.
 
-        Returns
-        -------
-        ndarray
-            Boolean array indicating cells to refine
+        Returns:
+            integer level array, same shape, in [0, max_level]
         """
-        if current_level >= self.max_level:
+        rho = np.asarray(density, dtype=float)
+        lambda_J = self.c_s * np.sqrt(np.pi / (self.G * rho))
+
+        # dx needed = lambda_J / n_jeans; each level halves dx
+        ratio = lambda_J / (self.n_jeans * self.dx)
+        level = np.ceil(np.log2(np.maximum(ratio, 1.0)))
+        return np.clip(level, 0, self.max_level).astype(int)
+
+    # ------------------------------------------------------------------
+    def refinement_map(self, density: np.ndarray) -> Dict[str, Any]:
+        """
+        Full refinement statistics for a density field.
+
+        Returns:
+            dict with 'levels', 'n_cells', 'n_refined',
+            'fraction_refined', 'effective_resolution',
+            'max_jeans_ratio'
+        """
+        rho = np.asarray(density, dtype=float)
+        levels = self.level_for_density(rho)
+        lambda_J = self.c_s * np.sqrt(np.pi / (self.G * rho))
+        jeans_ratio = lambda_J / self.dx
+        return {
+            'levels': levels,
+            'n_cells': int(rho.size),
+            'n_refined': int((levels > 0).sum()),
+            'fraction_refined': float((levels > 0).mean()),
+            'effective_resolution': {
+                f"level_{lv}": int(self.dx / 2 ** lv)
+                for lv in range(int(levels.max()) + 1)
+            },
+            'max_jeans_ratio': float(jeans_ratio.max()),
+        }
+
+    # ------------------------------------------------------------------
+    def build_refined_regions(self, density: np.ndarray) \
+            -> List[Dict[str, Any]]:
+        """
+        List the refined regions as level, mask pairs (one entry per
+        level present above the base grid).
+        """
+        levels = self.level_for_density(density)
+        out = []
+        for lv in range(1, int(levels.max()) + 1):
+            mask = levels == lv
+            if mask.any():
+                out.append({
+                    'level': lv,
+                    'dx': self.dx / 2 ** lv,
+                    'mask': mask,
+                    'n_cells': int(mask.sum()),
+                })
+        return out

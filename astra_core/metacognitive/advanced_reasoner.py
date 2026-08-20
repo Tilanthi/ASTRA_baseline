@@ -41,7 +41,7 @@ except ImportError:
     GPQA_AVAILABLE = False
 
 try:
-    from ..capabilities.v50_causal_engine import CausalDiscovery
+    from ..capabilities.causal_discovery import CausalDiscovery
     CAUSAL_AVAILABLE = True
 except ImportError:
     CAUSAL_AVAILABLE = False

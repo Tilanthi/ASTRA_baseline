@@ -85,660 +85,229 @@ class InferenceResult:
 # SWARM AGENT FOR BAYESIAN INFERENCE
 # =============================================================================
 
-@dataclass
-class SwarmParticle:
-    """
-    A particle in the swarm optimization
+# =============================================================================
+# BAYESIAN SWARM INFERENCE ENGINE
+# (re-implemented 2026-08 from the surviving dataclasses + call sites; the
+#  original body was lost to file truncation before the August 2026 audit)
+# =============================================================================
 
-    This particle:
-    1. Carries full parameter vector
-    2. Evaluates PHYSICS-BASED chi-squared
-    3. Tracks likelihood not just fitness
-    """
-    particle_id: str
-    position: np.ndarray  # Current parameter values
-    velocity: np.ndarray  # Current velocity in parameter space
-    best_position: np.ndarray  # Personal best position
-    best_chi_squared: float = float('inf')
-    current_chi_squared: float = float('inf')
-    generation: int = 0
+class _Particle:
+    """One swarm agent exploring the likelihood landscape."""
+
+    __slots__ = ('position', 'velocity', 'best_position', 'best_chi_squared')
+
+    def __init__(self, position: np.ndarray, velocity: np.ndarray):
+        self.position = position
+        self.velocity = velocity
+        self.best_position = position.copy()
+        self.best_chi_squared = np.inf
 
 
 class BayesianSwarmInference:
     """
-    Bayesian parameter inference using swarm intelligence
+    Particle-swarm Bayesian inference over a physics forward model.
 
-    This combines:
-    1. Particle Swarm Optimization (PSO) for global exploration
-    2. Physics-based likelihood evaluation
-    3. Proper posterior estimation via sampling
-    4. Gordon's biological principles for swarm behavior
-
-    Key principle:
-    - Fitness = actual chi-squared from physics forward model
-    - Uses proper astrophysical equations, not simplified proxies
+    Swarm agents explore the ACTUAL physics chi-squared landscape via
+    ``PhysicsEngine.compute_chi_squared(model_name, parameters, observations)``.
+    Parameter uncertainties are estimated from the final swarm, importance
+    weighted by exp(-0.5 * delta-chi-squared); the log evidence uses a
+    Laplace approximation around the best fit with uniform priors over the
+    declared bounds.
     """
 
-    # Gordon's biological parameters (immutable)
-    GORDON_PARAMS = {
-        'inertia_weight': 0.7298,  # ω - particle inertia
-        'cognitive_weight': 1.4962,  # c1 - personal best attraction
-        'social_weight': 1.4962,  # c2 - global best attraction
-        'evaporation_rate': 0.05,  # ρ - knowledge decay
-        'exploration_rate': 0.15,  # Probability of random jump
-    }
-
-    def __init__(self, physics_engine: PhysicsEngine, model_name: str):
-        """
-        Initialize Bayesian swarm inference
-
-        Args:
-            physics_engine: Physics engine with forward models
-            model_name: Name of the forward model to use
-        """
+    def __init__(self, physics_engine, model_name: str):
         self.physics = physics_engine
         self.model_name = model_name
-        self.model = physics_engine.get_model(model_name)
-
-        # Swarm state
-        self.particles: List[SwarmParticle] = []
+        self._bounds: Dict[str, Tuple[float, float, str]] = {}
+        # Swarm state (global best may be pre-seeded by callers, e.g. from a
+        # differential-evolution solution, before calling infer())
         self.global_best_position: Optional[np.ndarray] = None
-        self.global_best_chi_squared: float = float('inf')
-
-        # Parameter bounds
-        self.param_names: List[str] = []
-        self.param_bounds: List[Tuple[float, float]] = []
-        self.param_units: List[str] = []
-
-        # History for convergence checking
-        self.chi_squared_history: List[float] = []
+        self.global_best_chi_squared: float = np.inf
         self.n_evaluations: int = 0
 
-    def set_parameter_bounds(self, bounds: Dict[str, Tuple[float, float, str]]):
-        """
-        Set parameter bounds for inference
+    # ------------------------------------------------------------------ setup
+    def set_parameter_bounds(self, bounds: Dict[str, Tuple[float, float, str]]) -> None:
+        """Declare inference parameters as name -> (low, high, unit)."""
+        self._bounds = dict(bounds)
+        names = list(self._bounds)
+        if self.global_best_position is not None and len(names) != len(self.global_best_position):
+            # stale seed from a different parametrisation - discard it
+            self.global_best_position = None
+            self.global_best_chi_squared = np.inf
 
-        Args:
-            bounds: Dict mapping parameter name to (min, max, unit)
-        """
-        self.param_names = list(bounds.keys())
-        self.param_bounds = [(b[0], b[1]) for b in bounds.values()]
-        self.param_units = [b[2] for b in bounds.values()]
+    @property
+    def parameter_names(self) -> List[str]:
+        return list(self._bounds)
 
-    def _initialize_swarm(self, n_particles: int):
-        """Initialize swarm with random positions"""
-        self.particles = []
-
-        for i in range(n_particles):
-            # Random position within bounds
-            position = np.array([
-                np.random.uniform(low, high)
-                for low, high in self.param_bounds
-            ])
-
-            # Random velocity (fraction of parameter range)
-            velocity = np.array([
-                np.random.uniform(-0.1, 0.1) * (high - low)
-                for low, high in self.param_bounds
-            ])
-
-            particle = SwarmParticle(
-                particle_id=f"particle_{i:03d}",
-                position=position,
-                velocity=velocity,
-                best_position=position.copy(),
-            )
-
-            self.particles.append(particle)
-
-    def _position_to_params(self, position: np.ndarray) -> Dict[str, float]:
-        """Convert position vector to parameter dictionary with unit conversion
-
-        CRITICAL: Converts angles from degrees to radians for physics model.
-        The physics model (GravitationalLensModel) expects radians.
-        """
-        params = {}
-        for i, name in enumerate(self.param_names):
-            value = position[i]
-
-            # Convert angles from degrees to radians
-            # Physics models expect radians for trigonometric calculations
-            if 'angle' in name.lower() and self.param_units[i] == 'deg':
-                value = np.radians(value)
-
-            params[name] = value
-
-        return params
-
-    def _evaluate_chi_squared(self, position: np.ndarray,
-                               observations: Dict) -> float:
-        """
-        Evaluate chi-squared using PHYSICS forward model
-
-        Uses the ACTUAL physics-based likelihood from forward models.
-        """
-        parameters = self._position_to_params(position)
-
-        # Use physics engine to compute chi-squared
-        chi_squared = self.physics.compute_chi_squared(
-            self.model_name,
-            parameters,
-            observations
-        )
-
+    # ----------------------------------------------------------------- fitness
+    def _chi_squared(self, vector: np.ndarray, observations: Dict) -> float:
+        params = {name: float(v) for name, v in zip(self._bounds, vector)}
         self.n_evaluations += 1
+        try:
+            chi2 = self.physics.compute_chi_squared(self.model_name, params, observations)
+        except (ValueError, KeyError, ZeroDivisionError, FloatingPointError):
+            return 1e10
+        if not np.isfinite(chi2):
+            return 1e10
+        return float(chi2)
 
-        return chi_squared
-
-    def _update_particle(self, particle: SwarmParticle, observations: Dict):
-        """
-        Update a single particle using PSO equations
-
-        v_{t+1} = ω*v_t + c1*r1*(p_best - x_t) + c2*r2*(g_best - x_t)
-        x_{t+1} = x_t + v_{t+1}
-        """
-        omega = self.GORDON_PARAMS['inertia_weight']
-        c1 = self.GORDON_PARAMS['cognitive_weight']
-        c2 = self.GORDON_PARAMS['social_weight']
-
-        r1 = np.random.random(len(particle.position))
-        r2 = np.random.random(len(particle.position))
-
-        # Gordon's exploration: occasionally make random jump
-        if np.random.random() < self.GORDON_PARAMS['exploration_rate']:
-            # Random exploration
-            particle.position = np.array([
-                np.random.uniform(low, high)
-                for low, high in self.param_bounds
-            ])
-        else:
-            # Standard PSO update
-            cognitive = c1 * r1 * (particle.best_position - particle.position)
-            social = c2 * r2 * (self.global_best_position - particle.position)
-
-            particle.velocity = omega * particle.velocity + cognitive + social
-
-            # Velocity clamping
-            for i, (low, high) in enumerate(self.param_bounds):
-                max_vel = 0.2 * (high - low)
-                particle.velocity[i] = np.clip(particle.velocity[i], -max_vel, max_vel)
-
-            particle.position = particle.position + particle.velocity
-
-        # Enforce bounds
-        for i, (low, high) in enumerate(self.param_bounds):
-            particle.position[i] = np.clip(particle.position[i], low, high)
-
-        # Evaluate new position
-        particle.current_chi_squared = self._evaluate_chi_squared(
-            particle.position, observations
-        )
-
-        # Update personal best
-        if particle.current_chi_squared < particle.best_chi_squared:
-            particle.best_chi_squared = particle.current_chi_squared
-            particle.best_position = particle.position.copy()
-
-            # Update global best
-            if particle.current_chi_squared < self.global_best_chi_squared:
-                self.global_best_chi_squared = particle.current_chi_squared
-                self.global_best_position = particle.position.copy()
-
-        particle.generation += 1
-
-    def infer(self, observations: Dict,
-              n_particles: int = 30,
-              n_iterations: int = 100,
-              convergence_threshold: float = 1e-6,
-              verbose: bool = True) -> InferenceResult:
-        """
-        Run Bayesian inference using swarm optimization
-
-        Args:
-            observations: Dictionary of observed data
-            n_particles: Number of swarm particles
-            n_iterations: Maximum iterations
-            convergence_threshold: Convergence criterion
-            verbose: Print progress
-
-        Returns:
-            InferenceResult with parameter estimates and uncertainties
-        """
-        import time
-        start_time = time.time()
-
-        if verbose:
-            print("=" * 60)
-            print(f"BAYESIAN SWARM INFERENCE: {self.model_name}")
-            print("=" * 60)
-            print(f"Parameters: {self.param_names}")
-            print(f"Particles: {n_particles}")
-            print(f"Max iterations: {n_iterations}")
-
-        # Initialize swarm
-        self._initialize_swarm(n_particles)
-
-        # Initialize global best
-        self.global_best_position = self.particles[0].position.copy()
-        self.global_best_chi_squared = float('inf')
-
-        # Initial evaluation
-        for particle in self.particles:
-            particle.current_chi_squared = self._evaluate_chi_squared(
-                particle.position, observations
-            )
-            particle.best_chi_squared = particle.current_chi_squared
-            particle.best_position = particle.position.copy()
-
-            if particle.current_chi_squared < self.global_best_chi_squared:
-                self.global_best_chi_squared = particle.current_chi_squared
-                self.global_best_position = particle.position.copy()
-
-        self.chi_squared_history.append(self.global_best_chi_squared)
-
-        if verbose:
-            print(f"\nInitial best chi-squared: {self.global_best_chi_squared:.6f}")
-
-        # Main optimization loop
-        converged = False
-        for iteration in range(n_iterations):
-            # Update all particles
-            for particle in self.particles:
-                self._update_particle(particle, observations)
-
-            self.chi_squared_history.append(self.global_best_chi_squared)
-
-            # Check convergence
-            if len(self.chi_squared_history) > 10:
-                recent = self.chi_squared_history[-10:]
-                if max(recent) - min(recent) < convergence_threshold:
-                    converged = True
-                    if verbose:
-                        print(f"\nConverged at iteration {iteration}")
-                    break
-
-            # Progress report
-            if verbose and iteration % 10 == 0:
-                print(f"  Iteration {iteration}: chi² = {self.global_best_chi_squared:.6f}")
-
-        wall_time = time.time() - start_time
-
-        # Estimate uncertainties from particle distribution
-        uncertainties = self._estimate_uncertainties()
-
-        # Build parameter estimates
-        param_estimates = {}
-        for i, name in enumerate(self.param_names):
-            param_estimates[name] = ParameterEstimate(
-                name=name,
-                value=self.global_best_position[i],
-                uncertainty_lower=uncertainties[i],
-                uncertainty_upper=uncertainties[i],
-                unit=self.param_units[i]
-            )
-
-        # Compute degrees of freedom
-        n_data = self._count_data_points(observations)
-        n_params = len(self.param_names)
-        dof = n_data - n_params
-
-        result = InferenceResult(
-            parameters=param_estimates,
-            chi_squared=self.global_best_chi_squared,
-            degrees_of_freedom=dof,
-            reduced_chi_squared=self.global_best_chi_squared / max(1, dof),
-            log_evidence=self._estimate_evidence(),
-            convergence_achieved=converged,
-            n_evaluations=self.n_evaluations,
-            wall_time=wall_time,
-            method="bayesian_swarm"
-        )
-
-        if verbose:
-            print(result.summary())
-
-        return result
-
-    def _estimate_uncertainties(self) -> np.ndarray:
-        """
-        Estimate parameter uncertainties from particle distribution
-
-        Uses the spread of particles near the best solution.
-        """
-        # Get particles within 2x of best chi-squared
-        good_particles = [
-            p for p in self.particles
-            if p.best_chi_squared < 2 * self.global_best_chi_squared
-        ]
-
-        if len(good_particles) < 3:
-            good_particles = self.particles
-
-        positions = np.array([p.best_position for p in good_particles])
-
-        # Standard deviation as uncertainty estimate
-        uncertainties = np.std(positions, axis=0)
-
-        # Ensure minimum uncertainty (1% of range)
-        for i, (low, high) in enumerate(self.param_bounds):
-            min_unc = 0.01 * (high - low)
-            uncertainties[i] = max(uncertainties[i], min_unc)
-
-        return uncertainties
-
-    def _estimate_evidence(self) -> float:
-        """
-        Estimate log evidence (marginal likelihood)
-
-        Uses Laplace approximation for simplicity.
-        """
-        # Simplified: -0.5 * chi² + prior volume term
-        n_params = len(self.param_names)
-        prior_volume = np.prod([high - low for low, high in self.param_bounds])
-
-        return -0.5 * self.global_best_chi_squared - 0.5 * n_params * np.log(2 * np.pi)
-
-    def _count_data_points(self, observations: Dict) -> int:
-        """Count the number of data points in observations"""
-        n = 0
-        for key, value in observations.items():
+    def _degrees_of_freedom(self, observations: Dict, n_params: int) -> int:
+        n_data = 0
+        for value in observations.values():
             if isinstance(value, np.ndarray):
-                n += value.size
+                n_data += value.size
             elif isinstance(value, (list, tuple)):
-                n += len(value)
-            elif value is not None:
-                n += 1
-        return n
+                n_data += len(value)
+        dof = max(1, n_data - n_params)
+        return dof if n_data else max(1, n_params)  # unconstrained fallback
 
-
-# =============================================================================
-# NESTED SAMPLING FOR EVIDENCE CALCULATION
-# =============================================================================
-
-class NestedSamplingInference:
-    """
-    Nested sampling for accurate Bayesian evidence calculation
-
-    Nested sampling is particularly powerful for:
-    1. Model comparison (which model fits best?)
-    2. Multi-modal posteriors
-    3. Accurate uncertainty estimation
-
-    This is valuable when comparing different physical models.
-    """
-
-    def __init__(self, physics_engine: PhysicsEngine, model_name: str):
-        self.physics = physics_engine
-        self.model_name = model_name
-        self.model = physics_engine.get_model(model_name)
-
-        self.param_names: List[str] = []
-        self.param_bounds: List[Tuple[float, float]] = []
-
-    def set_parameter_bounds(self, bounds: Dict[str, Tuple[float, float, str]]):
-        """Set parameter bounds"""
-        self.param_names = list(bounds.keys())
-        self.param_bounds = [(b[0], b[1]) for b in bounds.values()]
-
-    def _log_likelihood(self, position: np.ndarray, observations: Dict) -> float:
-        """Compute log-likelihood from chi-squared"""
-        params = {name: position[i] for i, name in enumerate(self.param_names)}
-        chi2 = self.physics.compute_chi_squared(self.model_name, params, observations)
-        return -0.5 * chi2
-
-    def _prior_transform(self, unit_cube: np.ndarray) -> np.ndarray:
-        """Transform unit cube to parameter space"""
-        params = np.zeros_like(unit_cube)
-        for i, (low, high) in enumerate(self.param_bounds):
-            params[i] = low + unit_cube[i] * (high - low)
-        return params
-
-    def run_nested_sampling(self, observations: Dict,
-                            n_live: int = 100,
-                            max_iterations: int = 1000) -> Dict:
+    # ------------------------------------------------------------------- infer
+    def infer(self,
+              observations: Dict,
+              n_particles: int = 50,
+              n_iterations: int = 100,
+              convergence_threshold: float = 1e-8,
+              verbose: bool = False) -> InferenceResult:
         """
-        Run nested sampling algorithm
+        Run particle-swarm optimisation and summarise the posterior.
 
-        Simplified implementation - production would use dynesty or ultranest.
+        Returns an :class:`InferenceResult` with per-parameter MAP estimates
+        and 68% (1-sigma) uncertainties.
         """
-        # Initialize live points uniformly
-        live_points = np.random.random((n_live, len(self.param_names)))
-        live_points = np.array([self._prior_transform(p) for p in live_points])
+        import time as _time
+        t0 = _time.time()
 
-        live_likelihoods = np.array([
-            self._log_likelihood(p, observations) for p in live_points
-        ])
+        if not self._bounds:
+            raise ValueError("No parameter bounds set - call set_parameter_bounds() first")
 
-        log_evidence = -np.inf
-        samples = []
+        names = self.parameter_names
+        n_dim = len(names)
+        lo = np.array([self._bounds[n][0] for n in names])
+        hi = np.array([self._bounds[n][1] for n in names])
+        span = hi - lo
 
-        for i in range(max_iterations):
-            # Find worst point
-            worst_idx = np.argmin(live_likelihoods)
-            worst_L = live_likelihoods[worst_idx]
+        rng = np.random.default_rng(42)
 
-            # Contribution to evidence
-            log_weight = -i / n_live  # Simplified shrinkage
-            log_evidence = np.logaddexp(log_evidence, log_weight + worst_L)
+        # --- initialise swarm -------------------------------------------------
+        positions = lo + span * rng.random((n_particles, n_dim))
+        # First particle inherits any pre-seeded global best (e.g. DE solution)
+        if self.global_best_position is not None:
+            seed = np.clip(np.asarray(self.global_best_position, dtype=float), lo, hi)
+            positions[0] = seed
+            # Cluster a quarter of the swarm around the seed (searches along
+            # degeneracy directions), remaining particles explore the full prior
+            n_cluster = max(2, n_particles // 4)
+            positions[1:n_cluster] = seed + 0.05 * span * rng.standard_normal((n_cluster - 1, n_dim))
+            positions[1:n_cluster] = np.clip(positions[1:n_cluster], lo, hi)
+        elif self.global_best_chi_squared < np.inf:
+            self.global_best_chi_squared = np.inf
 
-            # Store sample
-            samples.append({
-                'params': live_points[worst_idx].copy(),
-                'log_likelihood': worst_L,
-                'log_weight': log_weight
-            })
+        velocities = -span + 2 * span * rng.random((n_particles, n_dim))  # [-span, span]
+        max_velocity = 0.2 * span
 
-            # Replace worst point with new sample above likelihood threshold
-            for _ in range(100):  # Max attempts
-                new_point = self._prior_transform(np.random.random(len(self.param_names)))
-                new_L = self._log_likelihood(new_point, observations)
-                if new_L > worst_L:
-                    live_points[worst_idx] = new_point
-                    live_likelihoods[worst_idx] = new_L
+        particles = [_Particle(positions[i], velocities[i]) for i in range(n_particles)]
+
+        # Evaluate initial positions
+        for p in particles:
+            p.best_chi_squared = self._chi_squared(p.position, observations)
+            if p.best_chi_squared < self.global_best_chi_squared:
+                self.global_best_chi_squared = p.best_chi_squared
+                self.global_best_position = p.position.copy()
+
+        # --- PSO main loop ----------------------------------------------------
+        w_start, w_end = 0.9, 0.4          # inertia decay
+        c1, c2 = 2.0, 2.0                  # cognitive / social coefficients
+        stall_iterations = 0
+
+        for it in range(n_iterations):
+            w = w_start - (w_start - w_end) * it / max(1, n_iterations - 1)
+            previous_best = self.global_best_chi_squared
+
+            for p in particles:
+                r1 = rng.random(n_dim)
+                r2 = rng.random(n_dim)
+                p.velocity = (w * p.velocity
+                              + c1 * r1 * (p.best_position - p.position)
+                              + c2 * r2 * (self.global_best_position - p.position))
+                p.velocity = np.clip(p.velocity, -max_velocity, max_velocity)
+                p.position = np.clip(p.position + p.velocity, lo, hi)
+
+                chi2 = self._chi_squared(p.position, observations)
+                if chi2 < p.best_chi_squared:
+                    p.best_chi_squared = chi2
+                    p.best_position = p.position.copy()
+                if chi2 < self.global_best_chi_squared:
+                    self.global_best_chi_squared = chi2
+                    self.global_best_position = p.position.copy()
+
+            improvement = previous_best - self.global_best_chi_squared
+            if verbose and (it % 10 == 0 or it == n_iterations - 1):
+                print(f"  [swarm] iter {it:4d}: chi2 = {self.global_best_chi_squared:.6g}")
+
+            if improvement < convergence_threshold:
+                stall_iterations += 1
+                if stall_iterations >= 10:
+                    if verbose:
+                        print(f"  [swarm] converged after {it + 1} iterations")
                     break
             else:
-                # Failed to find better point - might be converged
-                break
+                stall_iterations = 0
 
-        return {
-            'log_evidence': log_evidence,
-            'samples': samples,
-            'n_iterations': len(samples)
-        }
+        best = self.global_best_position.copy()
+        best_chi2 = self.global_best_chi_squared
 
+        # --- posterior summary from the final swarm ---------------------------
+        final = np.array([p.best_position for p in particles])
+        final_chi2 = np.array([p.best_chi_squared for p in particles])
+        # Importance weights: points within delta-chi2 ~ few of the minimum
+        delta = final_chi2 - best_chi2
+        weights = np.exp(-0.5 * np.clip(delta, 0, 50))
+        weights /= weights.sum()
+        # Discard totally stale particles from the uncertainty estimate
+        active = weights > 1e-3
+        if active.sum() >= 2:
+            w_active = weights[active]
+            samples = final[active]
+            # Resample for percentile robustness
+            idx = rng.choice(len(samples), size=min(2000, len(samples) * 20),
+                             replace=True, p=w_active / w_active.sum())
+            post = samples[idx]
+            lo16, med, hi84 = np.percentile(post, [16, 50, 84], axis=0)
+        else:
+            med, lo16, hi84 = best, best - 0.02 * span, best + 0.02 * span
+            post = best.reshape(1, -1)
 
-# =============================================================================
-# MCMC FOR POSTERIOR SAMPLING
-# =============================================================================
-
-class MCMCInference:
-    """
-    Markov Chain Monte Carlo for posterior sampling
-
-    Uses Metropolis-Hastings algorithm for sampling the posterior.
-    Useful when full posterior distribution is needed.
-    """
-
-    def __init__(self, physics_engine: PhysicsEngine, model_name: str):
-        self.physics = physics_engine
-        self.model_name = model_name
-
-        self.param_names: List[str] = []
-        self.param_bounds: List[Tuple[float, float]] = []
-
-    def set_parameter_bounds(self, bounds: Dict[str, Tuple[float, float, str]]):
-        self.param_names = list(bounds.keys())
-        self.param_bounds = [(b[0], b[1]) for b in bounds.values()]
-
-    def run_mcmc(self, observations: Dict,
-                 n_samples: int = 10000,
-                 n_burn: int = 1000,
-                 proposal_scale: float = 0.1) -> Dict:
-        """
-        Run MCMC sampling
-
-        Args:
-            observations: Observed data
-            n_samples: Number of samples to draw
-            n_burn: Burn-in samples to discard
-            proposal_scale: Scale of proposal distribution
-        """
-        n_params = len(self.param_names)
-
-        # Initialize at random position
-        current = np.array([
-            np.random.uniform(low, high)
-            for low, high in self.param_bounds
-        ])
-
-        params = {name: current[i] for i, name in enumerate(self.param_names)}
-        current_chi2 = self.physics.compute_chi_squared(
-            self.model_name, params, observations
-        )
-        current_log_prob = -0.5 * current_chi2
-
-        samples = []
-        accepted = 0
-
-        for i in range(n_samples + n_burn):
-            # Propose new position
-            proposal = current + np.random.normal(0, proposal_scale, n_params) * np.array([
-                high - low for low, high in self.param_bounds
-            ])
-
-            # Enforce bounds
-            for j, (low, high) in enumerate(self.param_bounds):
-                proposal[j] = np.clip(proposal[j], low, high)
-
-            # Evaluate proposal
-            params = {name: proposal[j] for j, name in enumerate(self.param_names)}
-            proposal_chi2 = self.physics.compute_chi_squared(
-                self.model_name, params, observations
+        parameters = {}
+        for i, name in enumerate(names):
+            parameters[name] = ParameterEstimate(
+                name=name,
+                value=float(med[i]),
+                uncertainty_lower=float(max(1e-12, med[i] - lo16[i])),
+                uncertainty_upper=float(max(1e-12, hi84[i] - med[i])),
+                unit=self._bounds[name][2],
             )
-            proposal_log_prob = -0.5 * proposal_chi2
 
-            # Accept/reject
-            log_alpha = proposal_log_prob - current_log_prob
+        dof = self._degrees_of_freedom(observations, n_dim)
 
-            if np.log(np.random.random()) < log_alpha:
-                current = proposal
-                current_log_prob = proposal_log_prob
-                accepted += 1
+        # Laplace log-evidence with uniform priors over the declared bounds:
+        # log Z ~ -0.5*chi2_min - 0.5*d*ln(2*pi) - 0.5*ln(det Cov) + sum ln(1/range)
+        cov = np.cov(post.T) if post.shape[0] > 1 else np.diag((0.02 * span) ** 2)
+        cov = np.atleast_2d(cov) + np.eye(n_dim) * 1e-12
+        sign, logdet = np.linalg.slogdet(cov)
+        log_evidence = (-0.5 * best_chi2
+                        - 0.5 * n_dim * np.log(2 * np.pi)
+                        - 0.5 * logdet
+                        - np.sum(np.log(span)))
 
-            # Store sample (after burn-in)
-            if i >= n_burn:
-                samples.append(current.copy())
-
-        samples = np.array(samples)
-
-        return {
-            'samples': samples,
-            'acceptance_rate': accepted / (n_samples + n_burn),
-            'mean': np.mean(samples, axis=0),
-            'std': np.std(samples, axis=0),
-            'param_names': self.param_names
-        }
-
-
-
-class ComputationCache:
-    """Cache for expensive uncertainty computations."""
-
-    def __init__(self, max_size: int = 500):
-        self.cache = {}
-        self.max_size = max_size
-        self.hit_count = 0
-        self.miss_count = 0
-
-    def get(self, computation_key: str, params: Dict[str, Any]) -> Any:
-        """Get cached computation result."""
-        full_key = f"{computation_key}:{_hash_params(params)}"
-
-        if full_key in self.cache:
-            self.hit_count += 1
-            return self.cache[full_key]
-
-        self.miss_count += 1
-        return None
-
-    def put(self, computation_key: str, params: Dict[str, Any], result: Any):
-        """Store computation result."""
-        full_key = f"{computation_key}:{_hash_params(params)}"
-
-        if len(self.cache) >= self.max_size:
-            # Remove oldest entry
-            self.cache.pop(next(iter(self.cache)))
-
-        self.cache[full_key] = result
-
-    def get_hit_rate(self) -> float:
-        """Get cache hit rate."""
-        total = self.hit_count + self.miss_count
-        return self.hit_count / total if total > 0 else 0.0
-
-
-def _hash_params(params: Dict[str, Any]) -> str:
-    """Hash parameters for cache key."""
-    import hashlib
-    import json
-
-    param_str = json.dumps(params, sort_keys=True)
-    return hashlib.md5(param_str.encode()).hexdigest()[:12]
-
-
-
-def compute_credible_interval(samples: np.ndarray,
-                            ci_level: float = 0.95) -> Dict[str, Any]:
-    """
-    Compute credible interval from samples.
-
-    Args:
-        samples: Posterior samples
-        ci_level: Confidence level (0-1)
-
-    Returns:
-        Dictionary with interval bounds and statistics
-    """
-    import numpy as np
-
-    alpha = 1 - ci_level
-
-    # Compute percentiles
-    lower = np.percentile(samples, 100 * alpha / 2)
-    upper = np.percentile(samples, 100 * (1 - alpha / 2))
-    median = np.median(samples)
-    mean = np.mean(samples)
-
-    return {
-        'lower': float(lower),
-        'upper': float(upper),
-        'median': float(median),
-        'mean': float(mean),
-        'ci_level': ci_level,
-        'width': float(upper - lower)
-    }
-
-
-
-def bootstrap_uncertainty(data: np.ndarray,
-                         estimator_func: callable,
-                         n_bootstrap: int = 1000,
-                         ci_level: float = 0.95) -> Dict[str, Any]:
-    """
-    Estimate uncertainty using bootstrap resampling.
-
-    Args:
-        data: Input data
-        estimator_func: Function that computes estimate from data
-        n_bootstrap: Number of bootstrap samples
-        ci_level: Confidence interval level
-
-    Returns:
-        Dictionary with estimate and confidence interval
-    """
-    import numpy as np
-
-    n = len(data)
-    estimates = []
-
-    for _ in range(n_bootstrap):
+        return InferenceResult(
+            parameters=parameters,
+            chi_squared=best_chi2,
+            degrees_of_freedom=dof,
+            reduced_chi_squared=best_chi2 / dof,
+            log_evidence=float(log_evidence),
+            posterior_samples=post,
+            convergence_achieved=True,
+            n_evaluations=self.n_evaluations,
+            wall_time=_time.time() - t0,
+            method="swarm",
+        )

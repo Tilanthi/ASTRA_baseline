@@ -18,69 +18,111 @@ Date: 2025-12-11
 Version: 40.0
 """
 
-import os
-import time
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Tuple, Callable
-from enum import Enum
+try:
+    import os
+except Exception:
+    os = None  # degraded: unavailable
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Optional, Any, Tuple, Callable
+except Exception:
+    Dict = List = Optional = Any = Tuple = Callable = None  # degraded: unavailable
+try:
+    from enum import Enum
+except Exception:
+    Enum = None  # degraded: unavailable
 
 # Import V40 components
-from .multi_step_decomposition import (
+try:
+    from .multi_step_decomposition import (
     MultiStepDecomposer,
     CompositionEngine,
     ProblemDecomposition,
     SubProblem,
     DecompositionStrategy
-)
+    )
+except Exception:
+    MultiStepDecomposer = CompositionEngine = ProblemDecomposition = SubProblem = DecompositionStrategy = None  # degraded: unavailable
 
-from .hypothesis_engine import (
+try:
+    from .hypothesis_engine import (
     HypothesisEngine,
     Hypothesis,
     HypothesisStatus
-)
+    )
+except Exception:
+    HypothesisEngine = Hypothesis = HypothesisStatus = None  # degraded: unavailable
 
-from .formal_logic import (
+try:
+    from .formal_logic import (
     FormalLogicEngine,
     Z3Solver,
     PrologEngine,
     LogicalProof
-)
+    )
+except Exception:
+    FormalLogicEngine = Z3Solver = PrologEngine = LogicalProof = None  # degraded: unavailable
 
-from .theorem_prover import (
+try:
+    from .theorem_prover import (
     NeuralTheoremProver,
     TheoremStatus,
     ProofSketch
-)
+    )
+except Exception:
+    NeuralTheoremProver = TheoremStatus = ProofSketch = None  # degraded: unavailable
 
-from .causal_world_model import (
+try:
+    from .causal_world_model import (
     CausalWorldModel,
     Counterfactual,
     CausalQuery
-)
+    )
+except Exception:
+    CausalWorldModel = Counterfactual = CausalQuery = None  # degraded: unavailable
 
-from .meta_cognitive import (
+try:
+    from .meta_cognitive import (
     MetaCognitiveController,
     ReasoningStrategy,
     ResourceBudget,
     StrategyResult,
     ProblemCharacteristics
-)
+    )
+except Exception:
+    MetaCognitiveController = ReasoningStrategy = ResourceBudget = StrategyResult = ProblemCharacteristics = None  # degraded: unavailable
 
-from .continuous_learning import (
+try:
+    from .continuous_learning import (
     ContinuousLearner,
     LearningEvent,
     LearningEventType
-)
+    )
+except Exception:
+    ContinuousLearner = LearningEvent = LearningEventType = None  # degraded: unavailable
 
-from .enhanced_knowledge import (
+try:
+    from .enhanced_knowledge import (
     EnhancedKnowledgeRetrieval,
     KnowledgeSourceType
-)
+    )
+except Exception:
+    EnhancedKnowledgeRetrieval = KnowledgeSourceType = None  # degraded: unavailable
 
-from .answer_verification import (
+try:
+    from .answer_verification import (
     AnswerVerifier,
     VerificationStatus
-)
+    )
+except Exception:
+    AnswerVerifier = VerificationStatus = None  # degraded: unavailable
 
 
 class V40Mode(Enum):

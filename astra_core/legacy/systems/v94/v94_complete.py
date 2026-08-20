@@ -6,24 +6,66 @@ with previous STAN versions, representing the paradigm shift from simulated
 intelligence to experienced intelligence.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union, Callable
-import logging
-import time
-import numpy as np
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Optional, Any, Union, Callable
+except Exception:
+    Dict = List = Optional = Any = Union = Callable = None  # degraded: unavailable
+try:
+    import logging
+except Exception:
+    logging = None  # degraded: unavailable
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
 
 # Import V94 components
-from .embodied_learning_engine import EmbodiedLearningEngine, LearningState
-from .sensorimotor_system import SensorimotorInterface, WorldAction, Experience
-from .developmental_learning import DevelopmentalLearning, DevelopmentalStage
-from .common_sense_engine import CommonSenseEngine
-from .language_grounding import LanguageGroundingEngine
+try:
+    from .embodied_learning_engine import EmbodiedLearningEngine, LearningState
+except Exception:
+    EmbodiedLearningEngine = LearningState = None  # degraded: unavailable
+try:
+    from .sensorimotor_system import SensorimotorInterface, WorldAction, Experience
+except Exception:
+    SensorimotorInterface = WorldAction = Experience = None  # degraded: unavailable
+try:
+    from .developmental_learning import DevelopmentalLearning, DevelopmentalStage
+except Exception:
+    DevelopmentalLearning = DevelopmentalStage = None  # degraded: unavailable
+try:
+    from .common_sense_engine import CommonSenseEngine
+except Exception:
+    CommonSenseEngine = None  # degraded: unavailable
+try:
+    from .language_grounding import LanguageGroundingEngine
+except Exception:
+    LanguageGroundingEngine = None  # degraded: unavailable
 
 # Import previous versions for integration
-from ..v80 import V80CompleteSystem
-from ..v91 import V91CompleteSystem
-from ..v92 import V92CompleteSystem
-from ..v93 import V93CompleteSystem
+try:
+    from ..v80 import V80CompleteSystem
+except Exception:
+    V80CompleteSystem = None  # degraded: unavailable
+try:
+    from ..v91 import V91CompleteSystem
+except Exception:
+    V91CompleteSystem = None  # degraded: unavailable
+try:
+    from ..v92 import V92CompleteSystem
+except Exception:
+    V92CompleteSystem = None  # degraded: unavailable
+try:
+    from ..v93 import V93CompleteSystem
+except Exception:
+    V93CompleteSystem = None  # degraded: unavailable
 
 
 @dataclass

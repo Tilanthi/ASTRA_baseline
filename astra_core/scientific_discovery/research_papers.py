@@ -133,38 +133,3 @@ class CitationGraph:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert statistics to dictionary"""
-        return {
-            'num_papers': self.num_nodes,
-            'num_citations': self.num_edges,
-            'avg_citations': self.avg_citations,
-            'influential_papers': self.influential_papers[:10],
-        }
-
-
-# =============================================================================
-# PDF Processor
-# =============================================================================
-
-class PDFProcessor:
-    """
-    Extract text and metadata from PDF files.
-
-    Supports multiple PDF libraries with automatic fallback.
-    """
-
-    def __init__(self):
-        self.has_pdf_support = HAS_PDFPLUMBER or HAS_PYPDF2
-
-        if not self.has_pdf_support:
-            logger.warning("No PDF library available. Install pdfplumber or PyPDF2.")
-
-        logger.info(f"PDFProcessor initialized (pdfplumber={HAS_PDFPLUMBER}, PyPDF2={HAS_PYPDF2})")
-
-    def extract_text(self, pdf_path: Path) -> str:
-        """
-        Extract full text from PDF.
-
-        Args:
-            pdf_path: Path to PDF file
-
-        Returns:

@@ -25,16 +25,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # V38 module imports
 from .self_consistency import (
     SelfConsistencyEngine,
-    EnhancedSelfConsistency,
     ConsistencyResult
 )
+from ..reasoning.enhanced_self_consistency import EnhancedSelfConsistency
 from .mork_expanded import (
     ExpandedMORK,
     MORKConcept,
     Domain,
     DomainRouter
 )
-from .tool_integration import (
+from ..capabilities.tool_integration import (
     ToolIntegration,
     ToolResult,
     WikipediaAPI,
@@ -44,9 +44,9 @@ from .tool_integration import (
 )
 from .local_rag import (
     LocalRAG,
-    RetrievalResult,
-    KnowledgeBaseBuilder
+    RetrievalResult
 )
+from ..capabilities.local_rag import KnowledgeBaseBuilder
 
 
 class ReasoningType(Enum):
@@ -121,7 +121,7 @@ class STANEnhanced:
         # Initialize all V38 modules
         self.mork = ExpandedMORK()
         self.domain_router = DomainRouter(self.mork)
-        self.consistency = EnhancedSelfConsistency(n_samples=n_consistency_samples)
+        self.consistency = EnhancedSelfConsistency(num_samples=n_consistency_samples)
         self.tools = ToolIntegration()
         self.rag = LocalRAG(persist_dir=rag_persist_dir)
 

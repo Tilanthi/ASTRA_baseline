@@ -215,3 +215,201 @@ class PaperLibrary:
         logger.info(f"PaperLibrary initialized at {self.library_path}")
         logger.info(f"  Total papers: {len(self.papers)}")
         logger.info(f"  Total chunks: {len(self.chunks)}")
+
+    # ======================================================================
+    # Persistence
+    # (re-implemented 2026-08; bodies lost to file truncation before the
+    #  August 2026 audit. API reconstructed from surviving call sites:
+    #  test_imports.py constructs PaperLibrary() and calls get_stats();
+    #  paper_rag_query.py queries via the chunk/paper stores.)
+    # ======================================================================
+
+    @staticmethod
+    def _paper_from_dict(d: Dict[str, Any]) -> Paper:
+        """Rebuild a Paper record from its persisted dict form."""
+        import dataclasses
+        names = {f.name for f in dataclasses.fields(Paper)}
+        kwargs = {k: v for k, v in d.items() if k in names and k != 'chunks'}
+        if kwargs.get('file_path'):
+            kwargs['file_path'] = Path(kwargs['file_path'])
+        return Paper(**kwargs)
+
+    @staticmethod
+    def _chunk_from_dict(d: Dict[str, Any]) -> PaperChunk:
+        """Rebuild a PaperChunk from its persisted dict form."""
+        return PaperChunk(
+            chunk_id=d['chunk_id'],
+            paper_id=d['paper_id'],
+            text=d['text'],
+            chunk_index=d['chunk_index'],
+            metadata=d.get('metadata', {}),
+        )
+
+    def _load_catalog(self) -> None:
+        """Load papers and chunks from catalog.json if it exists."""
+        if not self.catalog_path.exists():
+            return
+        try:
+            data = json.loads(self.catalog_path.read_text())
+            for paper_dict in data.get('papers', []):
+                try:
+                    paper = self._paper_from_dict(paper_dict)
+                    self.papers[paper.paper_id] = paper
+                except Exception:
+                    logger.warning("Skipping unreadable paper record in catalog")
+            for chunk_dict in data.get('chunks', []):
+                try:
+                    chunk = self._chunk_from_dict(chunk_dict)
+                    self.chunks[chunk.chunk_id] = chunk
+                    if chunk.paper_id in self.papers:
+                        self.papers[chunk.paper_id].chunks.append(chunk)
+                except Exception:
+                    logger.warning("Skipping unreadable chunk record in catalog")
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Could not load catalog: {e}")
+
+    def _save_catalog(self) -> None:
+        """Persist papers and chunks to catalog.json."""
+        data = {
+            'papers': [p.to_dict() for p in self.papers.values()],
+            'chunks': [c.to_dict() for c in self.chunks.values()],
+        }
+        try:
+            self.catalog_path.write_text(json.dumps(data, indent=2))
+        except OSError as e:
+            logger.warning(f"Could not save catalog: {e}")
+
+    # ======================================================================
+    # Adding content
+    # ======================================================================
+
+    def add_paper(self, paper: Paper, chunks: Optional[List[PaperChunk]] = None) -> str:
+        """
+        Add a paper (and optionally its chunks) to the library.
+
+        Chunks already attached to the paper record are indexed as well.
+        Returns the paper_id.
+        """
+        all_chunks = list(chunks) if chunks else []
+        for chunk in paper.chunks:
+            if chunk not in all_chunks:
+                all_chunks.append(chunk)
+
+        self.papers[paper.paper_id] = paper
+        known_ids = {c.chunk_id for c in paper.chunks}
+        for chunk in all_chunks:
+            chunk.paper_id = paper.paper_id
+            self.chunks[chunk.chunk_id] = chunk
+            if chunk.chunk_id not in known_ids:
+                paper.chunks.append(chunk)
+                known_ids.add(chunk.chunk_id)
+        paper.processed = bool(paper.chunks)
+        self._save_catalog()
+        return paper.paper_id
+
+    def chunk_text(self, text: str, chunk_id_prefix: str = "chunk",
+                   metadata: Optional[Dict[str, Any]] = None) -> List[PaperChunk]:
+        """
+        Split text into overlapping chunks.
+
+        Uses tiktoken tokens when available; otherwise falls back to
+        word-count chunking with the same size/overlap semantics.
+        """
+        metadata = dict(metadata or {})
+
+        if HAS_TIKTOKEN:
+            try:
+                enc = tiktoken.get_encoding("cl100k_base")
+                tokens = enc.encode(text)
+                token_lists, start = [], 0
+                while start < len(tokens):
+                    token_lists.append(tokens[start:start + self.chunk_size])
+                    if start + self.chunk_size >= len(tokens):
+                        break
+                    start += self.chunk_size - self.chunk_overlap
+                pieces = [enc.decode(t) for t in token_lists]
+            except Exception:
+                pieces = None
+        else:
+            pieces = None
+
+        if pieces is None:  # word-based fallback
+            words = text.split()
+            piece_words, start = [], 0
+            while start < len(words):
+                piece_words.append(words[start:start + self.chunk_size])
+                if start + self.chunk_size >= len(words):
+                    break
+                start += self.chunk_size - self.chunk_overlap
+            pieces = [' '.join(w) for w in piece_words]
+
+        chunks = []
+        for i, piece in enumerate(pieces):
+            if not piece.strip():
+                continue
+            chunks.append(PaperChunk(
+                chunk_id=f"{chunk_id_prefix}_{i}",
+                paper_id="",
+                text=piece,
+                chunk_index=i,
+                metadata=metadata,
+            ))
+        return chunks
+
+    # ======================================================================
+    # Retrieval
+    # ======================================================================
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        return re.findall(r'[a-z0-9]+', text.lower())
+
+    def search(self, query: str, k: int = 5) -> List[Tuple[PaperChunk, float]]:
+        """
+        Keyword (TF-IDF) search over all indexed chunks.
+
+        Returns the top-k (chunk, score) pairs, best match first.  This is
+        a lexical fallback retriever - no embedding model is required.
+        """
+        query_terms = set(self._tokenize(query))
+        if not query_terms or not self.chunks:
+            return []
+
+        chunk_list = list(self.chunks.values())
+        term_freqs = []
+        doc_freq: Dict[str, int] = {}
+        for chunk in chunk_list:
+            tokens = self._tokenize(chunk.text)
+            tf: Dict[str, int] = {}
+            for tok in tokens:
+                tf[tok] = tf.get(tok, 0) + 1
+            term_freqs.append(tf)
+            for term in set(tf):
+                doc_freq[term] = doc_freq.get(term, 0) + 1
+
+        n_docs = len(chunk_list)
+        scored = []
+        for chunk, tf in zip(chunk_list, term_freqs):
+            score = 0.0
+            for term in query_terms:
+                if term in tf:
+                    idf = np.log(1.0 + n_docs / (1.0 + doc_freq[term])) \
+                        if HAS_NUMPY else __import__('math').log(1.0 + n_docs / (1.0 + doc_freq[term]))
+                    score += tf[term] * idf
+            if score > 0:
+                scored.append((chunk, float(score)))
+        scored.sort(key=lambda cs: cs[1], reverse=True)
+        return scored[:k]
+
+    def get_paper(self, paper_id: str) -> Optional[Paper]:
+        """Fetch a paper record by ID."""
+        return self.papers.get(paper_id)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Library summary statistics."""
+        return {
+            'total_papers': len(self.papers),
+            'total_chunks': len(self.chunks),
+            'library_path': str(self.library_path),
+            'processed_papers': sum(1 for p in self.papers.values() if p.processed),
+        }

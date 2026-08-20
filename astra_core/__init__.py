@@ -276,6 +276,57 @@ except ImportError:
     create_enhanced_stan_system = None
 
 # -----------------------------------------------------------------------------
+# Orchestration System (NEW): Advanced coordination and resource management
+# -----------------------------------------------------------------------------
+try:
+    from .orchestration import (
+        # Main orchestrator
+        IntegratedOrchestrator,
+        create_integrated_orchestrator,
+
+        # Event bus
+        DomainEvent,
+        EventType,
+        EventPriority,
+        DomainEventBus,
+        get_global_event_bus,
+
+        # Anticipatory preloading
+        QueryContext,
+        CapabilityDemand,
+        PredictionMethod,
+
+        # Adaptive resources
+        ResourcePriority,
+        ResourceType,
+        WorkingMemoryManager,
+        DynamicCapabilityManager,
+
+        # Hierarchical control
+        ControlLayer,
+        ControlHorizon,
+        HierarchicalMetaController,
+    )
+except ImportError:
+    IntegratedOrchestrator = None
+    create_integrated_orchestrator = None
+    DomainEvent = None
+    EventType = None
+    EventPriority = None
+    DomainEventBus = None
+    get_global_event_bus = None
+    QueryContext = None
+    CapabilityDemand = None
+    PredictionMethod = None
+    ResourcePriority = None
+    ResourceType = None
+    WorkingMemoryManager = None
+    DynamicCapabilityManager = None
+    ControlLayer = None
+    ControlHorizon = None
+    HierarchicalMetaController = None
+
+# -----------------------------------------------------------------------------
 # Validation Framework (Phase 4): Benchmarking and testing
 # -----------------------------------------------------------------------------
 try:

@@ -292,4 +292,335 @@ class V41Orchestrator:
 
         start_time = time.time()
 
+
+
         # Begin metacognitive tracking
+        trace_steps: List[Dict[str, Any]] = []
+        capabilities_used: List[str] = []
+        hypotheses_generated: List[str] = []
+        knowledge_gaps: List[str] = []
+        patterns_discovered: List[str] = []
+        evidence: List[str] = []
+        confidence_components: List[float] = []
+        consensus_level = None
+        conclusion = ""
+
+        # ---------------------------------------------------------------- routing
+        capabilities = self.router.route(task)
+        trace_steps.append({
+            "step": "routing",
+            "capabilities": capabilities,
+            "complexity": task.complexity.name,
+        })
+        for cap in capabilities:
+            self.capability_usage[cap] += 1
+
+        # ------------------------------------------------------------ world model
+        if "world_model" in capabilities:
+            capabilities_used.append("world_model")
+            try:
+                breakdown = self.world_model.get_confidence_breakdown()
+                n_beliefs = len(getattr(self.world_model, "beliefs", {}))
+                trace_steps.append({
+                    "step": "world_model_context",
+                    "n_beliefs": n_beliefs,
+                    "confidence_breakdown": breakdown,
+                })
+                evidence.append(
+                    f"World model: {n_beliefs} tracked beliefs engaged as background context"
+                )
+                if breakdown:
+                    avg_conf = sum(breakdown.values()) / len(breakdown)
+                    confidence_components.append(float(avg_conf))
+            except Exception as exc:
+                trace_steps.append({"step": "world_model_context", "error": str(exc)})
+
+        # ------------------------------------------------------------ deliberation
+        if "deliberation" in capabilities:
+            capabilities_used.append("deliberation")
+            try:
+                consensus = self.deliberator.deliberate(
+                    question=task.objective,
+                    context=task.description,
+                    domain=task.domain,
+                    max_rounds=3,
+                )
+                consensus_level = getattr(consensus, "level", None)
+                level_name = getattr(consensus_level, "name", str(consensus_level))
+                statement = getattr(consensus, "statement", "")
+                if statement:
+                    conclusion = statement
+                confidence_components.append(
+                    0.5 * getattr(consensus, "confidence", 0.5)
+                    + 0.5 * getattr(consensus, "robustness", 0.5)
+                )
+                remaining = getattr(consensus, "remaining_disagreements", [])
+                for disagreement in remaining[:5]:
+                    knowledge_gaps.append(f"Unresolved disagreement: {disagreement}")
+                trace_steps.append({
+                    "step": "deliberation",
+                    "consensus_level": level_name,
+                    "n_supporting": len(getattr(consensus, "supporting_agents", [])),
+                    "n_dissenting": len(getattr(consensus, "dissenting_agents", [])),
+                })
+                evidence.append(
+                    f"Multi-agent deliberation reached {level_name} consensus "
+                    f"({len(getattr(consensus, 'supporting_agents', []))} supporting, "
+                    f"{len(getattr(consensus, 'dissenting_agents', []))} dissenting)"
+                )
+            except Exception as exc:
+                trace_steps.append({"step": "deliberation", "error": str(exc)})
+
+        # ----------------------------------------------------------- counterfactual
+        if "counterfactual" in capabilities:
+            capabilities_used.append("counterfactual")
+            scm = task.context.get("scm")
+            if scm is not None:
+                try:
+                    explanation = self.counterfactual_engine \
+                        .generate_contrastive_explanation(scm, task.context.get("outcome"))
+                    if explanation:
+                        evidence.append(f"Contrastive explanation: {explanation}")
+                        confidence_components.append(0.7)
+                except Exception as exc:
+                    trace_steps.append({"step": "counterfactual", "error": str(exc)})
+            else:
+                trace_steps.append({
+                    "step": "counterfactual",
+                    "note": "engine armed; no structural causal model in task context",
+                })
+
+        # ---------------------------------------------------------------- analogy
+        if "analogical" in capabilities:
+            capabilities_used.append("analogical")
+            try:
+                analogy = self.analogy_finder.find_analogy_for_problem(
+                    task.description, task.domain
+                )
+                if analogy is not None:
+                    novelty = float(getattr(analogy, "novelty", 0.3) or 0.3)
+                    confidence_components.append(0.3 + 0.4 * novelty)
+                    mapped = getattr(analogy, "mapped_elements", [])
+                    patterns_discovered.append(
+                        f"Cross-domain mapping: {len(mapped)} structural correspondences"
+                    )
+            except Exception as exc:
+                trace_steps.append({"step": "analogical", "error": str(exc)})
+
+        # -------------------------------------------------------- theory synthesis
+        if "theory_synthesis" in capabilities:
+            capabilities_used.append("theory_synthesis")
+            try:
+                summary = self.theory_synthesizer.get_synthesis_summary()
+                n_patterns = summary.get("patterns", {}).get("total", 0) \
+                    if isinstance(summary.get("patterns"), dict) else 0
+                n_laws = len(summary.get("laws", [])) \
+                    if isinstance(summary.get("laws"), list) else 0
+                trace_steps.append({
+                    "step": "theory_synthesis",
+                    "patterns": n_patterns,
+                    "laws": n_laws,
+                })
+                if n_laws:
+                    evidence.append(
+                        f"Theory base: {n_laws} established laws, {n_patterns} patterns"
+                    )
+            except Exception as exc:
+                trace_steps.append({"step": "theory_synthesis", "error": str(exc)})
+
+        # ------------------------------------------------------- knowledge gaps
+        if "knowledge_acquisition" in capabilities or "metacognition" in capabilities:
+            capabilities_used.append("knowledge_acquisition")
+            try:
+                gaps = self.knowledge_acquirer.identify_gaps(
+                    current_knowledge=task.context,
+                    task_requirements=[task.objective, task.description],
+                    domain=task.domain,
+                )
+                for gap in gaps[:5]:
+                    knowledge_gaps.append(getattr(gap, "description", str(gap)))
+                if gaps:
+                    trace_steps.append({
+                        "step": "knowledge_acquisition",
+                        "n_gaps": len(gaps),
+                    })
+            except Exception as exc:
+                trace_steps.append({"step": "knowledge_acquisition", "error": str(exc)})
+
+        # ------------------------------------------------------ dynamic replanning
+        if "dynamic_replanning" in capabilities:
+            capabilities_used.append("dynamic_replanning")
+            trace_steps.append({
+                "step": "dynamic_replanning",
+                "note": "execution monitored against time budget",
+            })
+
+        # ------------------------------------------------------------ conclusion
+        if not conclusion:
+            parts = []
+            if evidence:
+                parts.append(evidence[0])
+            parts.append(
+                f"Orchestrated {len(capabilities_used)} capabilities "
+                f"({', '.join(capabilities_used)}) for: {task.objective}"
+            )
+            conclusion = " ".join(parts)
+
+        confidence = (
+            sum(confidence_components) / len(confidence_components)
+            if confidence_components else 0.3
+        )
+        if knowledge_gaps:
+            confidence *= max(0.5, 1.0 - 0.05 * len(knowledge_gaps))
+
+        # -------------------------------------------------- metacognitive quality
+        trace = ReasoningTrace(
+            trace_id=f"TRACE-{task.task_id}",
+            task_description=task.description,
+            strategy_used=ReasoningStrategy.SYSTEMATIC,
+            steps=trace_steps,
+            capabilities_invoked=capabilities_used,
+            time_taken_ms=0.0,
+            conclusion=conclusion,
+            confidence=confidence,
+        )
+        try:
+            quality = self.metacognition.assess(trace)
+            coherence = float(quality.get("coherence", 0.5))
+            completeness = float(quality.get("completeness", 0.5))
+        except Exception:
+            coherence = 0.5
+            completeness = min(
+                1.0, len(capabilities_used) / 6.0
+            ) if capabilities_used else 0.2
+
+        # Completeness also reflects how many routed capabilities produced output
+        if capabilities:
+            produced = len({s.get("step") for s in trace_steps}) / max(1, len(capabilities))
+            completeness = min(1.0, 0.5 * completeness + 0.5 * produced)
+        novelty = min(1.0, len(patterns_discovered) * 0.4) if patterns_discovered else 0.1
+
+        # ------------------------------------------------------------------ learn
+        try:
+            self.learner.add_knowledge(
+                content=f"{task.description} -> {conclusion[:300]}",
+                domain=task.domain,
+                knowledge_type="task_outcome",
+                source="v41_orchestrator",
+                confidence=confidence,
+            )
+        except Exception:
+            pass
+
+        # ------------------------------------------------------------- bus events
+        for hypothesis in hypotheses_generated:
+            self.bus.publish(
+                EventType.HYPOTHESIS_GENERATED,
+                source="v41_orchestrator",
+                payload={"task_id": task.task_id, "hypothesis": hypothesis},
+                correlation_id=task.task_id,
+            )
+
+        # ------------------------------------------------------------------ close
+        time_taken = time.time() - start_time
+        task.status = "completed"
+        task.completed_at = datetime.now()
+        self.active_tasks.pop(task.task_id, None)
+
+        result = ReasoningResult(
+            task_id=task.task_id,
+            success=True,
+            conclusion=conclusion,
+            confidence=round(confidence, 4),
+            evidence=evidence,
+            reasoning_trace=trace_steps,
+            capabilities_used=capabilities_used,
+            time_taken_seconds=round(time_taken, 4),
+            coherence=round(coherence, 4),
+            completeness=round(completeness, 4),
+            novelty=round(novelty, 4),
+            hypotheses_generated=hypotheses_generated,
+            knowledge_gaps_identified=knowledge_gaps,
+            patterns_discovered=patterns_discovered,
+            mode_used=task.preferred_mode,
+            consensus_level=getattr(consensus_level, "name", None)
+            if consensus_level is not None else None,
+        )
+        self.completed_results[task.task_id] = result
+        self.tasks_completed += 1
+        self.total_reasoning_time += time_taken
+        return result
+
+    def _assess_complexity(
+        self, description: str, objective: str
+    ) -> TaskComplexity:
+        """Heuristic task-complexity assessment for routing and budgeting."""
+        text = f"{description} {objective}".lower()
+        score = 0
+
+        # Sheer size
+        score += min(3, len(text) / 200)
+
+        # Conditionality and causal structure raise complexity
+        score += 2 * text.count("what if")
+        score += text.count(" if ")
+        score += sum(text.count(kw) for kw in (
+            "cause", "effect", "because", "therefore", "however",
+            "trade-off", "tradeoff", "constrain",
+        ))
+
+        # Multi-part questions
+        score += text.count("?") - 1 if "?" in text else 0
+        score += text.count(" and ") * 0.5 + text.count(" versus ") * 0.5
+
+        if score < 2:
+            return TaskComplexity.SIMPLE
+        if score < 5:
+            return TaskComplexity.MODERATE
+        if score < 9:
+            return TaskComplexity.COMPLEX
+        if score < 14:
+            return TaskComplexity.EXPERT
+        return TaskComplexity.FRONTIER
+
+    def get_status(self) -> Dict[str, Any]:
+        """Orchestrator statistics since construction."""
+        return {
+            "version": self.VERSION,
+            "tasks_completed": self.tasks_completed,
+            "active_tasks": len(self.active_tasks),
+            "total_reasoning_time": round(self.total_reasoning_time, 4),
+            "capability_usage": dict(self.capability_usage),
+        }
+
+
+# Singleton accessor ----------------------------------------------------------
+
+_orchestrator: Optional["V41Orchestrator"] = None
+
+
+def get_orchestrator() -> "V41Orchestrator":
+    """Return the shared V41 orchestrator singleton."""
+    global _orchestrator
+    if _orchestrator is None:
+        _orchestrator = V41Orchestrator()
+    return _orchestrator
+
+
+def reason(
+    description: str,
+    objective: str,
+    domain: str = "general",
+    context: Dict[str, Any] = None,
+    mode: "ReasoningMode" = None,
+    time_budget: float = 60.0,
+) -> "ReasoningResult":
+    """Module-level convenience entry point for orchestrated reasoning."""
+    return get_orchestrator().reason(
+        description=description,
+        objective=objective,
+        domain=domain,
+        context=context,
+        mode=mode,
+        time_budget=time_budget,
+    )

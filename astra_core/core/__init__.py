@@ -118,11 +118,11 @@ class UnifiedSTANSystem:
     def _init_simulation_components(self):
         """Initialize simulation components."""
         try:
-            from ..simulation.physics.engine import PhysicsEngine
-            from ..simulation.market.engine import MarketEngine
+            from ..simulation.physics.simulator import PhysicsSimulator
+            from ..simulation.market.simulator import MarketSimulation
 
-            self.physics_engine = PhysicsEngine()
-            self.market_engine = MarketEngine()
+            self.physics_engine = PhysicsSimulator()
+            self.market_engine = MarketSimulation()
 
         except Exception as e:
             warnings.warn(f"Could not initialize simulation components: {e}")
@@ -281,9 +281,36 @@ class UnifiedSTANSystem:
             'query': query,
             'mode': self.mode,
             'status': 'processed',
+            'responses': [{
+                'message': 'STAN-CORE V4.0 system operational',
+                'source': 'unified_system'
+            }],
             'message': 'STAN-CORE V4.0 system operational',
             'meta_cognitive': False,
             'data_sufficient': True
+        }
+
+    def answer(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Answer a query (alias of process kept for the documented API).
+
+        Adds an 'answer' key summarising the primary response.
+        """
+        result = self.process(query, context=context)
+        if 'answer' not in result:
+            responses = result.get('responses') or []
+            result['answer'] = (responses[0].get('message', '')
+                                if responses else result.get('message', ''))
+        return result
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return a system status summary."""
+        return {
+            'mode': self.mode,
+            'version': '4.0.0',
+            'status': 'operational',
+            'n_capabilities': len(getattr(self, 'capabilities', {}) or {}),
+            'memory_available': getattr(self, 'memory_components', None) is not None,
         }
 
 

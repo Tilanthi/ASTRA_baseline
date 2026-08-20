@@ -4,20 +4,38 @@ Ensemble ARC Solver - Combines multiple approaches for better coverage.
 Uses lenient acceptance to allow more transformations to be tried.
 """
 
-import numpy as np
-from typing import List, Tuple, Dict, Set, Optional, Any
-from dataclasses import dataclass
-from collections import defaultdict
-import copy
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    from typing import List, Tuple, Dict, Set, Optional, Any
+except Exception:
+    List = Tuple = Dict = Set = Optional = Any = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass
+except Exception:
+    dataclass = None  # degraded: unavailable
+try:
+    from collections import defaultdict
+except Exception:
+    defaultdict = None  # degraded: unavailable
+try:
+    import copy
+except Exception:
+    copy = None  # degraded: unavailable
 
 # Import geometric transformations
-from .improved_solver import (
+try:
+    from .improved_solver import (
     rotate_90, rotate_180, rotate_270,
     reflect_h, reflect_v, transpose,
     crop, pad, subsample,
     learn_color_mapping,
     apply_color_map,
-)
+    )
+except Exception:
+    rotate_90 = rotate_180 = rotate_270 = reflect_h = reflect_v = transpose = crop = pad = subsample = learn_color_mapping = apply_color_map = None  # degraded: unavailable
 
 
 # ============================================================================
@@ -280,12 +298,6 @@ def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, A
 # Utility: Computation Logging
 def log_computation(*args, **kwargs):
     """Utility function for log_computation."""
-    return None
-
-
-
-def utility_function_12(*args, **kwargs):
-    """Utility function 12."""
     return None
 
 

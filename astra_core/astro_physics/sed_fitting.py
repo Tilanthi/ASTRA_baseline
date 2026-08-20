@@ -561,70 +561,185 @@ class SEDFitResult:
     success: bool
     method: str
 
-
 class SEDFitter:
     """
-    Bayesian SED fitting engine.
+    Fit a CompositeSED model to multi-wavelength photometry.
+
+    Minimizes chi-squared between observed fluxes and the model
+    evaluated at the observation wavelengths (the model is sampled
+    directly; for wide filters use pre-banded fluxes). Global search
+    by differential evolution followed by local polishing; parameter
+    uncertainties from the numerical Hessian of chi-squared
+    (covariance = 2 H^-1 for a Gaussian likelihood).
     """
 
-    def __init__(self, sed_model: CompositeSED,
-                filters: List[PhotometricFilter]):
+    def __init__(self, sed_model: CompositeSED):
+        self.sed = sed_model
+
+    # ------------------------------------------------------------------
+    def _ordered_param_names(self) -> List[str]:
+        """Stable, ordered, de-duplicated parameter list."""
+        seen: List[str] = []
+        for comp in self.sed.components.values():
+            for name in comp.parameter_names():
+                if name not in seen:
+                    seen.append(name)
+        return seen
+
+    # ------------------------------------------------------------------
+    def fit(self, wavelength: np.ndarray, fluxes: np.ndarray,
+            errors: np.ndarray,
+            initial: Optional[Dict[str, float]] = None,
+            bounds: Optional[Dict[str, Tuple[float, float]]] = None,
+            fixed: Optional[Dict[str, float]] = None,
+            log_params: Optional[List[str]] = None) -> SEDFitResult:
         """
-        Parameters
-        ----------
-        sed_model : CompositeSED
-            SED model to fit
-        filters : list
-            Photometric filters
+        Fit the SED to data.
+
+        Args:
+            wavelength: observation wavelengths (Angstrom)
+            fluxes: observed fluxes (same units as model output, Jy)
+            errors: 1-sigma flux uncertainties
+            initial: starting values (used for polishing)
+            bounds: per-parameter (low, high); required for free
+                parameters not given a default range
+            fixed: parameter values held constant
+            log_params: parameters fit as log10(value) (e.g. masses)
+
+        Returns:
+            SEDFitResult
         """
-        self.model = sed_model
-        self.filters = filters
+        wl = np.asarray(wavelength, dtype=float)
+        fl = np.asarray(fluxes, dtype=float)
+        er = np.asarray(errors, dtype=float)
+        fixed = dict(fixed or {})
+        log_params = set(log_params if log_params is not None
+                         else ['M_dust'])
 
-        # Fine wavelength grid for model evaluation
-        lambda_min = min(f.effective_wavelength for f in filters) * 0.5
-        lambda_max = max(f.effective_wavelength for f in filters) * 2.0
-        self.wavelength = np.logspace(np.log10(lambda_min),
-                                      np.log10(lambda_max), 1000)
+        all_names = self._ordered_param_names()
+        free_names = [n for n in all_names if n not in fixed]
 
-    def fit(self, observed_flux: Dict[str, float],
-           observed_errors: Dict[str, float],
-           param_bounds: Dict[str, Tuple[float, float]],
-           fixed_params: Optional[Dict[str, float]] = None,
-           method: str = 'differential_evolution') -> SEDFitResult:
-        """
-        Fit SED to observed photometry.
+        default_bounds = {
+            'T_dust': (5.0, 200.0),
+            'beta': (0.0, 3.0),
+            'M_dust': (1e2, 1e13),
+            'kappa_0': (0.05, 50.0),
+            'lambda_0': (50.0, 3000.0),
+            'T_warm': (20.0, 400.0),
+            'T_cold': (5.0, 80.0),
+            'M_warm': (1e2, 1e13),
+            'M_cold': (1e2, 1e13),
+            'alpha': (-5.0, 5.0),
+            'norm': (1e-12, 1e3),
+        }
 
-        Parameters
-        ----------
-        observed_flux : dict
-            Observed flux in each filter (Jy)
-        observed_errors : dict
-            Flux uncertainties (Jy)
-        param_bounds : dict
-            Parameter bounds {name: (min, max)}
-        fixed_params : dict, optional
-            Fixed parameter values
-        method : str
-            Optimization method
+        def _fit_key(name: str) -> str:
+            return f"log10({name})" if name in log_params else name
 
-        Returns
-        -------
-        SEDFitResult
-        """
-        if fixed_params is None:
-            fixed_params = {}
+        # work in fit space (log10 for the log params)
+        fit_names, fit_bounds = [], []
+        for n in free_names:
+            lo, hi = (bounds or {}).get(n, default_bounds.get(n))
+            if lo is None:
+                raise ValueError(f"no bounds for parameter '{n}'")
+            if n in log_params:
+                if lo <= 0 or hi <= 0:
+                    raise ValueError(f"log-param '{n}' needs positive "
+                                     f"bounds")
+                fit_bounds.append((np.log10(lo), np.log10(hi)))
+            else:
+                fit_bounds.append((lo, hi))
+            fit_names.append(n)
 
-        # Get free parameter names
-        free_params = [p for p in param_bounds.keys() if p not in fixed_params]
-        bounds = [param_bounds[p] for p in free_params]
+        def unpack(theta: np.ndarray) -> Dict[str, float]:
+            params = dict(fixed)
+            for name, val in zip(fit_names, theta):
+                params[name] = (10.0 ** val if name in log_params
+                                else val)
+            return params
 
-        # Build arrays for fitting
-        filter_names = list(observed_flux.keys())
-        flux_obs = np.array([observed_flux[f] for f in filter_names])
-        flux_err = np.array([observed_errors[f] for f in filter_names])
+        def chi2_of(theta: np.ndarray) -> float:
+            params = unpack(theta)
+            try:
+                model = self.sed.evaluate(wl, params)['total']
+            except (OverflowError, FloatingPointError):
+                return 1e30
+            model = np.where(np.isfinite(model), model, 0.0)
+            r = (fl - model) / er
+            return float(np.sum(r ** 2))
 
-        # Get filters in correct order
-        filter_dict = {f.name: f for f in self.filters}
-        filter_list = [filter_dict[name] for name in filter_names if name in filter_dict]
+        # ---- global search ----
+        from scipy.optimize import differential_evolution, minimize
+        de = differential_evolution(
+            chi2_of, fit_bounds, seed=0, tol=1e-8, maxiter=1000,
+            polish=True)
+        theta = de.x
+        chi2 = float(de.fun)
 
-        def chi_squared(theta):
+        # ---- local polish from `initial` as well (if given) ----
+        if initial:
+            x0 = []
+            ok = True
+            for n in fit_names:
+                v = initial.get(n)
+                if v is None:
+                    ok = False
+                    break
+                x0.append(np.log10(v) if n in log_params else v)
+            if ok:
+                nm = minimize(chi2_of, np.array(x0), method='Nelder-Mead',
+                              options={'maxiter': 5000, 'xatol': 1e-6,
+                                       'fatol': 1e-8})
+                if nm.fun < chi2:
+                    theta, chi2 = nm.x, float(nm.fun)
+
+        best = unpack(theta)
+
+        # ---- Hessian-based uncertainties ----
+        steps = np.maximum(np.abs(theta), 1e-3) * 1e-3
+        n_free = len(fit_names)
+        H = np.zeros((n_free, n_free))
+        for i in range(n_free):
+            for j in range(i, n_free):
+                ei = np.zeros(n_free); ej = np.zeros(n_free)
+                ei[i] = steps[i]; ej[j] = steps[j]
+                c_pp = chi2_of(theta + ei + ej)
+                c_pm = chi2_of(theta + ei - ej)
+                c_mp = chi2_of(theta - ei + ej)
+                c_mm = chi2_of(theta - ei - ej)
+                H[i, j] = H[j, i] = (c_pp - c_pm - c_mp + c_mm) / (
+                    4 * steps[i] * steps[j])
+        errors: Dict[str, float] = {}
+        try:
+            cov = 2.0 * np.linalg.inv(H)
+            sig = np.sqrt(np.abs(np.diag(cov)))
+            for name, s, t in zip(fit_names, sig, theta):
+                # propagate log-fit sigma back to linear units
+                if name in log_params:
+                    errors[name] = float(np.log(10.0) * (10.0 ** t) * s)
+                else:
+                    errors[name] = float(s)
+        except np.linalg.LinAlgError:
+            errors = {n: float('nan') for n in fit_names}
+
+        # ---- assemble outputs ----
+        model_total = self.sed.evaluate(wl, best)['total']
+        components = self.sed.evaluate(wl, best)
+        n_data = int(fl.size)
+        n_params = n_free
+
+        return SEDFitResult(
+            best_params=best,
+            param_errors=errors,
+            chi_squared=chi2,
+            reduced_chi_squared=chi2 / max(n_data - n_params, 1),
+            n_data=n_data,
+            n_params=n_params,
+            model_photometry={f"{w:.1f}": float(m)
+                              for w, m in zip(wl, model_total)},
+            residuals={f"{w:.1f}": float((f - m) / e)
+                       for w, f, m, e in zip(wl, fl, model_total, er)},
+            components=components,
+            success=bool(de.success),
+            method='differential_evolution',
+        )

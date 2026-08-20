@@ -115,3 +115,110 @@ class LocalRAG:
 
         if self.chromadb_available:
             self._init_chromadb()
+
+    # ==================================================================
+    # Backend initialisation
+    # (re-implemented 2026-08; bodies lost to file truncation before the
+    #  audit. API reconstructed from surviving call sites in
+    #  symbolic/stan_enhanced.py: retrieve, retrieve_with_context, stats,
+    #  add_documents; in-memory fallback when ChromaDB is absent.)
+    # ==================================================================
+
+    def _check_chromadb(self) -> bool:
+        """ChromaDB is optional; report availability without importing."""
+        try:
+            import chromadb  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    def _init_chromadb(self) -> None:
+        """Open (or create) the persistent ChromaDB collection."""
+        import chromadb
+        if self.persist_dir:
+            self.client = chromadb.PersistentClient(path=self.persist_dir)
+        else:
+            self.client = chromadb.Client()
+        self.collection = self.client.get_or_create_collection(
+            name=self.collection_name)
+        self.embedder = SimpleEmbedder()
+        self.documents: List[Document] = []
+
+    # ------------------------------------------------------------------
+    def _ensure_ready(self) -> None:
+        """Set up the in-memory fallback store if ChromaDB is absent."""
+        if not hasattr(self, 'documents'):
+            self.documents: List[Document] = []
+            self.embedder = SimpleEmbedder()
+            self._doc_embeddings: List[np.ndarray] = []
+
+    def add_documents(self, documents: List[Dict[str, Any]]) -> None:
+        """Add documents ({'content', 'metadata'?} dicts) to the store."""
+        self._ensure_ready()
+        for entry in documents:
+            content = entry.get('content') or entry.get('text') or ''
+            if not content:
+                continue
+            doc = Document(
+                doc_id=entry.get('doc_id',
+                                 hashlib.md5(content.encode()).hexdigest()),
+                content=content,
+                metadata=entry.get('metadata', {}),
+            )
+            self.documents.append(doc)
+            if self.chromadb_available:
+                self.collection.add(
+                    ids=[doc.doc_id], documents=[doc.content],
+                    metadatas=[doc.metadata],
+                )
+            else:
+                self._doc_embeddings.append(
+                    self.embedder.encode([content])[0])
+
+    def retrieve(self, query: str, top_k: int = 5) -> RetrievalResult:
+        """Retrieve the top-k most similar documents for a query."""
+        self._ensure_ready()
+        if not self.documents:
+            return RetrievalResult([], [], query, 0)
+
+        if self.chromadb_available:
+            n_results = min(top_k, self.collection.count())
+            if n_results == 0:
+                return RetrievalResult([], [], query, 0)
+            res = self.collection.query(query_texts=[query],
+                                        n_results=n_results)
+            docs = [Document(doc_id=i, content=c,
+                             metadata=m or {})
+                    for i, c, m in zip(res['ids'][0], res['documents'][0],
+                                       res['metadatas'][0])]
+            # ChromaDB returns distances; convert to similarity scores
+            dists = res.get('distances', [[0.0] * len(docs)])[0]
+            scores = [1.0 / (1.0 + float(d)) for d in dists]
+            return RetrievalResult(docs, scores, query, len(docs))
+
+        # In-memory cosine similarity over hash embeddings
+        query_vec = self.embedder.encode([query])[0]
+        scored = []
+        for doc, doc_vec in zip(self.documents, self._doc_embeddings):
+            denom = (np.linalg.norm(query_vec) * np.linalg.norm(doc_vec))
+            sim = float(query_vec @ doc_vec / denom) if denom > 0 else 0.0
+            scored.append((sim, doc))
+        scored.sort(key=lambda sd: sd[0], reverse=True)
+        top = scored[:top_k]
+        return RetrievalResult([d for _, d in top], [s for s, _ in top],
+                               query, len(top))
+
+    def retrieve_with_context(self, query: str, top_k: int = 3) -> str:
+        """Retrieve and format as a ready-to-use context string."""
+        result = self.retrieve(query, top_k=top_k)
+        return result.get_context()
+
+    def stats(self) -> Dict[str, Any]:
+        """Store statistics summary."""
+        self._ensure_ready()
+        return {
+            'n_documents': len(self.documents),
+            'backend': 'chromadb' if self.chromadb_available else 'in_memory',
+            'persist_dir': self.persist_dir,
+            'collection': self.collection_name,
+        }

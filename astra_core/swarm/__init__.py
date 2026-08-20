@@ -43,8 +43,9 @@ from .transforms import (
 )
 
 # Swarm orchestration
+# SwarmOrchestrator implementation lives in the intelligence package
+from ..intelligence.orchestrator import SwarmOrchestrator
 from .orchestrator import (
-    SwarmOrchestrator,
     SwarmAgent,
     AgentType,
     AgentState,
@@ -52,14 +53,14 @@ from .orchestrator import (
 )
 
 # Pheromone dynamics
-from .pheromone_dynamics import (
+from ..intelligence.pheromone_dynamics import (
     DigitalPheromoneField,
     PheromoneType,
     PheromoneDeposit
 )
 
 # LEAP core evolution
-from .leapcore_evolution import (
+from ..intelligence.leapcore_evolution import (
     LEAPCoreEvolution,
     EvolutionConfig,
     Chromosome,
@@ -67,7 +68,7 @@ from .leapcore_evolution import (
 )
 
 # Memory systems
-from .memory_graph import (
+from ..memory.memory_graph import (
     MemoryGraph,
     GraphNode,
     GraphEdge

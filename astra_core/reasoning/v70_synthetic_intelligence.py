@@ -23,46 +23,14 @@ from enum import Enum, auto
 import logging
 
 # Import all V70 components
-from .v70_algorithmic_discovery import (
-    AlgorithmicDiscoveryEngine,
-    create_algorithmic_discovery_engine,
-    DiscoveredAlgorithm
-)
-from .v70_universal_causal import (
-    UniversalCausalSubstrate,
-    create_universal_causal_substrate,
-    CausalStructure
-)
-from .v70_predictive_geometry import (
-    PredictiveInformationGeometry,
-    create_predictive_geometry,
-    InformationPoint
-)
-from .v70_meta_scientific import (
-    MetaScientificReasoner,
-    create_meta_scientific_reasoner,
-    ScientificQuestion,
-    QuestionType
-)
-from .v70_emergent_computation import (
-    EmergentComputationLayer,
-    create_emergent_computation_layer,
-    EmergentPattern
-)
-from .v70_temporal_hierarchy import (
-    TemporalHierarchyLearner,
-    create_temporal_hierarchy_learner,
-    TemporalPattern
-)
-from .v70_analogical_transfer import (
-    DeepAnalogicalTransferEngine,
-    create_analogical_transfer_engine
-)
-from .v70_hypothesis_generator import (
-    HypothesisSpaceGenerator,
-    create_hypothesis_generator,
-    Hypothesis
-)
+from astra_core.capabilities.discovery.algorithmic_discovery import AlgorithmicDiscoveryEngine, create_algorithmic_discovery_engine, DiscoveredAlgorithm
+from astra_core.capabilities.causal.universal_causal import UniversalCausalSubstrate, create_universal_causal_substrate, CausalStructure
+from astra_core.capabilities.metacognitive.predictive_geometry import PredictiveInformationGeometry, create_predictive_geometry, InformationPoint
+from astra_core.capabilities.metacognitive.meta_scientific import MetaScientificReasoner, create_meta_scientific_reasoner, ScientificQuestion, QuestionType
+from astra_core.capabilities.metacognitive.emergent_computation import EmergentComputationLayer, create_emergent_computation_layer, EmergentPattern
+from astra_core.capabilities.metacognitive.temporal_hierarchy import TemporalHierarchyLearner, create_temporal_hierarchy_learner, TemporalPattern
+from astra_core.capabilities.synthesis.analogical_transfer import DeepAnalogicalTransferEngine, create_analogical_transfer_engine
+from astra_core.capabilities.metacognitive.hypothesis_generator import HypothesisSpaceGenerator, create_hypothesis_generator, Hypothesis
 
 logger = logging.getLogger(__name__)
 

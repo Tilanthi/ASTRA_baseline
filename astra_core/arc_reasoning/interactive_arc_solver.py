@@ -463,9 +463,3 @@ class InteractiveARCSolver:
 __all__ = ['InteractiveARCSolver', 'TaskObservation', 'observe_task']
 
 
-
-def utility_function_12(*args, **kwargs):
-    """Utility function 12."""
-    return None
-
-

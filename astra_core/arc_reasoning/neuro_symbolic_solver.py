@@ -223,8 +223,3 @@ class PatternMemory:
 # ============================================================================
 # Symbolic Component: Integration with STAN's Causal Reasoning
 # ============================================================================
-
-class SymbolicReasoner:
-    """
-    Symbolic reasoning component integrated with STAN's causal systems.
-    Uses logic and verification rather than neural approaches.

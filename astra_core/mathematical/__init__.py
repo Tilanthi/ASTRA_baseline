@@ -9,14 +9,17 @@ Components:
 - AletheiaProofSystem: Basic 3-agent architecture
 """
 
-from .aletheia_stan_architecture import (
+try:
+    from .aletheia_stan_architecture import (
     AletheiaSTANSystem,
     ProofStrategy,
     VerdictType,
     ProofAttempt,
     ValidationResult,
     GeneratorOutput
-)
+    )
+except Exception:
+    AletheiaSTANSystem = ProofStrategy = VerdictType = ProofAttempt = ValidationResult = GeneratorOutput = None  # degraded: unavailable
 
 __all__ = [
     'AletheiaSTANSystem',

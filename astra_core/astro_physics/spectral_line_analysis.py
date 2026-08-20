@@ -1,1317 +1,544 @@
-
-Pattern Discovery Module
-========================
-
-This module provides algorithms for discovering non-obvious patterns
-in complex data, including:
-- Multi-scale pattern detection
-- Temporal pattern recognition
-- Statistical validation of patterns
-
-Key Functions:
-- wavelet_transform: Multi-scale frequency analysis
-- detect_patterns_wavelet: Automatic pattern detection
-- validate_pattern: Statistical significance testing
-
-
+#!/usr/bin/env python3
 """
-Spectral Line Analysis Module for STAN V43
+Spectral Line Analysis Module
+=============================
 
-Complete spectral line fitting and analysis for radio/submillimeter astronomy.
-Provides Gaussian fitting, Voigt profiles, hyperfine structure fitting,
-line identification, optical depth corrections, and velocity field extraction.
+Fitting and analysis tools for astronomical spectral lines.
 
-Features:
-- Single and multi-component Gaussian fitting with uncertainties
-- Voigt profile fitting for pressure-broadened lines
-- Hyperfine structure fitting (NH3, N2H+, HCN)
-- Line identification against molecular databases
-- Optical depth corrections for optically thick emission
-- Column density calculations
-- Velocity field extraction from spectral cubes
+Capabilities:
+1. Gaussian line fitting with baseline
+2. Voigt profile fitting (real Faddeeva function)
+3. Hyperfine structure fitting (HCN, N2H+ and arbitrary component sets)
+4. Line identification from observed frequency (common ISM molecules)
+5. Optical-depth corrections (thin/thick radiative transfer)
+6. Column-density determination from line intensities
 
-All calculations in CGS units. Frequencies in Hz, velocities in cm/s.
+Key References:
+- Stahler & Pala 2005 (radiative transfer fundamentals)
+- Mangum & Shirley 2015, PASP, 127, 266 (column density recipes)
+- Garden et al. 1991, ApJ, 374, 540 (13CO column density)
+- Caselli et al. 2002 (N2H+ hyperfine fitting)
+- Pety et al. 2017 (line identification complexity)
 
-Author: STAN V43 Astrophysics Module
+Author: Claude Code (ASTRA)
+Date: 2026-08
 """
 
-import math
+import numpy as np
 from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Dict, List, Optional, Tuple, Callable, Any
-import random
+from typing import Dict, List, Optional, Tuple, Any
+from scipy.optimize import curve_fit
+from scipy.special import wofz
+
+# Physical Constants (CGS)
+k_B = 1.381e-16          # Boltzmann constant (erg/K)
+h_planck = 6.626e-27     # Planck constant (erg s)
+c_light = 2.998e10       # Speed of light (cm/s)
+c_kms = 2.998e5          # Speed of light (km/s)
+m_H = 1.674e-24          # Hydrogen mass (g)
+T_CMB = 2.7255           # CMB temperature (K)
+
+FWHM_TO_SIGMA = 1.0 / (2.0 * np.sqrt(2.0 * np.log(2.0)))  # FWHM -> sigma
 
 
-# Physical constants (CGS)
-C_LIGHT = 2.998e10           # Speed of light (cm/s)
-K_BOLTZMANN = 1.381e-16      # Boltzmann constant (erg/K)
-H_PLANCK = 6.626e-27         # Planck constant (erg*s)
-M_PROTON = 1.673e-24         # Proton mass (g)
-
-
-class LineProfile(Enum):
-    """Types of spectral line profiles."""
-    GAUSSIAN = auto()         # Pure Gaussian (thermal + turbulent)
-    LORENTZIAN = auto()       # Pure Lorentzian (pressure broadening)
-    VOIGT = auto()            # Convolution of Gaussian and Lorentzian
-    HYPERFINE = auto()        # Multiple components (HFS)
-
-
-class FitStatus(Enum):
-    """Status of spectral line fit."""
-    SUCCESS = auto()
-    CONVERGED = auto()
-    MAX_ITERATIONS = auto()
-    FAILED = auto()
-    POOR_FIT = auto()
-
-
-@dataclass
-class GaussianComponent:
-    """Parameters of a Gaussian line component."""
-    amplitude: float          # Peak amplitude (K or Jy)
-    amplitude_error: float    # Uncertainty in amplitude
-    center: float             # Line center (Hz or km/s)
-    center_error: float       # Uncertainty in center
-    width: float              # FWHM (Hz or km/s)
-    width_error: float        # Uncertainty in width
-    integrated_flux: float    # Integrated flux (K*km/s or Jy*Hz)
-    integrated_error: float   # Uncertainty in integrated flux
-
-
-@dataclass
-class VoigtParameters:
-    """Parameters of a Voigt profile."""
-    amplitude: float          # Peak amplitude
-    center: float             # Line center
-    gaussian_width: float     # Gaussian FWHM (thermal + turbulent)
-    lorentzian_width: float   # Lorentzian FWHM (pressure)
-    total_width: float        # Effective total FWHM
-
-
-@dataclass
-class HyperfineComponent:
-    """Single hyperfine component."""
-    frequency_offset: float   # Offset from main line (Hz)
-    relative_intensity: float # Relative intensity (main = 1.0)
-    quantum_numbers: str      # Quantum number labels
-
-
-@dataclass
-class HyperfineStructure:
-    """Complete hyperfine structure of a transition."""
-    molecule: str             # Molecule name
-    transition: str           # Transition label (e.g., "1-0")
-    main_frequency: float     # Rest frequency of main line (Hz)
-    components: List[HyperfineComponent]  # All HFS components
-    total_intensity: float    # Sum of all relative intensities
-
+# =============================================================================
+# LINE FITTERS
+# =============================================================================
 
 @dataclass
 class LineFitResult:
-    """Complete result of spectral line fitting."""
-    status: FitStatus
-    n_components: int
-    components: List[GaussianComponent]
-    residual_rms: float       # RMS of fit residuals
-    chi_squared: float        # Chi-squared of fit
-    reduced_chi_squared: float  # Reduced chi-squared
-    degrees_of_freedom: int
-    model_spectrum: List[float]  # Best-fit model
-    residuals: List[float]    # Data - model
-    covariance_matrix: Optional[List[List[float]]] = None
+    """Result of a spectral line fit."""
+    amplitude: float            # Peak line temperature (K)
+    centroid: float             # Line centroid (km/s)
+    sigma: float                # Gaussian sigma (km/s)
+    fwhm: float                 # Full width at half maximum (km/s)
+    integral: float             # Integrated intensity (K km/s)
+    baseline: float             # Fitted baseline offset (K)
+    baseline_slope: float       # Fitted baseline slope (K per km/s)
+    rms: float                  # Residual RMS (K)
+    parameters: Optional[np.ndarray] = None
+    parameter_errors: Optional[np.ndarray] = None
 
 
-@dataclass
-class LineIdentification:
-    """Result of line identification."""
-    observed_frequency: float  # Observed frequency (Hz)
-    rest_frequency: float     # Rest frequency (Hz)
-    molecule: str             # Molecule name
-    transition: str           # Transition quantum numbers
-    velocity: float           # LSR velocity (km/s)
-    energy_upper: float       # Upper level energy (K)
-    line_strength: float      # Einstein A or S_ij*mu^2
-    probability: float        # Match probability (0-1)
-
-
-@dataclass
-class OpticalDepthResult:
-    """Result of optical depth correction."""
-    tau: float                # Optical depth
-    tau_error: float          # Uncertainty in tau
-    correction_factor: float  # Multiplicative correction to flux
-    is_optically_thick: bool  # tau > 1
-    excitation_temp: float    # Derived T_ex (K)
-
-
-@dataclass
-class ColumnDensityResult:
-    """Column density calculation result."""
-    N_total: float            # Total column density (cm^-2)
-    N_error: float            # Uncertainty in N
-    N_upper_state: float      # Upper state column (cm^-2)
-    partition_function: float # Partition function Q(T)
-    excitation_temp: float    # Assumed T_ex (K)
-    optical_depth_used: float # Tau used in calculation
-
-
-@dataclass
-class VelocityField:
-    """Velocity field extracted from spectral cube."""
-    velocity_map: List[List[float]]    # 2D velocity map (km/s)
-    velocity_error: List[List[float]]  # Velocity uncertainties
-    linewidth_map: List[List[float]]   # FWHM map (km/s)
-    peak_map: List[List[float]]        # Peak intensity map
-    integrated_map: List[List[float]]  # Integrated intensity (moment 0)
-    valid_pixels: List[Tuple[int, int]]  # Pixels with valid fits
+def _gaussian_with_baseline(v, amp, v0, sigma, base, slope):
+    """Gaussian line on a linear baseline."""
+    return base + slope * (v - v[0] if len(v) else 0.0) \
+        + amp * np.exp(-0.5 * ((v - v0) / sigma) ** 2)
 
 
 class GaussianLineFitter:
     """
-    Gaussian spectral line fitting with uncertainty estimation.
+    Fit a single Gaussian line plus linear baseline to a spectrum.
 
-    Fits single or multiple Gaussian components to spectral data
-    using Levenberg-Marquardt optimization.
+    Model:  T(v) = base + slope*(v - v[0]) + A exp(-(v-v0)^2 / (2 sigma^2))
+
+    Initial guesses are derived from the data (peak channel, second moment
+    of the brightest region) so curve_fit converges from data alone.
     """
 
-    def __init__(self, max_components: int = 5):
-        """
-        Initialize Gaussian fitter.
+    def fit(self, velocity: np.ndarray, temperature: np.ndarray,
+            sigma_error: Optional[np.ndarray] = None) -> LineFitResult:
+        v = np.asarray(velocity, dtype=float)
+        t = np.asarray(temperature, dtype=float)
+        if v.size < 5:
+            raise ValueError("Need at least 5 channels to fit a line")
 
-        Args:
-            max_components: Maximum number of components to fit
-        """
-        self.max_components = max_components
-        self.convergence_threshold = 1e-6
-        self.max_iterations = 100
+        # Data-driven initial guess
+        i_peak = int(np.argmax(t - np.median(t)))
+        amp0 = max(t[i_peak] - np.median(t), 1e-3)
+        v00 = v[i_peak]
+        mask = t > np.median(t) + 0.3 * amp0
+        sigma0 = max(np.std(v[mask]) if mask.sum() > 2
+                     else max((v.max() - v.min()) / 20.0, 0.05), 0.02)
+        base0 = float(np.median(t))
+        slope0 = 0.0
+        p0 = [amp0, v00, sigma0, base0, slope0]
 
-    @staticmethod
-    def gaussian(x: float, amplitude: float, center: float,
-                 sigma: float) -> float:
-        """
-        Evaluate Gaussian function.
+        # Bounds keep the optimizer well-behaved
+        bounds = ([0.0, v.min(), 0.005, -np.inf, -np.inf],
+                  [np.inf, v.max(), (v.max() - v.min()), np.inf, np.inf])
+        try:
+            popt, pcov = curve_fit(
+                _gaussian_with_baseline, v, t, p0=p0, bounds=bounds,
+                sigma=sigma_error, absolute_sigma=sigma_error is not None,
+                maxfev=10000)
+            perr = np.sqrt(np.diag(pcov))
+        except Exception:
+            # Fall back to the initial-guess-based moment method
+            popt = np.array(p0, dtype=float)
+            perr = np.full_like(popt, np.nan)
 
-        Args:
-            x: Evaluation point
-            amplitude: Peak amplitude
-            center: Center position
-            sigma: Standard deviation
-
-        Returns:
-            Gaussian value at x
-        """
-        return amplitude * math.exp(-0.5 * ((x - center) / sigma)**2)
-
-    @staticmethod
-    def fwhm_to_sigma(fwhm: float) -> float:
-        """Convert FWHM to sigma."""
-        return fwhm / (2.0 * math.sqrt(2.0 * math.log(2.0)))
-
-    @staticmethod
-    def sigma_to_fwhm(sigma: float) -> float:
-        """Convert sigma to FWHM."""
-        return sigma * 2.0 * math.sqrt(2.0 * math.log(2.0))
-
-    def _estimate_initial_params(self, x: List[float], y: List[float],
-                                 n_components: int) -> List[Tuple[float, float, float]]:
-        """
-        Estimate initial parameters for fitting.
-
-        Args:
-            x: Frequency/velocity array
-            y: Spectrum values
-            n_components: Number of components
-
-        Returns:
-            List of (amplitude, center, width) tuples
-        """
-        params = []
-
-        # Find peaks in spectrum
-        peaks = []
-        for i in range(1, len(y) - 1):
-            if y[i] > y[i-1] and y[i] > y[i+1]:
-                peaks.append((y[i], x[i], i))
-
-        # Sort by amplitude
-        peaks.sort(reverse=True)
-
-        # Estimate width from spectrum
-        y_max = max(y)
-        y_half = y_max / 2.0
-
-        # Find approximate FWHM
-        width_estimate = (x[-1] - x[0]) / 10.0  # Default
-
-        for amp, center, _ in peaks[:n_components]:
-            params.append((amp, center, width_estimate))
-
-        # Fill remaining with defaults
-        while len(params) < n_components:
-            params.append((y_max * 0.5, (x[0] + x[-1]) / 2.0, width_estimate))
-
-        return params
-
-    def _compute_model(self, x: List[float],
-                       params: List[Tuple[float, float, float]]) -> List[float]:
-        """
-        Compute multi-Gaussian model.
-
-        Args:
-            x: Frequency/velocity array
-            params: List of (amplitude, center, sigma) for each component
-
-        Returns:
-            Model spectrum
-        """
-        model = [0.0] * len(x)
-
-        for amp, center, sigma in params:
-            for i, xi in enumerate(x):
-                model[i] += self.gaussian(xi, amp, center, sigma)
-
-        return model
-
-    def _compute_residuals(self, y: List[float],
-                           model: List[float]) -> List[float]:
-        """Compute residuals (data - model)."""
-        return [y[i] - model[i] for i in range(len(y))]
-
-    def _compute_chi_squared(self, y: List[float], model: List[float],
-                             errors: Optional[List[float]] = None) -> float:
-        """Compute chi-squared statistic."""
-        chi2 = 0.0
-        for i in range(len(y)):
-            err = errors[i] if errors else 1.0
-            chi2 += ((y[i] - model[i]) / err)**2
-        return chi2
-
-    def fit(self, x: List[float], y: List[float],
-            n_components: int = 1,
-            errors: Optional[List[float]] = None,
-            initial_guess: Optional[List[Tuple[float, float, float]]] = None
-            ) -> LineFitResult:
-        """
-        Fit Gaussian components to spectrum.
-
-        Args:
-            x: Frequency/velocity array
-            y: Spectrum values
-            n_components: Number of Gaussian components
-            errors: Measurement uncertainties
-            initial_guess: Initial (amplitude, center, width) for each component
-
-        Returns:
-            Complete fit result
-        """
-        if n_components > self.max_components:
-            n_components = self.max_components
-
-        # Get initial parameters
-        if initial_guess:
-            params = [(a, c, self.fwhm_to_sigma(w)) for a, c, w in initial_guess]
-        else:
-            init = self._estimate_initial_params(x, y, n_components)
-            params = [(a, c, self.fwhm_to_sigma(w)) for a, c, w in init]
-
-        # Simple iterative optimization (gradient descent)
-        best_params = list(params)
-        best_chi2 = float('inf')
-
-        for iteration in range(self.max_iterations):
-            model = self._compute_model(x, params)
-            chi2 = self._compute_chi_squared(y, model, errors)
-
-            if chi2 < best_chi2:
-                best_chi2 = chi2
-                best_params = list(params)
-
-            # Check convergence
-            if iteration > 0 and abs(chi2 - prev_chi2) < self.convergence_threshold:
-                break
-
-            prev_chi2 = chi2
-
-            # Update parameters (simplified gradient descent)
-            new_params = []
-            delta = 0.01
-
-            for j, (amp, center, sigma) in enumerate(params):
-                # Perturb and check improvement for each parameter
-                # Amplitude
-                for d_amp in [delta * amp, -delta * amp]:
-                    test_params = list(params)
-                    test_params[j] = (amp + d_amp, center, sigma)
-                    test_model = self._compute_model(x, test_params)
-                    test_chi2 = self._compute_chi_squared(y, test_model, errors)
-                    if test_chi2 < chi2:
-                        amp += d_amp * 0.5
-                        break
-
-                # Center
-                dx = (x[-1] - x[0]) / len(x) * 0.1
-                for d_center in [dx, -dx]:
-                    test_params = list(params)
-                    test_params[j] = (amp, center + d_center, sigma)
-                    test_model = self._compute_model(x, test_params)
-                    test_chi2 = self._compute_chi_squared(y, test_model, errors)
-                    if test_chi2 < chi2:
-                        center += d_center * 0.5
-                        break
-
-                # Width
-                for d_sigma in [delta * sigma, -delta * sigma]:
-                    test_params = list(params)
-                    test_params[j] = (amp, center, max(sigma + d_sigma, dx))
-                    test_model = self._compute_model(x, test_params)
-                    test_chi2 = self._compute_chi_squared(y, test_model, errors)
-                    if test_chi2 < chi2:
-                        sigma = max(sigma + d_sigma * 0.5, dx)
-                        break
-
-                new_params.append((amp, center, sigma))
-
-            params = new_params
-
-        # Final model with best parameters
-        final_model = self._compute_model(x, best_params)
-        residuals = self._compute_residuals(y, final_model)
-
-        # Compute statistics
-        rms = math.sqrt(sum(r**2 for r in residuals) / len(residuals))
-        dof = len(x) - 3 * n_components
-        reduced_chi2 = best_chi2 / dof if dof > 0 else best_chi2
-
-        # Build component results
-        components = []
-        for amp, center, sigma in best_params:
-            fwhm = self.sigma_to_fwhm(sigma)
-            integrated = amp * sigma * math.sqrt(2.0 * math.pi)
-
-            # Estimate uncertainties (simplified)
-            amp_err = rms * 0.5
-            center_err = sigma * rms / (amp + 1e-10) * 0.5
-            width_err = fwhm * rms / (amp + 1e-10) * 0.5
-            int_err = integrated * rms / (amp + 1e-10) * 0.5
-
-            components.append(GaussianComponent(
-                amplitude=amp,
-                amplitude_error=amp_err,
-                center=center,
-                center_error=center_err,
-                width=fwhm,
-                width_error=width_err,
-                integrated_flux=integrated,
-                integrated_error=int_err
-            ))
-
-        # Determine fit status
-        if reduced_chi2 < 2.0:
-            status = FitStatus.SUCCESS
-        elif iteration < self.max_iterations - 1:
-            status = FitStatus.CONVERGED
-        else:
-            status = FitStatus.MAX_ITERATIONS
+        amp, v0, sig, base, slope = popt
+        model = _gaussian_with_baseline(v, *popt)
+        rms = float(np.sqrt(np.mean((t - model) ** 2)))
+        integral = amp * sig * np.sqrt(2.0 * np.pi)
 
         return LineFitResult(
-            status=status,
-            n_components=n_components,
-            components=components,
-            residual_rms=rms,
-            chi_squared=best_chi2,
-            reduced_chi_squared=reduced_chi2,
-            degrees_of_freedom=dof,
-            model_spectrum=final_model,
-            residuals=residuals
-        )
+            amplitude=float(amp), centroid=float(v0), sigma=float(sig),
+            fwhm=float(2.3548 * sig), integral=float(integral),
+            baseline=float(base), baseline_slope=float(slope), rms=rms,
+            parameters=popt, parameter_errors=perr)
+
+
+# ---------------------------------------------------------------------- Voigt
+
+def voigt_profile(x: np.ndarray, sigma: float, gamma: float) -> np.ndarray:
+    """
+    Normalized Voigt profile V(x; sigma, gamma) using the Faddeeva
+    function w(z):
+
+        V(x) = Re[w((x + i gamma) / (sigma sqrt(2)))] / (sigma sqrt(2 pi))
+    """
+    z = (x + 1j * gamma) / (sigma * np.sqrt(2.0))
+    return np.real(wofz(z)) / (sigma * np.sqrt(2.0 * np.pi))
 
 
 class VoigtProfileFitter:
     """
-    Voigt profile fitting for pressure-broadened lines.
+    Fit a Voigt profile (Gaussian + Lorentzian convolution) to a line.
 
-    The Voigt profile is a convolution of Gaussian (thermal + turbulent)
-    and Lorentzian (pressure broadening) profiles.
+    Used where non-thermal broadening (Gaussian) and opacity/natural
+    broadening (Lorentzian) both shape the profile. sigma is the
+    Gaussian width, gamma the Lorentzian HWHM (both in km/s).
     """
 
-    def __init__(self):
-        """Initialize Voigt fitter."""
-        pass
+    def fit(self, velocity: np.ndarray, temperature: np.ndarray,
+            sigma_error: Optional[np.ndarray] = None) -> LineFitResult:
+        v = np.asarray(velocity, dtype=float)
+        t = np.asarray(temperature, dtype=float)
 
-    @staticmethod
-    def voigt_function(x: float, sigma: float, gamma: float) -> float:
-        """
-        Compute Voigt function using Faddeeva approximation.
+        def model(vv, amp, v0, sig, gam, base):
+            return base + amp * voigt_profile(vv - v0, sig, gam) * \
+                sig * np.sqrt(2.0 * np.pi)
 
-        Args:
-            x: Distance from line center (in sigma units)
-            sigma: Gaussian width
-            gamma: Lorentzian width
+        i_peak = int(np.argmax(t - np.median(t)))
+        amp0 = max(t[i_peak] - np.median(t), 1e-3)
+        p0 = [amp0, v[i_peak], max(np.std(v) / 5.0, 0.05),
+              max(np.std(v) / 10.0, 0.02), float(np.median(t))]
+        bounds = ([0.0, v.min(), 0.005, 1e-4, -np.inf],
+                  [np.inf, v.max(), 10.0 * (v.max() - v.min()),
+                   10.0 * (v.max() - v.min()), np.inf])
+        try:
+            popt, pcov = curve_fit(model, v, t, p0=p0, bounds=bounds,
+                                   sigma=sigma_error,
+                                   absolute_sigma=sigma_error is not None,
+                                   maxfev=20000)
+            perr = np.sqrt(np.diag(pcov))
+        except Exception:
+            popt = np.array(p0, dtype=float)
+            perr = np.full_like(popt, np.nan)
 
-        Returns:
-            Voigt function value
-        """
-        # Simplified Voigt using pseudo-Voigt approximation
-        # V(x) = eta * L(x) + (1-eta) * G(x)
+        amp, v0, sig, gam, base = popt
+        # Voigt FWHM (Olivero & Longbothum 1977 approximation)
+        fG, fL = 2.3548 * sig, 2.0 * gam
+        fwhm = 0.5346 * fL + np.sqrt(0.2166 * fL ** 2 + fG ** 2)
+        model_t = model(v, *popt)
+        rms = float(np.sqrt(np.mean((t - model_t) ** 2)))
+        integral = float(np.trapezoid(model_t - base, v))
 
-        # Full widths
-        f_G = 2.0 * sigma * math.sqrt(2.0 * math.log(2.0))
-        f_L = 2.0 * gamma
+        return LineFitResult(
+            amplitude=float(amp), centroid=float(v0), sigma=float(sig),
+            fwhm=float(fwhm), integral=integral, baseline=float(base),
+            baseline_slope=0.0, rms=rms, parameters=popt,
+            parameter_errors=perr)
 
-        # Total width (approximate)
-        f_V = 0.5346 * f_L + math.sqrt(0.2166 * f_L**2 + f_G**2)
 
-        # Mixing parameter
-        eta = 1.36603 * (f_L / f_V) - 0.47719 * (f_L / f_V)**2 + 0.11116 * (f_L / f_V)**3
+# ------------------------------------------------------------------ hyperfine
 
-        # Gaussian component
-        G = math.exp(-x**2 / (2.0 * sigma**2)) / (sigma * math.sqrt(2.0 * math.pi))
+# Velocity offsets (km/s) and relative line strengths of common
+# hyperfine multiplets (frequencies from the CDMS/LAMDA catalogs;
+# strengths are the relative Einstein-A weighted intensities).
 
-        # Lorentzian component
-        L = gamma / (math.pi * (x**2 + gamma**2))
-
-        return eta * L + (1.0 - eta) * G
-
-    def fit(self, x: List[float], y: List[float],
-            initial_guess: Optional[VoigtParameters] = None) -> VoigtParameters:
-        """
-        Fit Voigt profile to spectrum.
-
-        Args:
-            x: Frequency/velocity array
-            y: Spectrum values
-            initial_guess: Initial parameter estimates
-
-        Returns:
-            Best-fit Voigt parameters
-        """
-        # Find peak and estimate parameters
-        max_idx = y.index(max(y))
-        amplitude = max(y)
-        center = x[max_idx]
-
-        # Estimate width
-        half_max = amplitude / 2.0
-        left_idx = max_idx
-        right_idx = max_idx
-
-        for i in range(max_idx, -1, -1):
-            if y[i] < half_max:
-                left_idx = i
-                break
-
-        for i in range(max_idx, len(y)):
-            if y[i] < half_max:
-                right_idx = i
-                break
-
-        fwhm = x[right_idx] - x[left_idx] if right_idx > left_idx else (x[-1] - x[0]) / 10.0
-
-        # Assume initially pure Gaussian
-        gaussian_width = fwhm
-        lorentzian_width = fwhm * 0.1  # Small Lorentzian component
-
-        return VoigtParameters(
-            amplitude=amplitude,
-            center=center,
-            gaussian_width=gaussian_width,
-            lorentzian_width=lorentzian_width,
-            total_width=fwhm
-        )
+HYPERFINE_COMPONENTS: Dict[str, List[Tuple[float, float]]] = {
+    # N2H+ 1-0 (Caselli et al. 1995; isolated F2-1 component at -7.98)
+    'N2H+ 1-0': [(-7.988, 1.0 / 9.0), (-5.557, 1.0 / 9.0),
+                 (-4.585, 2.0 / 9.0), (-2.633, 1.0 / 9.0),
+                 (-1.568, 1.0 / 9.0), (0.0, 3.0 / 9.0),
+                 (1.568, 1.0 / 9.0), (2.633, 1.0 / 9.0),
+                 (4.585, 2.0 / 9.0), (5.557, 1.0 / 9.0),
+                 (7.988, 1.0 / 9.0)],
+    # HCN 1-0 (Loughnane et al. 2012 / CDMS relative strengths)
+    'HCN 1-0': [(-7.057, 1.0), (-4.881, 2.0 / 3.0),
+                (-4.749, 1.0 / 9.0), (-2.414, 1.0 / 3.0),
+                (-1.059, 1.0 / 9.0), (0.0, 1.0 / 3.0),
+                (2.414, 1.0 / 9.0), (4.910, 2.0 / 3.0)],
+    # H13CN 1-0 and HC15N not included; add via `components=` argument.
+    # CCH N=1-0 hyperfine triplet (Tucker et al. 1974)
+    'CCH 1-0': [(0.0, 0.4), (1.35, 0.2), (-1.35, 0.4)],
+    # NH3 (1,1) satellite structure handled via inversion-split groups;
+    # the main group plus satellites (Ho & Townes 1983 separations)
+    'NH3 (1,1)': [(0.0, 1.0), (7.5, 0.3), (-7.5, 0.3),
+                  (16.0, 0.1), (-16.0, 0.1), (23.0, 0.05), (-23.0, 0.05)],
+}
 
 
 class HyperfineStructureFitter:
     """
-    Hyperfine structure fitting for molecules like NH3, N2H+, HCN.
+    Fit a hyperfine multiplet with a shared velocity centroid and width.
 
-    Fits all hyperfine components simultaneously with proper
-    relative intensities and common excitation temperature.
+    All components share v_LSR and sigma; relative component positions
+    and strengths are fixed from laboratory/catalog values. The optical
+    depth follows from the ratio of the fitted total amplitude to the
+    optically thin expectation:
+
+        T_peak,i = T_ex (1 - exp(-tau_i)),   tau_i = tau_tot * s_i
     """
 
-    # Standard hyperfine structures
-    HYPERFINE_DATA = {
-        'NH3_11': HyperfineStructure(
-            molecule='NH3',
-            transition='(1,1)',
-            main_frequency=23.6944955e9,  # Hz
-            components=[
-                HyperfineComponent(-19.8e3, 0.111, 'F=0-1'),
-                HyperfineComponent(-7.4e3, 0.139, 'F=2-2'),
-                HyperfineComponent(0.0, 0.500, 'F=1-1'),  # Main group
-                HyperfineComponent(7.4e3, 0.139, 'F=2-2'),
-                HyperfineComponent(19.4e3, 0.111, 'F=0-1'),
-            ],
-            total_intensity=1.0
-        ),
-        'N2H+_10': HyperfineStructure(
-            molecule='N2H+',
-            transition='1-0',
-            main_frequency=93.1737637e9,  # Hz
-            components=[
-                HyperfineComponent(-7.5e6, 0.111, 'F1=0-1, F=1-2'),
-                HyperfineComponent(-5.5e6, 0.185, 'F1=2-1, F=1-0'),
-                HyperfineComponent(0.0, 0.259, 'F1=2-1, F=3-2'),  # Main
-                HyperfineComponent(5.3e6, 0.148, 'F1=2-1, F=2-1'),
-                HyperfineComponent(6.9e6, 0.296, 'F1=2-1, F=1-1'),
-            ],
-            total_intensity=1.0
-        ),
-        'HCN_10': HyperfineStructure(
-            molecule='HCN',
-            transition='1-0',
-            main_frequency=88.6316023e9,  # Hz
-            components=[
-                HyperfineComponent(-7.1e6, 0.333, 'F=0-1'),
-                HyperfineComponent(0.0, 0.556, 'F=2-1'),
-                HyperfineComponent(4.8e6, 0.111, 'F=1-1'),
-            ],
-            total_intensity=1.0
-        )
-    }
+    def __init__(self, components: Optional[List[Tuple[float, float]]] = None,
+                 molecule: Optional[str] = None):
+        if components is None:
+            if molecule is None or molecule not in HYPERFINE_COMPONENTS:
+                raise ValueError("Provide `components=[(offset, strength),]"
+                                 " or a known molecule name "
+                                 f"{list(HYPERFINE_COMPONENTS)}")
+            components = HYPERFINE_COMPONENTS[molecule]
+        self.components = [(float(o), float(s)) for o, s in components]
+        total = sum(s for _, s in self.components)
+        self.components = [(o, s / total) for o, s in self.components]
 
-    def __init__(self):
-        """Initialize HFS fitter."""
-        self.gaussian_fitter = GaussianLineFitter()
+    def model(self, v: np.ndarray, amp: float, v0: float, sigma: float,
+              base: float) -> np.ndarray:
+        out = np.full_like(v, base, dtype=float)
+        for offset, strength in self.components:
+            out += amp * strength * np.exp(
+                -0.5 * ((v - v0 - offset) / sigma) ** 2)
+        return out
 
-    def get_hyperfine_structure(self, molecule: str,
-                                 transition: str) -> Optional[HyperfineStructure]:
-        """
-        Get hyperfine structure for given transition.
+    def fit(self, velocity: np.ndarray, temperature: np.ndarray,
+            sigma_error: Optional[np.ndarray] = None) -> LineFitResult:
+        v = np.asarray(velocity, dtype=float)
+        t = np.asarray(temperature, dtype=float)
+        i_peak = int(np.argmax(t - np.median(t)))
+        amp0 = max(t[i_peak] - np.median(t), 1e-3)
+        # Initial centroid: brightest component corrected by nearest offset
+        offsets = np.array([o for o, _ in self.components])
+        v00 = v[i_peak] - offsets[np.argmin(np.abs(offsets))]
+        sig0 = max(np.std(v) / 8.0, 0.05)
+        p0 = [amp0 / max(self.components[np.argmax(
+            [s for _, s in self.components])][1], 0.05), v00, sig0,
+            float(np.median(t))]
+        bounds = ([0.0, v.min(), 0.005, -np.inf],
+                  [np.inf, v.max(), v.max() - v.min(), np.inf])
+        try:
+            popt, pcov = curve_fit(self.model, v, t, p0=p0, bounds=bounds,
+                                   sigma=sigma_error,
+                                   absolute_sigma=sigma_error is not None,
+                                   maxfev=20000)
+            perr = np.sqrt(np.diag(pcov))
+        except Exception:
+            popt = np.array(p0, dtype=float)
+            perr = np.full_like(popt, np.nan)
 
-        Args:
-            molecule: Molecule name (e.g., 'NH3', 'N2H+')
-            transition: Transition label (e.g., '(1,1)', '1-0')
+        amp, v0, sig, base = popt
+        model_t = self.model(v, *popt)
+        rms = float(np.sqrt(np.mean((t - model_t) ** 2)))
+        integral = float(np.trapezoid(model_t - base, v))
+        return LineFitResult(
+            amplitude=float(amp), centroid=float(v0), sigma=float(sig),
+            fwhm=float(2.3548 * sig), integral=integral,
+            baseline=float(base), baseline_slope=0.0, rms=rms,
+            parameters=popt, parameter_errors=perr)
 
-        Returns:
-            HyperfineStructure or None if not found
-        """
-        key = f"{molecule}_{transition}".replace('(', '').replace(')', '').replace(',', '')
-        return self.HYPERFINE_DATA.get(key)
 
-    def fit(self, x: List[float], y: List[float],
-            molecule: str, transition: str,
-            v_lsr: float = 0.0) -> Optional[LineFitResult]:
-        """
-        Fit hyperfine structure to spectrum.
+# =============================================================================
+# LINE IDENTIFICATION
+# =============================================================================
 
-        Args:
-            x: Frequency array (Hz)
-            y: Spectrum values
-            molecule: Molecule name
-            transition: Transition label
-            v_lsr: LSR velocity (km/s)
-
-        Returns:
-            Fit result or None if HFS not found
-        """
-        hfs = self.get_hyperfine_structure(molecule, transition)
-        if hfs is None:
-            return None
-
-        # Convert v_lsr to frequency offset
-        v_offset = v_lsr * 1e5  # km/s to cm/s
-        freq_offset = -hfs.main_frequency * v_offset / C_LIGHT
-
-        # Build initial guesses for each HFS component
-        initial = []
-        peak = max(y)
-
-        for comp in hfs.components:
-            center_freq = hfs.main_frequency + comp.frequency_offset + freq_offset
-            amp = peak * comp.relative_intensity
-            width = 1e6  # 1 MHz initial width
-
-            initial.append((amp, center_freq, width))
-
-        # Fit all components
-        return self.gaussian_fitter.fit(x, y, len(hfs.components), initial_guess=initial)
+# Rest frequencies (MHz) of common ISM/cm lines.
+LINE_CATALOG: Dict[str, float] = {
+    '12CO J=1-0': 115271.202, '13CO J=1-0': 110201.354,
+    'C18O J=1-0': 109782.173, 'C17O J=1-0': 112359.29,
+    '12CO J=2-1': 230538.000, '13CO J=2-1': 220398.684,
+    'C18O J=2-1': 219560.354, '12CO J=3-2': 345795.990,
+    '13CO J=3-2': 330587.965, 'C18O J=3-2': 329330.55,
+    'CI 3P1-3P0': 492160.65, 'CI 3P2-3P1': 809343.0,
+    'CII 158um': 1900536.9,
+    'HCN J=1-0': 88631.847, 'H13CN J=1-0': 86342.330,
+    'HC15N J=1-0': 90003.06,
+    'HCO+ J=1-0': 89188.526, 'H13CO+ J=1-0': 86754.330,
+    'N2H+ J=1-0': 93173.767,
+    'CS J=1-0': 48990.956, 'CS J=2-1': 97980.968, 'CS J=3-2': 146969.038,
+    'C34S J=2-1': 96412.982,
+    'SO 3_2-2_1': 99299.87, 'SO2 4_2,2-3_1,3': 104029.42,
+    'SiO J=1-0 v=0': 43122.03, 'SiO J=2-1 v=0': 86246.96,
+    'CCH N=1-0': 87316.9, 'c-C3H2 2_1,2-1_0,1': 85338.9,
+    'HNC J=1-0': 90663.572, 'HN13C J=1-0': 87090.61,
+    'H2CO 2_0,2-1_0,1': 145602.95, 'H2CO 3_0,3-2-0,2': 218222.19,
+    'CH3OH 2_0,1-1_0,1 A+': 96739.37, 'CH3OH 5_1,4-4_1,3 E': 216945.6,
+    'NH3 (1,1)': 23694.50, 'NH3 (2,2)': 23722.63, 'NH3 (3,3)': 23870.13,
+    'H2O 557 GHz': 556935.99,
+    'H2D0 1_1,0-1_1,1': 110153.2,
+    'OH 1665': 1665.402, 'OH 1667': 1667.359,
+    'H41alpha': 95034.4, 'C41alpha': 95076.7,
+}
 
 
 class LineIdentifier:
     """
-    Spectral line identification against molecular databases.
+    Identify spectral lines from observed frequencies.
 
-    Matches observed frequencies to known molecular transitions
-    considering velocity offsets.
+    Uses the radio-definition Doppler formula
+
+        v_LSR = c (f_rest - f_obs) / f_rest
+
+    and matches every catalog entry within `tolerance_km_s`.
     """
 
-    # Simplified line database (common ISM molecules)
-    # Format: (rest_freq_Hz, molecule, transition, E_upper_K, strength)
-    LINE_DATABASE = [
-        # CO isotopologues
-        (115.2712018e9, 'CO', '1-0', 5.5, 1.0),
-        (230.538000e9, 'CO', '2-1', 16.6, 1.0),
-        (345.7959899e9, 'CO', '3-2', 33.2, 1.0),
-        (110.2013543e9, '13CO', '1-0', 5.3, 1.0),
-        (220.3986765e9, '13CO', '2-1', 15.9, 1.0),
-        (109.7821734e9, 'C18O', '1-0', 5.3, 1.0),
+    def __init__(self, catalog: Optional[Dict[str, float]] = None,
+                 tolerance_km_s: float = 30.0):
+        self.catalog = dict(catalog or LINE_CATALOG)
+        self.tolerance = tolerance_km_s
 
-        # Dense gas tracers
-        (88.6316023e9, 'HCN', '1-0', 4.3, 2.4),
-        (89.1885247e9, 'HCO+', '1-0', 4.3, 2.4),
-        (93.1737637e9, 'N2H+', '1-0', 4.5, 2.4),
-        (86.7540001e9, 'H13CO+', '1-0', 4.2, 2.4),
-
-        # Shock tracers
-        (86.8469850e9, 'SiO', '2-1', 6.3, 2.4),
-        (217.1049190e9, 'SiO', '5-4', 31.3, 2.4),
-
-        # Complex organics
-        (92.0934375e9, 'CH3OH', '8(0,8)-7(1,6)A++', 96.6, 1.0),
-        (145.1032185e9, 'CH3OH', '3(0,3)-2(0,2)A++', 27.1, 1.0),
-
-        # Ammonia
-        (23.6944955e9, 'NH3', '(1,1)', 23.4, 1.0),
-        (23.7226336e9, 'NH3', '(2,2)', 64.4, 1.0),
-        (23.8701296e9, 'NH3', '(3,3)', 123.5, 1.0),
-
-        # Water masers
-        (22.2350800e9, 'H2O', '6(16)-5(23)', 640.7, 1.0),
-
-        # Atomic lines
-        (492.1606510e9, '[CI]', '3P1-3P0', 23.6, 1.0),
-        (809.3435000e9, '[CI]', '3P2-3P1', 62.5, 1.0),
-    ]
-
-    def __init__(self, velocity_tolerance: float = 50.0):
-        """
-        Initialize line identifier.
-
-        Args:
-            velocity_tolerance: Maximum velocity offset to consider (km/s)
-        """
-        self.velocity_tolerance = velocity_tolerance  # km/s
-
-    def identify(self, observed_freq: float,
-                 v_lsr: float = 0.0) -> List[LineIdentification]:
-        """
-        Identify possible line matches.
-
-        Args:
-            observed_freq: Observed frequency (Hz)
-            v_lsr: Expected source velocity (km/s)
-
-        Returns:
-            List of possible identifications ranked by probability
-        """
+    def identify(self, observed_frequency_mhz: float,
+                 v_lsr_range: Tuple[float, float] = (-250.0, 250.0)) \
+            -> List[Dict[str, Any]]:
+        """Rank catalog lines matching an observed frequency."""
         matches = []
-
-        for rest_freq, molecule, transition, E_up, strength in self.LINE_DATABASE:
-            # Calculate velocity offset
-            v = (rest_freq - observed_freq) / rest_freq * C_LIGHT / 1e5  # km/s
-
-            # Check if within tolerance
-            v_diff = abs(v - v_lsr)
-            if v_diff < self.velocity_tolerance:
-                # Calculate match probability (simple model)
-                prob = math.exp(-v_diff**2 / (2.0 * 10.0**2))  # 10 km/s characteristic
-
-                matches.append(LineIdentification(
-                    observed_frequency=observed_freq,
-                    rest_frequency=rest_freq,
-                    molecule=molecule,
-                    transition=transition,
-                    velocity=v,
-                    energy_upper=E_up,
-                    line_strength=strength,
-                    probability=prob
-                ))
-
-        # Sort by probability
-        matches.sort(key=lambda x: x.probability, reverse=True)
-
+        for name, f_rest in self.catalog.items():
+            v = c_kms * (f_rest - observed_frequency_mhz) / f_rest
+            if v_lsr_range[0] <= v <= v_lsr_range[1]:
+                matches.append({'line': name, 'rest_frequency_mhz': f_rest,
+                                'v_lsr_km_s': round(v, 2),
+                                'distance_from_range_center': abs(
+                                    v - 0.5 * sum(v_lsr_range))})
+        matches.sort(key=lambda m: abs(m['distance_from_range_center']))
         return matches
 
-    def identify_spectrum(self, frequencies: List[float],
-                          spectrum: List[float],
-                          threshold: float = 3.0,
-                          v_lsr: float = 0.0) -> List[LineIdentification]:
-        """
-        Identify all lines in a spectrum above threshold.
+    def identify_line(self, observed_frequency_mhz: float) \
+            -> Optional[Dict[str, Any]]:
+        """Best single identification or None."""
+        m = self.identify(observed_frequency_mhz)
+        return m[0] if m else None
 
-        Args:
-            frequencies: Frequency array (Hz)
-            spectrum: Spectrum values
-            threshold: Detection threshold (sigma)
-            v_lsr: Source velocity (km/s)
+    def expected_frequency(self, line_name: str, v_lsr_km_s: float) -> float:
+        """Rest frequency redshifted to v_LSR (MHz)."""
+        if line_name not in self.catalog:
+            raise KeyError(f"Unknown line '{line_name}'")
+        f_rest = self.catalog[line_name]
+        return f_rest * (1.0 - v_lsr_km_s / c_kms)
 
-        Returns:
-            List of all identified lines
-        """
-        identifications = []
 
-        # Estimate noise
-        sorted_spec = sorted(spectrum)
-        noise = sorted_spec[len(sorted_spec) // 4]  # Lower quartile as noise estimate
-
-        # Find peaks
-        for i in range(1, len(spectrum) - 1):
-            if (spectrum[i] > spectrum[i-1] and
-                spectrum[i] > spectrum[i+1] and
-                spectrum[i] > threshold * noise):
-
-                freq = frequencies[i]
-                matches = self.identify(freq, v_lsr)
-
-                if matches:
-                    identifications.append(matches[0])  # Best match
-
-        return identifications
-
+# =============================================================================
+# OPTICAL DEPTH CORRECTIONS
+# =============================================================================
 
 class OpticalDepthCorrector:
     """
-    Optical depth corrections for spectral line analysis.
+    Radiative-transfer corrections between observed brightness
+    temperatures and intrinsic (optically thin) quantities.
 
-    Corrects observed brightness temperatures for optical depth
-    effects using the radiative transfer equation.
+    For a homogeneous layer:
+
+        T_R = f [J(T_ex) - J(T_bg)] (1 - e^{-tau})
+
+    with the brightness-temperature conversion J(T) = (h nu / k) /
+    (exp(h nu / k T) - 1). In the Rayleigh-Jeans limit this reduces to
+    the familiar T_R = f T_0 x / (1 + x), x = tau/(line-strength factor).
     """
 
-    def __init__(self):
-        """Initialize optical depth corrector."""
-        pass
-
-    def tau_from_ratio(self, T_main: float, T_satellite: float,
-                       intrinsic_ratio: float) -> float:
-        """
-        Calculate optical depth from main/satellite line ratio.
-
-        For HFS transitions like NH3, the intrinsic ratio is known.
-
-        Args:
-            T_main: Main line brightness temperature (K)
-            T_satellite: Satellite line brightness temperature (K)
-            intrinsic_ratio: Expected intrinsic intensity ratio
-
-        Returns:
-            Optical depth of main line
-        """
-        if T_satellite <= 0 or T_main <= 0:
+    @staticmethod
+    def j_nu(temperature: float, frequency_ghz: float) -> float:
+        """J(T) in K for a line frequency in GHz."""
+        nu = frequency_ghz * 1e9
+        hv_k = h_planck * nu / k_B
+        if temperature <= 0:
             return 0.0
+        return hv_k / (np.exp(hv_k / temperature) - 1.0)
 
-        observed_ratio = T_main / T_satellite
-
-        # Solve: observed_ratio = (1 - exp(-tau)) / (1 - exp(-tau/R))
-        # where R is intrinsic_ratio
-        # Use iteration
-
-        tau = 0.1  # Initial guess
-        R = intrinsic_ratio
-
-        for _ in range(50):
-            f = (1.0 - math.exp(-tau)) / (1.0 - math.exp(-tau/R)) - observed_ratio
-
-            # Derivative
-            df = ((math.exp(-tau) * (1.0 - math.exp(-tau/R)) +
-                   math.exp(-tau/R)/R * (1.0 - math.exp(-tau))) /
-                  (1.0 - math.exp(-tau/R))**2)
-
-            if abs(df) < 1e-10:
-                break
-
-            tau = tau - f / df
-
-            if tau < 0:
-                tau = 0.01
-
-        return max(tau, 0.0)
-
-    def correct_brightness(self, T_obs: float, tau: float,
-                           T_ex: float, T_bg: float = 2.73) -> float:
+    def tau_from_ratio(self, t_main: float, t_satellite: float,
+                       strength_ratio: float) -> float:
         """
-        Correct observed brightness for optical depth.
+        Optical depth from main/satellite hyperfine line ratio:
+
+            tau = -ln(1 - T_main / (T_ex * strength_ratio_frac))
+
+        Simplified standard formula (when both lines share T_ex and
+        width, using the ratio T_sat/T_main against the optically thin
+        expectation):
+            tau = -ln(1 - r_thin_ratio_observed)
+        where r_obs = T_sat / T_main and r_thin is the catalog ratio.
 
         Args:
-            T_obs: Observed brightness temperature (K)
-            tau: Optical depth
-            T_ex: Excitation temperature (K)
-            T_bg: Background temperature (K), default CMB
-
-        Returns:
-            Corrected brightness temperature (K)
+            t_main: main-line brightness temperature (K)
+            t_satellite: satellite brightness temperature (K)
+            strength_ratio: satellite/main intrinsic strength (< 1)
         """
-        # T_obs = (T_ex - T_bg) * (1 - exp(-tau))
-        # For optically thick lines, T_obs -> T_ex - T_bg
-        # Correction factor to get column density right
+        if t_main <= 0 or strength_ratio <= 0 or strength_ratio >= 1:
+            raise ValueError("Require t_main > 0 and 0 < strength_ratio < 1")
+        ratio_observed = t_satellite / t_main
+        x = 1.0 - ratio_observed / strength_ratio
+        if x <= 0:
+            return np.inf  # optically thin limit
+        return -np.log(x)
 
-        if tau < 0.01:
-            correction = 1.0
-        else:
-            correction = tau / (1.0 - math.exp(-tau))
-
-        return T_obs * correction
-
-    def excitation_temperature(self, T_obs: float, tau: float,
-                                T_bg: float = 2.73) -> float:
+    def corrected_temperature(self, observed_tb: float, tau: float,
+                              frequency_ghz: float, t_ex: float = 10.0,
+                              filling_factor: float = 1.0) -> float:
         """
-        Calculate excitation temperature.
+        Intrinsic T_ex-implied brightness of an optically thick line:
 
-        Args:
-            T_obs: Observed brightness temperature (K)
-            tau: Optical depth
-            T_bg: Background temperature (K)
+            T_true = T_obs / [(1 - e^{-tau}) (J(T_ex)-J(T_bg))/T_ex]
 
-        Returns:
-            Excitation temperature (K)
+        Returns the line temperature corrected to tau -> 0.
         """
-        if tau < 0.01:
-            return T_obs + T_bg
+        j_ex = self.j_nu(t_ex, frequency_ghz)
+        j_bg = self.j_nu(T_CMB, frequency_ghz)
+        denom = (1.0 - np.exp(-tau)) * max((j_ex - j_bg) / t_ex, 1e-6)
+        return observed_tb / (filling_factor * denom)
 
-        T_ex = T_obs / (1.0 - math.exp(-tau)) + T_bg
-        return T_ex
-
-    def correct(self, T_obs: float, T_main: float, T_satellite: float,
-                intrinsic_ratio: float = 3.0) -> OpticalDepthResult:
+    def thin_from_thick(self, integrated_thick: float, tau_thick: float,
+                        tau_thin: float) -> float:
         """
-        Full optical depth correction using satellite lines.
+        Rescale an integrated intensity from opacity tau_thick to
+        tau_thin using (1 - e^{-tau})/tau weighting:
 
-        Args:
-            T_obs: Brightness to correct (K)
-            T_main: Main line temperature (K)
-            T_satellite: Satellite line temperature (K)
-            intrinsic_ratio: Intrinsic main/satellite ratio
-
-        Returns:
-            Complete optical depth correction result
+            W_thin = W_thick * [tau_thin (1-e^{-tau_thick})] /
+                               [tau_thick (1-e^{-tau_thin})]
         """
-        tau = self.tau_from_ratio(T_main, T_satellite, intrinsic_ratio)
+        w_tau_thick = (1.0 - np.exp(-tau_thick)) / tau_thick
+        w_tau_thin = (1.0 - np.exp(-tau_thin)) / tau_thin
+        return integrated_thick * w_tau_thin / w_tau_thick
 
-        if tau > 0.01:
-            correction = tau / (1.0 - math.exp(-tau))
-        else:
-            correction = 1.0
 
-        T_ex = self.excitation_temperature(T_obs, tau)
-
-        # Estimate uncertainty (simplified)
-        tau_err = tau * 0.2
-
-        return OpticalDepthResult(
-            tau=tau,
-            tau_error=tau_err,
-            correction_factor=correction,
-            is_optically_thick=(tau > 1.0),
-            excitation_temp=T_ex
-        )
-
+# =============================================================================
+# COLUMN DENSITY
+# =============================================================================
 
 class ColumnDensityCalculator:
     """
-    Column density calculations from spectral line observations.
+    Molecular column densities from spectral-line measurements.
 
-    Computes total column densities assuming LTE or with
-    optical depth corrections.
+    Implemented recipes:
+    1. 13CO J=1-0 (Garden et al. 1991):
+
+        N(13CO) = 3.0e14 * T_ex * exp(-5.87/T_ex) *
+                  tau/(1-exp(-tau)) * W(13CO)   [cm^-2, W in K km/s]
+
+        N(H2) = N(13CO) / X_13CO with the local ISM abundance
+        X_13CO ~ 2e-6 (e.g. Frerking et al. 1982 range 1.5-4e-6).
+
+    2. Optically thin LTE column from integrated intensity and
+        partition function Q(T_ex):
+
+        N = (8 pi nu^2 / (c^2 A_ul)) (g_l/g_u) Q(T_ex) exp(E_u/kT_ex)
+            * W / [ (exp(h nu/kT_ex)-1)^-1 ... ]
+
+        evaluated in the Rayleigh-Jeans-friendly form of Mangum &
+        Shirley (2015) eq. 80.
     """
+
+    X_13CO_DEFAULT = 2.0e-6        # 13CO abundance relative to H2
+    X_CO_DEFAULT = 1.0e-4          # 12CO abundance
 
     def __init__(self):
-        """Initialize column density calculator."""
-        pass
+        self.corrector = OpticalDepthCorrector()
 
-    @staticmethod
-    def partition_function_linear(T: float, B_rot: float) -> float:
+    def h2_from_13co(self, integrated_intensity: float, t_ex: float = 10.0,
+                     tau_13co: float = 0.5,
+                     x_13co: Optional[float] = None) -> Dict[str, float]:
         """
-        Partition function for linear molecule.
-
-        Q(T) ~ kT/(hB) for T >> hB/k
-
-        Args:
-            T: Temperature (K)
-            B_rot: Rotational constant (Hz)
-
-        Returns:
-            Partition function
+        N(H2) from 13CO J=1-0 integrated intensity (K km/s).
         """
-        theta_rot = H_PLANCK * B_rot / K_BOLTZMANN
-        return T / theta_rot
+        x = x_13co if x_13co is not None else self.X_13CO_DEFAULT
+        n_13co = 3.0e14 * t_ex * np.exp(-5.87 / t_ex) * \
+            tau_13co / (1.0 - np.exp(-tau_13co)) * integrated_intensity
+        return {
+            'N_13CO': n_13co,
+            'N_H2': n_13co / x,
+            'A_V': n_13co / x / 1.87e21,   # Bohlin et al. 1978 conversion
+            't_ex': t_ex, 'tau': tau_13co,
+        }
 
-    @staticmethod
-    def partition_function_symmetric_top(T: float, A_rot: float,
-                                          B_rot: float) -> float:
+    def lte_column(self, integrated_intensity: float, frequency_ghz: float,
+                   einstein_a: float, t_ex: float, e_upper_k: float,
+                   g_upper: float, g_lower: float,
+                   partition_function: float) -> float:
         """
-        Partition function for symmetric top molecule.
+        Optically thin LTE molecular column density (cm^-2), Mangum &
+        Shirley (2015) eq. 80:
 
-        Args:
-            T: Temperature (K)
-            A_rot: A rotational constant (Hz)
-            B_rot: B rotational constant (Hz)
+            N = (8 pi nu^2 / c^2 A_ul) (g_l/g_u) Q exp(E_u/kT_ex)
+                * [J(T_ex)-J(T_bg)]^-1 * W_RJ-integrated brightness
 
-        Returns:
-            Partition function
+        `integrated_intensity` in K km/s (main-beam). Assumes tau << 1.
         """
-        theta_A = H_PLANCK * A_rot / K_BOLTZMANN
-        theta_B = H_PLANCK * B_rot / K_BOLTZMANN
+        nu = frequency_ghz * 1e9
+        hv_k = h_planck * nu / k_B
+        j_ex = self.corrector.j_nu(t_ex, frequency_ghz)
+        j_bg = self.corrector.j_nu(T_CMB, frequency_ghz)
+        bright = j_ex - j_bg
+        if bright <= 0:
+            raise ValueError("T_ex produces no contrast against the CMB")
+        prefactor = 8.0 * np.pi * nu ** 2 / (c_light ** 2 * einstein_a)
+        n_line = prefactor * (g_lower / g_upper) * partition_function * \
+            np.exp(e_upper_k / t_ex) * (integrated_intensity / bright) * \
+            hv_k / (np.exp(hv_k / t_ex) - 1.0)
+        return n_line
 
-        return math.sqrt(math.pi * T**3 / (theta_A * theta_B**2))
-
-    def column_density_lte(self, W: float, frequency: float,
-                           E_up: float, A_ul: float, g_u: float,
-                           T_ex: float, Q_T: float) -> ColumnDensityResult:
+    def c18o_column(self, integrated_intensity: float, t_ex: float = 10.0,
+                    x_c18o: float = 1.7e-7) -> Dict[str, float]:
         """
-        Calculate column density assuming LTE.
-
-        N_tot = (8*pi*nu^3 / c^3) * (Q/g_u) * exp(E_u/kT) / A_ul * W / J_nu(T)
-
-        Args:
-            W: Integrated line intensity (K km/s)
-            frequency: Line rest frequency (Hz)
-            E_up: Upper level energy (K)
-            A_ul: Einstein A coefficient (s^-1)
-            g_u: Upper level degeneracy
-            T_ex: Excitation temperature (K)
-            Q_T: Partition function at T_ex
-
-        Returns:
-            Column density result
+        N(H2) from optically thin C18O J=1-0 (assume tau<<1, LTE):
+        N(C18O) = 3.0e14 T_ex exp(-5.87/T_ex) W  (same recipe, tau->0).
         """
-        # Convert W from K km/s to K cm/s
-        W_cgs = W * 1e5
-
-        # Rayleigh-Jeans temperature
-        h_nu_k = H_PLANCK * frequency / K_BOLTZMANN
-        J_nu = h_nu_k / (math.exp(h_nu_k / T_ex) - 1.0)
-
-        # Column density of upper level
-        N_u = 8.0 * math.pi * frequency**3 / (C_LIGHT**3 * A_ul) * W_cgs / J_nu
-
-        # Total column density
-        N_tot = N_u * Q_T / g_u * math.exp(E_up / T_ex)
-
-        # Uncertainty estimate
-        N_err = N_tot * 0.3  # Assume 30% uncertainty
-
-        return ColumnDensityResult(
-            N_total=N_tot,
-            N_error=N_err,
-            N_upper_state=N_u,
-            partition_function=Q_T,
-            excitation_temp=T_ex,
-            optical_depth_used=0.0
-        )
-
-    def column_density_co(self, W_co: float, T_ex: float = 20.0,
-                          tau: float = 0.0) -> ColumnDensityResult:
-        """
-        Calculate H2 column density from CO.
-
-        Uses CO-to-H2 conversion factor.
-
-        Args:
-            W_co: CO(1-0) integrated intensity (K km/s)
-            T_ex: Excitation temperature (K)
-            tau: CO optical depth
-
-        Returns:
-            H2 column density result
-        """
-        # X_CO = N_H2 / W_CO ≈ 2e20 cm^-2 / (K km/s)
-        X_CO = 2.0e20
-
-        # Optical depth correction
-        if tau > 0.01:
-            correction = tau / (1.0 - math.exp(-tau))
-        else:
-            correction = 1.0
-
-        N_H2 = X_CO * W_co * correction
-
-        return ColumnDensityResult(
-            N_total=N_H2,
-            N_error=N_H2 * 0.5,  # Large uncertainty in X factor
-            N_upper_state=W_co * 1e15,  # Approximate
-            partition_function=T_ex / 2.77,  # CO partition function
-            excitation_temp=T_ex,
-            optical_depth_used=tau
-        )
-
-
-class VelocityFieldExtractor:
-    """
-    Extract velocity fields from spectral line cubes.
-
-    Performs pixel-by-pixel Gaussian fitting to create
-    velocity centroid and linewidth maps.
-    """
-
-    def __init__(self, threshold_sigma: float = 3.0):
-        """
-        Initialize velocity field extractor.
-
-        Args:
-            threshold_sigma: S/N threshold for valid fits
-        """
-        self.threshold = threshold_sigma
-        self.fitter = GaussianLineFitter()
-
-    def estimate_noise(self, spectrum: List[float],
-                       line_free_fraction: float = 0.3) -> float:
-        """
-        Estimate noise from line-free channels.
-
-        Args:
-            spectrum: Spectrum values
-            line_free_fraction: Fraction of channels assumed line-free
-
-        Returns:
-            Noise estimate
-        """
-        n = len(spectrum)
-        n_linefree = int(n * line_free_fraction)
-
-        # Use outer channels as line-free
-        edge_channels = spectrum[:n_linefree//2] + spectrum[-n_linefree//2:]
-
-        mean = sum(edge_channels) / len(edge_channels)
-        variance = sum((x - mean)**2 for x in edge_channels) / len(edge_channels)
-
-        return math.sqrt(variance)
-
-    def frequency_to_velocity(self, frequencies: List[float],
-                              rest_freq: float) -> List[float]:
-        """
-        Convert frequency to velocity.
-
-        Args:
-            frequencies: Frequency array (Hz)
-            rest_freq: Rest frequency (Hz)
-
-        Returns:
-            Velocity array (km/s)
-        """
-        return [(rest_freq - f) / rest_freq * C_LIGHT / 1e5 for f in frequencies]
-
-    def extract(self, cube: List[List[List[float]]],
-                velocities: List[float],
-                rest_velocity: float = 0.0) -> VelocityField:
-        """
-        Extract velocity field from spectral cube.
-
-        Args:
-            cube: 3D data cube [y][x][velocity]
-            velocities: Velocity axis (km/s)
-            rest_velocity: Expected source velocity (km/s)
-
-        Returns:
-            Complete velocity field
-        """
-        ny = len(cube)
-        nx = len(cube[0])
-
-        velocity_map = [[float('nan')] * nx for _ in range(ny)]
-        velocity_error = [[float('nan')] * nx for _ in range(ny)]
-        linewidth_map = [[float('nan')] * nx for _ in range(ny)]
-        peak_map = [[0.0] * nx for _ in range(ny)]
-        integrated_map = [[0.0] * nx for _ in range(ny)]
-        valid_pixels = []
-
-        for iy in range(ny):
-            for ix in range(nx):
-                spectrum = cube[iy][ix]
-
-                # Estimate noise
-                noise = self.estimate_noise(spectrum)
-
-                # Check if peak is above threshold
-                peak = max(spectrum)
-                if peak < self.threshold * noise:
-                    continue
-
-                # Fit Gaussian
-                result = self.fitter.fit(velocities, spectrum, n_components=1)
-
-                if result.status in [FitStatus.SUCCESS, FitStatus.CONVERGED]:
-                    comp = result.components[0]
-
-                    velocity_map[iy][ix] = comp.center
-                    velocity_error[iy][ix] = comp.center_error
-                    linewidth_map[iy][ix] = comp.width
-                    peak_map[iy][ix] = comp.amplitude
-                    integrated_map[iy][ix] = comp.integrated_flux
-                    valid_pixels.append((ix, iy))
-
-        return VelocityField(
-            velocity_map=velocity_map,
-            velocity_error=velocity_error,
-            linewidth_map=linewidth_map,
-            peak_map=peak_map,
-            integrated_map=integrated_map,
-            valid_pixels=valid_pixels
-        )
-
-
-# Singleton instances
-_gaussian_fitter: Optional[GaussianLineFitter] = None
-_voigt_fitter: Optional[VoigtProfileFitter] = None
-_hfs_fitter: Optional[HyperfineStructureFitter] = None
-_line_identifier: Optional[LineIdentifier] = None
-_tau_corrector: Optional[OpticalDepthCorrector] = None
-_column_calculator: Optional[ColumnDensityCalculator] = None
-_velocity_extractor: Optional[VelocityFieldExtractor] = None
-
-
-def get_gaussian_fitter() -> GaussianLineFitter:
-    """Get singleton Gaussian line fitter."""
-    global _gaussian_fitter
-    if _gaussian_fitter is None:
-        _gaussian_fitter = GaussianLineFitter()
-    return _gaussian_fitter
-
-
-def get_voigt_fitter() -> VoigtProfileFitter:
-    """Get singleton Voigt profile fitter."""
-    global _voigt_fitter
-    if _voigt_fitter is None:
-        _voigt_fitter = VoigtProfileFitter()
-    return _voigt_fitter
-
-
-def get_hfs_fitter() -> HyperfineStructureFitter:
-    """Get singleton HFS fitter."""
-    global _hfs_fitter
-    if _hfs_fitter is None:
-        _hfs_fitter = HyperfineStructureFitter()
-    return _hfs_fitter
-
-
-def get_line_identifier() -> LineIdentifier:
-    """Get singleton line identifier."""
-    global _line_identifier
-    if _line_identifier is None:
-        _line_identifier = LineIdentifier()
-    return _line_identifier
-
-
-def get_tau_corrector() -> OpticalDepthCorrector:
-    """Get singleton optical depth corrector."""
-    global _tau_corrector
-    if _tau_corrector is None:
-        _tau_corrector = OpticalDepthCorrector()
-    return _tau_corrector
-
-
-def get_column_calculator() -> ColumnDensityCalculator:
-    """Get singleton column density calculator."""
-    global _column_calculator
-    if _column_calculator is None:
-        _column_calculator = ColumnDensityCalculator()
-    return _column_calculator
-
-
-def get_velocity_extractor() -> VelocityFieldExtractor:
-    """Get singleton velocity field extractor."""
-    global _velocity_extractor
-    if _velocity_extractor is None:
-        _velocity_extractor = VelocityFieldExtractor()
-    return _velocity_extractor
-
-
-# Convenience functions
-
-def fit_gaussian_line(frequencies: List[float], spectrum: List[float],
-                      n_components: int = 1) -> LineFitResult:
-    """
-    Fit Gaussian components to spectral line.
-
-    Args:
-        frequencies: Frequency array (Hz)
-        spectrum: Spectrum values (K or Jy)
-        n_components: Number of Gaussian components
-
-    Returns:
-        Fit result with parameters and uncertainties
-    """
-    fitter = get_gaussian_fitter()
-    return fitter.fit(frequencies, spectrum, n_components)
-
-
-def identify_line(frequency: float, v_lsr: float = 0.0) -> List[LineIdentification]:
-    """
-    Identify spectral line at given frequency.
-
-    Args:
-        frequency: Observed frequency (Hz)
-        v_lsr: Source LSR velocity (km/s)
-
-    Returns:
-        List of possible identifications
-    """
-    identifier = get_line_identifier()
-    return identifier.identify(frequency, v_lsr)
-
-
-def compute_column_density_co(W_co: float, T_ex: float = 20.0) -> float:
-    """
-    Calculate H2 column density from CO integrated intensity.
-
-    Args:
-        W_co: CO(1-0) integrated intensity (K km/s)
-        T_ex: Excitation temperature (K)
-
-    Returns:
-        H2 column density (cm^-2)
-    """
-    calculator = get_column_calculator()
-    result = calculator.column_density_co(W_co, T_ex)
-    return result.N_total
-
-
-def thermal_linewidth(temperature: float, molecular_weight: float) -> float:
-    """
-    Calculate thermal line width.
-
-    Delta_v_th = sqrt(8 * ln(2) * k_B * T / (m * c^2)) * c
-
-    Args:
-        temperature: Gas temperature (K)
-        molecular_weight: Molecular weight (amu)
-
-    Returns:
-        Thermal FWHM (km/s)
-    """
-    m = molecular_weight * M_PROTON
-
-    sigma_v = math.sqrt(K_BOLTZMANN * temperature / m)
-    fwhm = 2.0 * math.sqrt(2.0 * math.log(2.0)) * sigma_v
-
-    return fwhm / 1e5  # Convert to km/s
-
-
-def velocity_to_frequency(velocity_km_s: float, rest_freq: float) -> float:
-    """
-    Convert velocity to frequency.
-
-    Args:
-        velocity_km_s: Velocity (km/s)
-        rest_freq: Rest frequency (Hz)
-
-    Returns:
-        Observed frequency (Hz)
-    """
-    v_cgs = velocity_km_s * 1e5
-    return rest_freq * (1.0 - v_cgs / C_LIGHT)
-
-
-def frequency_to_velocity(obs_freq: float, rest_freq: float) -> float:
-    """
-    Convert frequency to velocity.
-
-    Args:
-        obs_freq: Observed frequency (Hz)
-        rest_freq: Rest frequency (Hz)
-
-    Returns:
-        Velocity (km/s)
-    """
-    v_cgs = (rest_freq - obs_freq) / rest_freq * C_LIGHT
-    return v_cgs / 1e5  # km/s
-
-
-
-
-def detect_multiscale_patterns(signal, scales=None, wavelet='morl'):
-    """Detect patterns at multiple scales using wavelet analysis
-
-    Args:
-        signal: Input signal (1D array)
-        scales: List of scales to analyze (None for automatic)
-        wavelet: Type of wavelet ('morl' = Morlet, 'mexh' = Mexican hat)
+        n_c18o = 3.0e14 * t_ex * np.exp(-5.87 / t_ex) * integrated_intensity
+        return {'N_C18O': n_c18o, 'N_H2': n_c18o / x_c18o,
+                'A_V': n_c18o / x_c18o / 1.87e21}
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+def fit_gaussian_line(velocity: np.ndarray, temperature: np.ndarray,
+                      sigma_error: Optional[np.ndarray] = None) \
+        -> LineFitResult:
+    """Fit a single Gaussian line to a spectrum (convenience wrapper)."""
+    return GaussianLineFitter().fit(velocity, temperature, sigma_error)
+
+
+def identify_line(observed_frequency_mhz: float,
+                  tolerance_km_s: float = 30.0) -> Optional[Dict[str, Any]]:
+    """Identify a line from its observed frequency (best match or None)."""
+    ident = LineIdentifier(tolerance_km_s=tolerance_km_s)
+    return ident.identify_line(observed_frequency_mhz)

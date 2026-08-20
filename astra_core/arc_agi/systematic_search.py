@@ -8,23 +8,53 @@ Implements program synthesis via systematic search with:
 - Analogical transfer from solved tasks
 """
 
-import numpy as np
-from typing import List, Tuple, Dict, Set, Optional, Callable, Any
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from collections import defaultdict
-import heapq
-import time
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    from typing import List, Tuple, Dict, Set, Optional, Callable, Any
+except Exception:
+    List = Tuple = Dict = Set = Optional = Callable = Any = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from enum import Enum, auto
+except Exception:
+    Enum = auto = None  # degraded: unavailable
+try:
+    from collections import defaultdict
+except Exception:
+    defaultdict = None  # degraded: unavailable
+try:
+    import heapq
+except Exception:
+    heapq = None  # degraded: unavailable
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
 
-from .grid_dsl import Grid, GridObject, BoundingBox, empty_grid
-from .hypothesis_engine import (
+try:
+    from .grid_dsl import Grid, GridObject, BoundingBox, empty_grid
+except Exception:
+    Grid = GridObject = BoundingBox = empty_grid = None  # degraded: unavailable
+try:
+    from .hypothesis_engine import (
     TransformationHypothesis, TransformationType,
     HypothesisGenerator, HypothesisTester
-)
-from .pattern_library import (
+    )
+except Exception:
+    TransformationHypothesis = TransformationType = HypothesisGenerator = HypothesisTester = None  # degraded: unavailable
+try:
+    from .pattern_library import (
     PatternDetector, PatternPrimitives, ObjectRelationships,
     CompositeTransform
-)
+    )
+except Exception:
+    PatternDetector = PatternPrimitives = ObjectRelationships = CompositeTransform = None  # degraded: unavailable
 
 
 @dataclass

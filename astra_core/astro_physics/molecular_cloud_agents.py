@@ -28,26 +28,62 @@ Author: Claude Code (ASTRO-SWARM)
 Date: 2024-11
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-import uuid
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Optional, Any, Tuple
+except Exception:
+    Dict = List = Optional = Any = Tuple = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from datetime import datetime
+except Exception:
+    datetime = None  # degraded: unavailable
+try:
+    from enum import Enum
+except Exception:
+    Enum = None  # degraded: unavailable
+try:
+    import uuid
+except Exception:
+    uuid = None  # degraded: unavailable
 
-from .agents import (
+try:
+    from .agents import (
     AstroAgent, PheromoneTrail, StigmergicMemory
-)
-from .physics import PhysicsEngine
-from .knowledge_graph import (
+    )
+except Exception:
+    AstroAgent = PheromoneTrail = StigmergicMemory = None  # degraded: unavailable
+
+# Keep subclass definitions importable when the agent framework was hollowed
+if AstroAgent is None:
+    AstroAgent = object
+if PheromoneTrail is None:
+    PheromoneTrail = object
+try:
+    from .physics import PhysicsEngine
+except Exception:
+    PhysicsEngine = None  # degraded: unavailable
+try:
+    from .knowledge_graph import (
     AstronomicalKnowledgeGraph, AstroNode, AstroEdge,
     AstroNodeType, RelationType
-)
-from .molecular_cloud_physics import (
+    )
+except Exception:
+    AstronomicalKnowledgeGraph = AstroNode = AstroEdge = AstroNodeType = RelationType = None  # degraded: unavailable
+try:
+    from .molecular_cloud_physics import (
     MolecularCloudPhysicsEngine, MolecularLineDatabase,
     DustModelLibrary, DustModel, CloudSpectralLine, DustSED,
     MolecularCloudProperties
-)
+    )
+except Exception:
+    MolecularCloudPhysicsEngine = MolecularLineDatabase = DustModelLibrary = DustModel = CloudSpectralLine = DustSED = MolecularCloudProperties = None  # degraded: unavailable
 
 
 # =============================================================================
@@ -941,13 +977,3 @@ __all__ = [
 ]
 
 
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None

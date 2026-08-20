@@ -84,31 +84,111 @@ def learn_color_mapping(train_inputs, train_outputs) -> Optional[Dict[int, int]]
                 if inp_val != out_val:
                     if inp_val in color_map:
                         if color_map[inp_val] != out_val:
-                            return None  # Inconsistent mapping
+                            return None
                     else:
                         color_map[inp_val] = out_val
-
     return color_map if color_map else None
 
 def apply_color_map(grid, color_map):
-    """Apply color mapping to grid."""
+    """Apply a color mapping to every cell (unmapped colours pass through)."""
     return [[color_map.get(cell, cell) for cell in row] for row in grid]
 
 
 # ============================================================================
-# Geometric Transformation Detection
+# Solution Hypotheses and Solver
+# (re-implemented 2026-08; bodies lost to file truncation before the audit.
+#  Exported via arc_reasoning/__init__.py as ImprovedARC_Solver /
+#  SolutionHypothesis; primitive functions are imported by
+#  ensemble_arc_solver.py and super_ensemble_solver.py.)
 # ============================================================================
 
-def detect_geometric_transform(train_inputs, train_outputs) -> Optional[str]:
-    """Detect if a simple geometric transformation applies to all pairs."""
-    candidates = []
+@dataclass
+class SolutionHypothesis:
+    """A candidate transformation with its training-pair verification."""
+    description: str
+    transform: Callable
+    confidence: float = 0.0
+    n_correct: int = 0
+    n_train: int = 0
 
-    # Test each transformation
-    transforms = [
-        ("identity", lambda g: g),
-        ("rotate_90", rotate_90),
-        ("rotate_180", rotate_180),
-        ("rotate_270", rotate_270),
-        ("reflect_h", reflect_h),
-        ("reflect_v", reflect_v),
-        ("transpose", transpose),
+    def __repr__(self):
+        return f"SolutionHypothesis({self.description!r}, conf={self.confidence:.2f})"
+
+
+class ImprovedARC_Solver:
+    """
+    Improved ARC-AGI-2 solver: comprehensive transformation detection
+    with composition support.
+
+    Candidates are built from the geometric primitives, the learned
+    colour map, and compositions of the two (geometry then colour);
+    each is verified against every training pair and the best hypothesis
+    is applied to the test input.
+    """
+
+    def __init__(self):
+        self.geometric_transforms = [
+            ("identity", lambda g: g),
+            ("rotate_90", rotate_90),
+            ("rotate_180", rotate_180),
+            ("rotate_270", rotate_270),
+            ("reflect_h", reflect_h),
+            ("reflect_v", reflect_v),
+            ("transpose", transpose),
+        ]
+
+    def generate_hypotheses(self, train_inputs, train_outputs) -> List[SolutionHypothesis]:
+        """Generate and verify transformation hypotheses on the training pairs."""
+        candidates: List[Tuple[str, Callable]] = []
+
+        # Pure geometric transforms
+        for name, fn in self.geometric_transforms:
+            candidates.append((name, fn))
+
+        # Pure colour mapping
+        color_map = learn_color_mapping(train_inputs, train_outputs)
+        if color_map:
+            candidates.append(("color_map", lambda g, cm=color_map: apply_color_map(g, cm)))
+
+            # Compositions: geometry then colour
+            for name, fn in self.geometric_transforms:
+                candidates.append((
+                    f"{name}+color_map",
+                    lambda g, fn=fn, cm=color_map: apply_color_map(fn(g), cm),
+                ))
+
+        hypotheses = []
+        n_train = len(train_inputs)
+        for description, transform in candidates:
+            correct = 0
+            for inp, out in zip(train_inputs, train_outputs):
+                try:
+                    if transform(inp) == out:
+                        correct += 1
+                except Exception:
+                    continue
+            hypotheses.append(SolutionHypothesis(
+                description=description,
+                transform=transform,
+                confidence=correct / n_train if n_train else 0.0,
+                n_correct=correct,
+                n_train=n_train,
+            ))
+
+        # Best first; simpler descriptions win ties (Occam)
+        hypotheses.sort(key=lambda h: (-h.confidence, len(h.description), h.description))
+        return hypotheses
+
+    def solve(self, train_inputs, train_outputs, test_input):
+        """
+        Solve one task: return the transformed test input, or None if no
+        hypothesis explains the training pairs.
+        """
+        hypotheses = self.generate_hypotheses(train_inputs, train_outputs)
+        if not hypotheses or hypotheses[0].confidence == 0.0:
+            return None
+        best = hypotheses[0]
+        try:
+            return best.transform(test_input)
+        except Exception:
+            return None

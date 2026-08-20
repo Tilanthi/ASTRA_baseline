@@ -63,7 +63,7 @@ class ComprehensiveSystemTest:
             ("Astrophysical Causal", "astra_core.reasoning.astrophysical_causal_discovery", None),
             ("V50 Causal Engine", "astra_core.reasoning.v50_causal_engine", None),
             ("V70 Universal Causal", "astra_core.reasoning.v70_universal_causal", None),
-            ("Swarm Reasoning", "astra_core.reasoning.swarm_reasoning", None),
+            ("Swarm Reasoning", "astra_core.legacy.systems.v41.swarm_reasoning", None),
             ("Hierarchical Bayesian", "astra_core.reasoning.hierarchical_bayesian_metalearning", None),
 
             # V4 Revolutionary Capabilities

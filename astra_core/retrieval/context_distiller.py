@@ -163,83 +163,106 @@ class LLMRelevancyChecker(RelevancyChecker):
 
 class ContextDistiller:
     """
-    Parallel Context Pre-processing (Distillation).
+    Filters high-recall retrieval results down to the relevant few.
 
-    After retrieving a large set of candidate documents (k=10+),
-    this uses multiple, small, parallel LLM calls to process them.
-    Each call acts as a highly-focused filter, checking a single document
-    for relevance to the specific question.
-
-    Architecture:
-        1. Input: Raw retrieved documents (k=10+)
-        2. Scatter: Dispatch relevancy checks in parallel
-        3. Gather: Collect all relevancy results
-        4. Filter: Keep only documents marked as relevant
-        5. Output: Distilled, high-quality context for generation
-
-    Benefits:
-        - 90% reduction in context tokens
-        - 73% faster final generation
-        - 25% accuracy improvement (removes noise)
-        - Parallel processing (same latency for 1 or 10 docs)
-
-    Example:
-        ```python
-        distiller = ContextDistiller(checker=SimpleKeywordChecker())
-
-        # High-recall retrieval (k=20)
-        raw_docs = vector_store.retrieve("power saving", k=20)
-
-        # Distill to relevant subset
-        result = distiller.distill(
-            query="What are our power saving efforts?",
-            documents=raw_docs
-        )
-
-        # Result: 20 docs -> 2-3 highly relevant docs
-        # 90% token reduction, higher quality
-        ```
+    Runs the relevancy checker over every retrieved document in parallel
+    (ThreadPoolExecutor), drops irrelevant documents, de-duplicates
+    repeats from overlapping queries, and reports the token reduction
+    achieved.
     """
 
-    def __init__(self,
-                 checker: RelevancyChecker = None,
-                 max_workers: int = 5,
-                 enable_timing: bool = True):
-        """
-        Initialize context distiller.
-
-        Args:
-            checker: Relevancy checker (defaults to SimpleKeywordChecker)
-            max_workers: Max parallel workers for distillation
-            enable_timing: Track execution time for metrics
-        """
+    def __init__(self, checker: Optional[RelevancyChecker] = None,
+                 max_workers: int = 4):
         self.checker = checker or SimpleKeywordChecker()
         self.max_workers = max_workers
-        self.enable_timing = enable_timing
 
-    def distill(self,
-                query: str,
+    # ---------------------------------------------------------------- public
+    def distill(self, query: str,
                 documents: List[Document]) -> DistillationResult:
         """
-        Distill documents to relevant subset using parallel checking.
+        Distill a raw retrieved document list down to relevant documents.
 
-        Args:
-            query: Original user query
-            documents: Raw retrieved documents (typically k=10+)
+        Parameters
+        ----------
+        query : the user query the documents were retrieved for
+        documents : raw (high-recall, possibly duplicated) document list
 
-        Returns:
-            DistillationResult with filtered documents and metrics
+        Returns
+        -------
+        DistillationResult with relevant_docs (confidence-sorted),
+        filtered_docs, counts, token reduction and timing.
         """
-        start_time = time.time()
+        raw = list(documents or [])
+        start = time.perf_counter()
 
-        # Parallel relevancy checking
-        relevant_docs = []
-        filtered_docs = []
-        explanations = []
+        # De-duplicate repeats (overlapping multi-query retrieval often
+        # returns the same document several times)
+        seen = set()
+        unique: List[Document] = []
+        for doc in raw:
+            key = getattr(doc, 'page_content', None)
+            key = key if key is not None else str(doc)
+            if key not in seen:
+                seen.add(key)
+                unique.append(doc)
 
-        distill_start = time.time()
-        with ThreadPoolExecutor(max_workers=min(self.max_workers, len(documents))) as executor:
-            # Submit all checks
-            future_to_doc = {
-                executor.submit(self.checker.check_relevance, query, doc): doc
-                for doc in documents
+        # Relevancy-check every document, in parallel
+        checks: List[RelevancyCheck] = []
+        if unique:
+            if self.max_workers > 1:
+                with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+                    futures = [pool.submit(self.checker.check_relevance, query, d)
+                               for d in unique]
+                    for future in futures:
+                        try:
+                            checks.append(future.result())
+                        except Exception:
+                            continue
+            else:
+                checks = [self.checker.check_relevance(query, d) for d in unique]
+        distillation_time = time.perf_counter() - start
+
+        relevant = [c for c in checks if c.is_relevant]
+        relevant.sort(key=lambda c: c.confidence, reverse=True)
+        filtered = [c for c in checks if not c.is_relevant]
+
+        relevant_docs = [c.document for c in relevant if c.document is not None]
+        filtered_docs = [c.document for c in filtered if c.document is not None]
+
+        raw_tokens = self._count_tokens([getattr(d, 'page_content', '') for d in raw])
+        kept_tokens = self._count_tokens([getattr(d, 'page_content', '')
+                                          for d in relevant_docs])
+        token_reduction = (100.0 * (1.0 - kept_tokens / raw_tokens)
+                           if raw_tokens > 0 else 0.0)
+        execution_time = time.perf_counter() - start
+
+        return DistillationResult(
+            relevant_docs=relevant_docs,
+            filtered_docs=filtered_docs,
+            raw_count=len(raw),
+            relevant_count=len(relevant_docs),
+            token_reduction=round(token_reduction, 1),
+            execution_time=round(execution_time, 4),
+            distillation_time=round(distillation_time, 4),
+            explanations=[c.brief_explanation for c in checks],
+        )
+
+    # ------------------------------------------------------------- internals
+    @staticmethod
+    def _count_tokens(texts: List[str]) -> int:
+        """Token count via tiktoken when available, else word count."""
+        if not texts:
+            return 0
+        if _TIKTOKEN_AVAILABLE:
+            try:
+                enc = tiktoken.get_encoding('cl100k_base')
+                return sum(len(enc.encode(t)) for t in texts if t)
+            except Exception:
+                pass
+        return sum(len(t.split()) for t in texts if t)
+
+
+def create_context_distiller(checker: Optional[RelevancyChecker] = None,
+                             max_workers: int = 4) -> ContextDistiller:
+    """Factory for the context distiller (default: keyword checker)."""
+    return ContextDistiller(checker=checker, max_workers=max_workers)

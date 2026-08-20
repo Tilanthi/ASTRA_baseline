@@ -228,12 +228,3 @@ class ChemicalNetwork(ABC):
                     dndt[idx] += rate
 
         return dndt
-
-    def integrate(self, t_final: float, dt_output: float = None,
-                  method: str = 'BDF') -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Integrate chemical evolution.
-
-        Args:
-            t_final: Final time (s)
-            dt_output: Output time step (s)

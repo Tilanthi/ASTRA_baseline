@@ -556,9 +556,3 @@ if __name__ == "__main__":
     print(result.summary())
 
 
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-

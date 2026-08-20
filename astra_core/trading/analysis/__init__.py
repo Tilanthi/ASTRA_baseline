@@ -1,2 +1,5 @@
 """Trading Analysis Package"""
-from .causal_analysis import MarketCausalAnalyzer, CausalSignal, CausalBacktester
+try:
+    from .causal_analysis import MarketCausalAnalyzer, CausalSignal, CausalBacktester
+except Exception:
+    MarketCausalAnalyzer = CausalSignal = CausalBacktester = None  # degraded: unavailable

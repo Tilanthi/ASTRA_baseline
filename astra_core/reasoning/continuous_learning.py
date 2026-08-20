@@ -1022,3 +1022,15 @@ class ContinuousLearner:
         except Exception as e:
             print(f"Failed to load state: {e}")
             return False
+
+
+# Singleton instance for consistent learner access across modules
+_continuous_learner_instance: Optional["ContinuousLearner"] = None
+
+
+def get_continuous_learner(storage_path: str = None) -> "ContinuousLearner":
+    """Get or create the singleton continuous learner instance."""
+    global _continuous_learner_instance
+    if _continuous_learner_instance is None:
+        _continuous_learner_instance = ContinuousLearner(storage_path=storage_path)
+    return _continuous_learner_instance

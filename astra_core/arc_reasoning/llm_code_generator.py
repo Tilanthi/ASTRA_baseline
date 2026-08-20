@@ -75,30 +75,3 @@ def generate_task_description(task_id: str,
 
     # Check for objects
     has_objects = any(c != 0 for inp in train_inputs for row in inp for c in row)
-    if has_objects:
-        description_parts.append("  Contains: Colored objects/regions")
-
-    # Pattern hints
-    patterns = []
-    if inp_h == out_h and inp_w == out_w:
-        patterns.append("same-size transformation")
-    if (out_h * out_w) < (inp_h * inp_w):
-        patterns.append("compression")
-    if color_changes:
-        patterns.append("color transformation")
-    if has_objects:
-        patterns.append("object manipulation")
-
-    if patterns:
-        description_parts.append(f"  Likely patterns: {', '.join(patterns)}")
-
-    return "\n".join(description_parts)
-
-
-# ============================================================================
-# LLM-Generated Code Templates
-# ============================================================================
-
-CODE_TEMPLATES = {
-    "color_map": """
-# Color mapping transformation

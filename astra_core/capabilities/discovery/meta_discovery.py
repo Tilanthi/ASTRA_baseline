@@ -446,7 +446,7 @@ class MetaDiscoveryTransferEngine:
         elif strategy == "causal_inference":
             # Causal inference (using V98 FCI)
             try:
-                from astra_core.capabilities.v98_fci_causal_discovery import FCIDiscovery
+                from astra_core.capabilities.causal.fci_discovery import FCIDiscovery
                 fci = FCIDiscovery(alpha=0.05)
                 pag = fci.discover_causal_graph(data, variable_names)
                 results['pag'] = pag

@@ -39,7 +39,7 @@ from datetime import datetime
 
 # Import V36 core (if available)
 try:
-    from ..core_legacy.v36.v36_system import (
+    from ..legacy.systems.v36.v36_system import (
         MechanismDiscoveryEngine, SymbolicCausalAbstraction,
         CrossDomainAnalogyEngine
     )
@@ -648,13 +648,3 @@ __all__ = [
 ]
 
 
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None

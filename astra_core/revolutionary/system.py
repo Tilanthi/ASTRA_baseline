@@ -218,7 +218,7 @@ def create_v4_system() -> V4RevolutionarySystem:
         V4RevolutionarySystem instance with all capabilities initialized
 
     Example:
-        >>> from astra_core.v4_revolutionary import create_v4_system
+        >>> from astra_core.revolutionary import create_v4_system
         >>> system = create_v4_system()
         >>> capabilities = system.get_available_capabilities()
         >>> print(f"Available: {capabilities}")

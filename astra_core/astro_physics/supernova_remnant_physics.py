@@ -1302,18 +1302,6 @@ def analyze_snr(energy_erg: float = 1e51, ejecta_msun: float = 3.0,
 
 
 
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-
-
 # Test helper for uncertainty_quantification
 def test_uncertainty_quantification_function(data):
     """Test function for uncertainty_quantification."""

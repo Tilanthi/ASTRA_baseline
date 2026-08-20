@@ -135,7 +135,7 @@ def run_integration_tests():
     """Run integration tests."""
     print("Testing V4.0 Integration...")
     try:
-        from astra_core.v4_revolutionary import create_v4_coordinator, IntegrationMode
+        from astra_core.revolutionary import create_v4_coordinator, IntegrationMode
 
         coordinator = create_v4_coordinator()
         print("✓ V4 coordinator created")

@@ -5,19 +5,55 @@ This engine implements learning through real-world interaction, moving beyond
 simulation to true embodied experience and understanding.
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
-import time
-import logging
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Optional, Tuple, Any
+except Exception:
+    Dict = List = Optional = Tuple = Any = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from abc import ABC, abstractmethod
+except Exception:
+    ABC = abstractmethod = None  # degraded: unavailable
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
+try:
+    import logging
+except Exception:
+    logging = None  # degraded: unavailable
 
-from ..v80.neural_symbolic_integration import NeuralSymbolicBridge
-from ..v93.self_modifying_architecture import DynamicArchitecture
-from .sensorimotor_system import SensorimotorInterface, WorldAction, Experience
-from .developmental_learning import DevelopmentalLearning
-from .common_sense_engine import CommonSenseEngine
-from .language_grounding import LanguageGroundingEngine
+try:
+    from ..v80.neural_symbolic_integration import NeuralSymbolicBridge
+except Exception:
+    NeuralSymbolicBridge = None  # degraded: unavailable
+try:
+    from ..v93.self_modifying_architecture import DynamicArchitecture
+except Exception:
+    DynamicArchitecture = None  # degraded: unavailable
+try:
+    from .sensorimotor_system import SensorimotorInterface, WorldAction, Experience
+except Exception:
+    SensorimotorInterface = WorldAction = Experience = None  # degraded: unavailable
+try:
+    from .developmental_learning import DevelopmentalLearning
+except Exception:
+    DevelopmentalLearning = None  # degraded: unavailable
+try:
+    from .common_sense_engine import CommonSenseEngine
+except Exception:
+    CommonSenseEngine = None  # degraded: unavailable
+try:
+    from .language_grounding import LanguageGroundingEngine
+except Exception:
+    LanguageGroundingEngine = None  # degraded: unavailable
 
 
 @dataclass

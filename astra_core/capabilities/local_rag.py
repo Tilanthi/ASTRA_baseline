@@ -191,8 +191,89 @@ class KnowledgeBaseBuilder:
     Provides higher-level interface for building and managing knowledge bases.
     """
 
-    def __init__(self, persist_dir: Optional[str] = None, collection_name: str = "stan_knowledge"):
-        self.rag = LocalRAG(persist_dir, collection_name)
+    def __init__(self, rag: Optional[LocalRAG] = None,
+                 persist_dir: Optional[str] = None,
+                 collection_name: str = "stan_knowledge"):
+        """
+        Wrap an existing RAG store, or create one.
+
+        Args:
+            rag: An existing LocalRAG (any object with add_documents/
+                 retrieve) to build into
+            persist_dir: Directory for a new LocalRAG (ignored if rag given)
+            collection_name: Collection name for a new LocalRAG
+        """
+        # Backwards compatibility: KnowledgeBaseBuilder('/some/dir')
+        if rag is not None and not hasattr(rag, 'add_documents'):
+            persist_dir = rag
+            rag = None
+        self.rag = rag if rag is not None else LocalRAG(persist_dir, collection_name)
+
+    def build_default_knowledge_base(self, mork_ontology=None) -> Dict[str, Any]:
+        """
+        Populate the RAG store from the MORK ontology.
+
+        Every concept contributes its definition and formulas as
+        retrievable documents.  Returns summary statistics.
+        """
+        n_added = 0
+        concepts_used = 0
+        concepts = []
+        if mork_ontology is not None:
+            store = getattr(mork_ontology, 'concepts', None)
+            if isinstance(store, dict):
+                concepts = list(store.values())
+            elif hasattr(mork_ontology, 'domain_concepts'):
+                try:
+                    concepts = [
+                        mork_ontology.concepts[cid]
+                        for ids in mork_ontology.domain_concepts.values()
+                        for cid in ids
+                    ]
+                except Exception:
+                    concepts = []
+
+        documents = []
+        for concept in concepts:
+            name = getattr(concept, 'name', '')
+            definition = getattr(concept, 'definition', '')
+            keywords = getattr(concept, 'keywords', []) or []
+            formulas = getattr(concept, 'formulas', []) or []
+            domain = getattr(getattr(concept, 'domain', None), 'value', '')
+            if definition:
+                documents.append({
+                    'content': f"{name}: {definition}",
+                    'metadata': {'type': 'definition', 'domain': domain,
+                                 'source': 'mork_ontology'},
+                })
+                concepts_used += 1
+            elif keywords:
+                # Concept carries keywords only - still retrievable content
+                documents.append({
+                    'content': f"{name} ({domain}): "
+                               f"{', '.join(keywords)}",
+                    'metadata': {'type': 'concept_keywords',
+                                 'domain': domain,
+                                 'source': 'mork_ontology'},
+                })
+                concepts_used += 1
+            for formula in formulas:
+                documents.append({
+                    'content': f"{name} formula: {formula}",
+                    'metadata': {'type': 'formula', 'domain': domain,
+                                 'source': 'mork_ontology'},
+                })
+
+        if documents:
+            self.rag.add_documents(documents)
+            n_added = len(documents)
+
+        self.kb_stats = {
+            'n_documents_added': n_added,
+            'n_concepts_used': concepts_used,
+            'ontology_attached': mork_ontology is not None,
+        }
+        return self.kb_stats
 
     def add_documents(self, documents: List[Dict[str, Any]]):
         """Add documents to the knowledge base"""
@@ -201,12 +282,3 @@ class KnowledgeBaseBuilder:
     def retrieve(self, query: str, top_k: int = 5) -> RetrievalResult:
         """Retrieve relevant documents"""
         return self.rag.retrieve(query, top_k)
-    """
-    Local RAG system using ChromaDB for vector storage.
-
-    Falls back to in-memory storage if ChromaDB is not available.
-    """
-
-    def __init__(self, persist_dir: Optional[str] = None, collection_name: str = "stan_knowledge"):
-        self.persist_dir = persist_dir
-        self.collection_name = collection_name

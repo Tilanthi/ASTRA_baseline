@@ -9,7 +9,8 @@ Key components:
 - ConditionalComputationEngine: Orchestrates execution with routing
 """
 
-from .moe_router import (
+try:
+    from .moe_router import (
     MoECapabilityRouter,
     ConditionalComputationEngine,
     TaskType,
@@ -17,7 +18,9 @@ from .moe_router import (
     RoutingDecision,
     create_moe_router,
     create_conditional_engine,
-)
+    )
+except Exception:
+    MoECapabilityRouter = ConditionalComputationEngine = TaskType = Expert = RoutingDecision = create_moe_router = create_conditional_engine = None  # degraded: unavailable
 
 __all__ = [
     'MoECapabilityRouter',

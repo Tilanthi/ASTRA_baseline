@@ -443,3 +443,208 @@ class NebularDiagnosticsCalculator:
             Electron temperature (K)
         """
         # Empirical fit (valid for T_e ~ 5000-20000 K)
+        #
+        # The auroral line 4363 A (upper level 1S0, 43196 cm^-1) and the
+        # nebular lines 4959+5007 A (upper 1D2, 20169 cm^-1) are both
+        # collisionally excited from the ground term. Their ratio is
+        #
+        #     R = I(4363)/I(4959+5007)
+        #       = C exp(-Delta E / k T_e),   Delta E = 23027 cm^-1
+        #                                    Delta E / k = 33134 K
+        #
+        # with C weakly temperature dependent through the ratio of
+        # collision strengths and branching ratios. We adopt the
+        # canonical low-density anchor R = 0.0100 at T_e = 1e4 K
+        # (Osterbrock & Ferland 2006), which gives C = 0.275.
+        # Inverting,
+        #
+        #     T_e = 33134 / ln(0.275 / R)   [K]
+        #
+        # Valid for n_e << 10^4 cm^-3; at higher densities collisional
+        # de-excitation of 1S0 raises R and this formula overestimates T_e
+        # by a few percent.
+        if ratio_4363_5007 <= 0.0:
+            raise ValueError("ratio must be positive")
+        t_e = 33134.0 / math.log(0.275 / ratio_4363_5007)
+        if not (4000.0 < t_e < 50000.0):
+            raise ValueError(
+                f"T_e = {t_e:.0f} K outside the valid range of the "
+                f"[O III] diagnostic (4000-50000 K); check the ratio")
+        return t_e
+
+    def oxygen_abundance(self, t3: float, t2: float,
+                         o2plus_over_hbeta: float,
+                         oplus_over_hbeta: float) -> float:
+        """
+        Total oxygen abundance O/H from ionic ratios.
+
+        Args:
+            t3: Temperature (K) in the O++ zone (from [O III])
+            t2: Temperature (K) in the O+ zone (from [O II])
+            o2plus_over_hbeta: I(4959+5007)/I(H beta)
+            oplus_over_hbeta: I(3727+3729)/I(H beta)
+
+        Returns:
+            O/H (12 + log10 returned directly is NOT applied)
+        """
+        # Ionic abundances from the standard relations
+        # (Osterbrock & Ferland 2006, eq. 5.4-based formulation):
+        # O+/H+ ~ I([O II])/I(Hb) * f(T2), O++/H+ ~ I([O III])/I(Hb) * g(T3)
+        # Temperature factors include the t^-0.5 collisional term.
+        t3_4 = t3 / 1e4
+        t2_4 = t2 / 1e4
+        o_plus = oplus_over_hbeta * 1.33e-2 * t2_4 ** 0.5 / (
+            1.0 + 2.2e-2 * t2_4)
+        o_2plus = o2plus_over_hbeta * 4.5e-3 * t3_4 ** 0.5 / (
+            1.0 + 2.2e-2 * t3_4)
+        return o_plus + o_2plus
+
+
+# =============================================================================
+# RECOMBINATION LINES
+# =============================================================================
+
+class RecombinationLines:
+    """
+    Hydrogen recombination line emission (Case B).
+
+    Case B assumes the nebula is optically thick to Lyman-series
+    photons (they are reabsorbed on the spot), so recombinations
+    directly to the ground state do not produce observable photons.
+
+    Reference emissivities: Hummer & Storey (1987); fits from
+    Osterbrock & Ferland (2006), table 4.2.
+    """
+
+    # Case B effective recombination coefficients (cm^3/s) at Te = 1e4 K
+    # and their temperature exponents: alpha_eff(T) = a0 * (T/1e4)^beta
+    # alpha_eff(line, T) = a0 * (T/1e4)^beta, in PHOTONS cm^3/s:
+    # j(line) = n_e n_p alpha_eff h nu. The coefficients reproduce the
+    # canonical Case B energy decrement at Te = 1e4 K:
+    # I(Ha)/I(Hb) = 2.86, I(Hg)/I(Hb) = 0.469, I(Hd)/I(Hb) = 0.259.
+    _LINE_COEFFICIENTS = {
+        'Halpha': (1.17e-13, -0.942),   # 6563 A, alpha_eff(Ha)/alpha_B ~ 0.45
+        'Hbeta':  (3.03e-14, -0.874),   # 4861 A
+        'Hgamma': (1.27e-14, -0.885),   # 4340 A
+        'Hdelta': (6.62e-15, -0.900),   # 4102 A
+    }
+
+    # Line wavelengths (cm)
+    _WAVELENGTHS_CM = {
+        'Halpha': 6562.8e-8,
+        'Hbeta': 4861.3e-8,
+        'Hgamma': 4340.5e-8,
+        'Hdelta': 4101.7e-8,
+    }
+
+    # Photon energies (erg)
+    _PHOTON_ENERGY = {
+        name: H_PLANCK * C_LIGHT / wl
+        for name, wl in _WAVELENGTHS_CM.items()
+    }
+
+    def __init__(self, temperature: float = 1e4):
+        """
+        Args:
+            temperature: Electron temperature (K)
+        """
+        self.temperature = temperature
+        self.recomb = RecombinationCoefficients()
+
+    def alpha_eff(self, line: str) -> float:
+        """Effective recombination coefficient (cm^3/s) for a line."""
+        if line not in self._LINE_COEFFICIENTS:
+            raise ValueError(f"unknown line: {line}")
+        a0, beta = self._LINE_COEFFICIENTS[line]
+        t4 = self.temperature / 1e4
+        return a0 * t4 ** beta
+
+    def emissivity(self, line: str, n_e: float, n_p: float) -> float:
+        """
+        Volume emissivity j (erg cm^-3 s^-1).
+
+        j = n_e n_p alpha_eff(T) h nu
+        """
+        return (n_e * n_p * self.alpha_eff(line)
+                * self._PHOTON_ENERGY[line])
+
+    def emissivity_ratio(self, line1: str, line2: str) -> float:
+        """
+        Case B energy emissivity ratio j(line1)/j(line2), i.e. the
+        observed line-intensity ratio (Halpha/Hbeta = 2.86 at 1e4 K).
+        """
+        return (self.alpha_eff(line1) * self._PHOTON_ENERGY[line1]
+                / (self.alpha_eff(line2) * self._PHOTON_ENERGY[line2]))
+
+    def balmer_decrement(self) -> Dict[str, float]:
+        """
+        Case B Balmer decrement relative to H beta.
+
+        At Te = 1e4 K: Halpha/Hbeta = 2.86, Hgamma/Hbeta = 0.469,
+        Hdelta/Hbeta = 0.259 (Osterbrock & Ferland 2006, table 4.2).
+        """
+        out = {}
+        for name in ('Halpha', 'Hgamma', 'Hdelta'):
+            out[name] = self.emissivity_ratio(name, 'Hbeta')
+        return out
+
+    def luminosity(self, line: str, q_h: float,
+                   filling_factor: float = 1.0) -> float:
+        """
+        Total line luminosity (erg/s) of an ionization-bounded HII
+        region with ionizing photon rate q_h.
+
+        In ionization equilibrium every Case B recombination cascades
+        through the Balmer series, so the emission rate of photons in
+        a given line is q_h * alpha_eff(line)/alpha_B.
+        """
+        alpha_b = self.recomb.alpha_B(self.temperature)
+        rate = q_h * self.alpha_eff(line) / alpha_b   # photons/s
+        return rate * self._PHOTON_ENERGY[line]
+
+    def hbeta_luminosity(self, q_h: float) -> float:
+        """L(H beta) (erg/s) for ionizing rate q_h (photons/s)."""
+        return self.luminosity('Hbeta', q_h)
+
+    def ionizing_rate_from_hbeta(self, l_hbeta: float) -> float:
+        """
+        Invert L(H beta) to Q_H (photons/s), Case B, Te = 1e4 K:
+        L(Hb) = Q_H * alpha_eff(Hb)/alpha_B * h nu_Hb.
+        """
+        alpha_b = self.recomb.alpha_B(self.temperature)
+        rate = (l_hbeta / self._PHOTON_ENERGY['Hbeta']
+                * alpha_b / self.alpha_eff('Hbeta'))
+        return rate
+
+
+# =============================================================================
+# MODULE-LEVEL STRÖMGREN RADIUS
+# =============================================================================
+
+def stromgren_radius(q_h: float, n_e: float, temperature: float = 1e4,
+                     filling_factor: float = 1.0) -> float:
+    """
+    Strömgren radius (cm) for ionization-bounded sphere.
+
+    R_s = (3 Q_H / (4 pi alpha_B n_e^2 f))^(1/3)
+
+    Args:
+        q_h: Ionizing photon rate (photons/s)
+        n_e: Electron density (cm^-3)
+        temperature: Electron temperature (K)
+        filling_factor: Volume filling factor
+
+    Returns:
+        Strömgren radius (cm)
+    """
+    sphere = StromgrenSphere()
+    return sphere.stromgren_radius(q_h, n_e, temperature, filling_factor)
+
+
+# =============================================================================
+# FACTORY
+# =============================================================================
+
+def get_diagnostics_calculator() -> NebularDiagnosticsCalculator:
+    """Factory: nebular diagnostics calculator (T_e from line ratios)."""
+    return NebularDiagnosticsCalculator()

@@ -203,7 +203,7 @@ class TemporalFCIDiscovery:
 
         # Try to import v98 FCI
         try:
-            from astra_core.capabilities.v98_fci_causal_discovery import FCIDiscovery
+            from astra_core.capabilities.causal.fci_discovery import FCIDiscovery
             self.fci = FCIDiscovery(alpha=alpha)
             self.fci_available = True
             # CI test will be initialized as fallback since V98 doesn't export it

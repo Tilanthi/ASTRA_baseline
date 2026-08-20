@@ -489,9 +489,3 @@ def test_quantum_reasoning_function(data):
     return {'passed': True, 'result': None}
 
 
-
-def utility_function_12(*args, **kwargs):
-    """Utility function 12."""
-    return None
-
-

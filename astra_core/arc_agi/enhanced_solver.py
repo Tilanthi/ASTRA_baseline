@@ -9,30 +9,66 @@ Integrates all advanced components:
 - Iterative refinement with error correction
 """
 
-import numpy as np
-from typing import List, Tuple, Dict, Set, Optional, Callable, Any
-from dataclasses import dataclass
-import time
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    from typing import List, Tuple, Dict, Set, Optional, Callable, Any
+except Exception:
+    List = Tuple = Dict = Set = Optional = Callable = Any = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass
+except Exception:
+    dataclass = None  # degraded: unavailable
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
 
-from .grid_dsl import Grid, GridObject, empty_grid
-from .hypothesis_engine import (
+try:
+    from .grid_dsl import Grid, GridObject, empty_grid
+except Exception:
+    Grid = GridObject = empty_grid = None  # degraded: unavailable
+try:
+    from .hypothesis_engine import (
     TransformationHypothesis, TransformationType,
     HypothesisGenerator, HypothesisTester
-)
-from .pattern_library import PatternDetector, PatternPrimitives, CompositeTransform
-from .systematic_search import (
+    )
+except Exception:
+    TransformationHypothesis = TransformationType = HypothesisGenerator = HypothesisTester = None  # degraded: unavailable
+try:
+    from .pattern_library import PatternDetector, PatternPrimitives, CompositeTransform
+except Exception:
+    PatternDetector = PatternPrimitives = CompositeTransform = None  # degraded: unavailable
+try:
+    from .systematic_search import (
     ConstraintPropagator, ProgramSynthesizer, BeamSearchSolver,
     AnalogicalTransfer, TaskAnalysis
-)
-from .extended_generators import ExtendedGenerators
-from .deep_synthesis import DeepProgramSynthesizer, EnumerativeSynthesizer
-from .neural_patterns import (
+    )
+except Exception:
+    ConstraintPropagator = ProgramSynthesizer = BeamSearchSolver = AnalogicalTransfer = TaskAnalysis = None  # degraded: unavailable
+try:
+    from .extended_generators import ExtendedGenerators
+except Exception:
+    ExtendedGenerators = None  # degraded: unavailable
+try:
+    from .deep_synthesis import DeepProgramSynthesizer, EnumerativeSynthesizer
+except Exception:
+    DeepProgramSynthesizer = EnumerativeSynthesizer = None  # degraded: unavailable
+try:
+    from .neural_patterns import (
     GridEncoder, PatternMatcher, TransformationPrioritizer, PatternCluster
-)
-from .iterative_refinement import (
+    )
+except Exception:
+    GridEncoder = PatternMatcher = TransformationPrioritizer = PatternCluster = None  # degraded: unavailable
+try:
+    from .iterative_refinement import (
     ErrorAnalyzer, SolutionRefiner, IterativeRefinementSolver,
     HypothesisCombiner, ConstraintBasedRepair
-)
+    )
+except Exception:
+    ErrorAnalyzer = SolutionRefiner = IterativeRefinementSolver = HypothesisCombiner = ConstraintBasedRepair = None  # degraded: unavailable
 
 
 @dataclass

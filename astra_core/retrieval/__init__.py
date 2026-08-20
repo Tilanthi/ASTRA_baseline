@@ -21,48 +21,63 @@ Version: 1.0
 Date: 2026-01-04
 """
 
-from .hybrid_search import (
+try:
+    from .hybrid_search import (
     HybridRetriever,
     TfidfRetriever,
     VectorRetriever,
     HybridSearchResult,
     create_hybrid_retriever,
     Document,
-)
+    )
+except Exception:
+    HybridRetriever = TfidfRetriever = VectorRetriever = HybridSearchResult = create_hybrid_retriever = Document = None  # degraded: unavailable
 
-from .context_distiller import (
+try:
+    from .context_distiller import (
     ContextDistiller,
     RelevancyCheck,
     DistillationResult,
     create_context_distiller,
     SimpleKeywordChecker,
-)
+    )
+except Exception:
+    ContextDistiller = RelevancyCheck = DistillationResult = create_context_distiller = SimpleKeywordChecker = None  # degraded: unavailable
 
-from .sharded_retrieval import (
+try:
+    from .sharded_retrieval import (
     ShardedRetriever,
     DomainShard,
     ShardedRetrievalResult,
     ShardStrategy,
     ShardSelector,
     create_sharded_retriever,
-)
+    )
+except Exception:
+    ShardedRetriever = DomainShard = ShardedRetrievalResult = ShardStrategy = ShardSelector = create_sharded_retriever = None  # degraded: unavailable
 
-from .query_expander import (
+try:
+    from .query_expander import (
     QueryExpander,
     ParallelQueryExpander,
     RuleBasedExpander,
     ExpandedQueries,
     QueryExpansionResult,
     create_query_expander,
-)
+    )
+except Exception:
+    QueryExpander = ParallelQueryExpander = RuleBasedExpander = ExpandedQueries = QueryExpansionResult = create_query_expander = None  # degraded: unavailable
 
-from .parallel_rag import (
+try:
+    from .parallel_rag import (
     ParallelRAGOrchestrator,
     ParallelRAGConfig,
     ParallelRAGResult,
     RetrievalMode,
     create_parallel_rag,
-)
+    )
+except Exception:
+    ParallelRAGOrchestrator = ParallelRAGConfig = ParallelRAGResult = RetrievalMode = create_parallel_rag = None  # degraded: unavailable
 
 __all__ = [
     # Priority 1: Hybrid Search

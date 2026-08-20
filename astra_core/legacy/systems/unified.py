@@ -38,11 +38,26 @@ The system automatically selects optimal capabilities based on the task.
 
 __version__ = "3.1.0-ASTRO"
 
-from typing import Dict, List, Any, Optional, Union, Tuple
-from dataclasses import dataclass, field
-from enum import Enum
-import numpy as np
-import logging
+try:
+    from typing import Dict, List, Any, Optional, Union, Tuple
+except Exception:
+    Dict = List = Any = Optional = Union = Tuple = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from enum import Enum
+except Exception:
+    Enum = None  # degraded: unavailable
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    import logging
+except Exception:
+    logging = None  # degraded: unavailable
 
 # Import all capabilities from version-specific modules
 try:
@@ -79,13 +94,22 @@ except Exception as e:
     V94CompleteSystem = None
 
 # Import memory and intelligence systems
-from ..memory import MemoryGraph, MORKOntology, ExpandedMORK
-from ..intelligence import SwarmOrchestrator, DigitalPheromoneField
-from ..capabilities import (
+try:
+    from ...memory import MemoryGraph, MORKOntology, ExpandedMORK
+except Exception:
+    MemoryGraph = MORKOntology = ExpandedMORK = None  # degraded: unavailable
+try:
+    from ...intelligence import SwarmOrchestrator, DigitalPheromoneField
+except Exception:
+    SwarmOrchestrator = DigitalPheromoneField = None  # degraded: unavailable
+try:
+    from ...capabilities import (
     BayesianInference, CausalDiscovery, AbductiveInference,
     SelfConsistency, ExternalKnowledge, LLMInference,
     MetaLearning, AnalogicalReasoning, ToolIntegration
-)
+    )
+except Exception:
+    BayesianInference = CausalDiscovery = AbductiveInference = SelfConsistency = ExternalKnowledge = LLMInference = MetaLearning = AnalogicalReasoning = ToolIntegration = None  # degraded: unavailable
 
 # Import ASTRO-specific capabilities
 try:

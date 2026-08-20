@@ -6,15 +6,43 @@ enabling the system to develop intuitive understanding of cosmic phenomena
 through simulated "embodied" interaction with astronomical environments.
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Any, Union
-from dataclasses import dataclass, field
-import time
-import logging
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Optional, Tuple, Any, Union
+except Exception:
+    Dict = List = Optional = Tuple = Any = Union = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
+try:
+    import logging
+except Exception:
+    logging = None  # degraded: unavailable
 
-from .sensorimotor_system import VirtualEnvironment, WorldAction, Experience, ActionResult, SensoryInput, ModalityType
-from .embodied_learning_engine import EmbodiedLearningEngine
-from .common_sense_engine import PhysicsIntuitionModule, WorldScenario
+try:
+    from .sensorimotor_system import VirtualEnvironment, WorldAction, Experience, ActionResult, SensoryInput, ModalityType
+except Exception:
+    VirtualEnvironment = WorldAction = Experience = ActionResult = SensoryInput = ModalityType = None  # degraded: unavailable
+
+# Keep subclass definitions importable when the sensorimotor system was hollowed
+if VirtualEnvironment is None:
+    VirtualEnvironment = object
+try:
+    from .embodied_learning_engine import EmbodiedLearningEngine
+except Exception:
+    EmbodiedLearningEngine = None  # degraded: unavailable
+try:
+    from .common_sense_engine import PhysicsIntuitionModule, WorldScenario
+except Exception:
+    PhysicsIntuitionModule = WorldScenario = None  # degraded: unavailable
 
 
 @dataclass

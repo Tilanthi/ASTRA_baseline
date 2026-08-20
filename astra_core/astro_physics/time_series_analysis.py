@@ -1,850 +1,710 @@
-
-Multi-Scale Inference Module
-=============================
-
-This module combines information across multiple temporal and spatial
-scales for robust inference.
-
-Key Functions:
-- multi_scale_fusion: Combine evidence from multiple scales
-- scale_voting: Ensemble inference across scales
-
-
+#!/usr/bin/env python3
 """
-Time Series and Power Spectrum Analysis Module
+Time Series Analysis Module
+===========================
 
-Comprehensive time series analysis for astrophysical signals.
-Supports analysis of variable stars, AGN, transients, and periodic signals.
+Analysis tools for astronomical time series (light curves, radial
+velocity series, pulsar timing residuals, etc.).
 
-Key capabilities:
-- Power spectral density estimation
-- Period detection (Lomb-Scargle, phase dispersion)
-- Autocorrelation analysis
-- Wavelet analysis
-- Quasi-periodic oscillations (QPOs)
-- Time-domain filtering
-- Cross-correlation and coherence
-- Burst detection
-- State space modeling
+Capabilities:
+1. Periodograms: FFT for even sampling, Lomb-Scargle for uneven sampling
+2. Periodicity detection with false-alarm significance
+3. Power-spectrum characterization (red-noise slopes, log binning)
+4. Variability metrics (chi^2, fractional variability F_var)
+5. Morlet wavelet scalograms
+6. Cross-correlation (even) and discrete correlation (uneven, Edelson &
+   Krolik 1988)
+7. Structure functions (first and second order)
+8. Burst detection (sigma-threshold with minimum duration)
 
-Date: 2025-12-22
-Version: 1.0
+Key References:
+- Scargle 1982, ApJ, 263, 835 (Lomb-Scargle)
+- Horne & Baliunas 1986, ApJ, 302, 757 (LS normalization/FAP)
+- Torrence & Compo 1998, Rev. Geophys. (wavelets)
+- Edelson & Krolik 1988, ApJ, 333, 646 (discrete correlation)
+- Vaughan et al. 2003, MNRAS, 345, 1271 (fractional variability)
+
+Author: Claude Code (ASTRA)
+Date: 2026-08
 """
 
 import numpy as np
-from typing import List, Dict, Optional, Any, Tuple, Union, Callable
 from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
-from scipy import signal, fft, stats
-from scipy.interpolate import interp1d
-import warnings
+from scipy.signal import lombscargle
 
-# Physical constants
-DAY = 86400  # seconds
-YEAR = 3.154e7  # seconds
 
+# =============================================================================
+# DATA STRUCTURES
+# =============================================================================
 
 class SignalType(Enum):
-    """Types of astrophysical signals"""
-    PERIODIC = "periodic"
-    QUASI_PERIODIC = "quasi_periodic"
-    STOCHASTIC = "stochastic"
-    TRANSIENT = "transient"
-    BURST = "burst"
-    WHITE_NOISE = "white_noise"
-    RED_NOISE = "red_noise"
+    """Classification of time-series signal character."""
+    PERIODIC = "periodic"               # coherent oscillation / rotation
+    QUASI_PERIODIC = "quasi_periodic"   # broadened periodic component
+    RED_NOISE = "red_noise"             # power law P(f) ~ f^-alpha
+    WHITE_NOISE = "white_noise"         # flat spectrum
+    BURSTY = "bursty"                   # episodic flares / bursts
+    STOCHASTIC = "stochastic"           # correlated, aperiodic
 
 
 @dataclass
 class TimeSeries:
-    """Time series data container"""
-    times: np.ndarray  # Time values (days)
-    values: np.ndarray  # Measured values
-    errors: np.ndarray = None  # Measurement errors
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    """
+    A validated astronomical time series.
 
-    def __len__(self):
-        return len(self.times)
+    Attributes:
+        time: sample times (arbitrary units, monotonically increasing)
+        values: measured values
+        errors: 1-sigma measurement errors (optional)
+        name: series label
+    """
+
+    time: np.ndarray
+    values: np.ndarray
+    errors: Optional[np.ndarray] = None
+    name: str = "series"
 
     def __post_init__(self):
+        self.time = np.asarray(self.time, dtype=float)
+        self.values = np.asarray(self.values, dtype=float)
+        if self.time.ndim != 1 or self.values.ndim != 1:
+            raise ValueError("time and values must be 1-D")
+        if self.time.size != self.values.size:
+            raise ValueError("time and values must have equal length")
+        if self.time.size < 2:
+            raise ValueError("need at least 2 samples")
+        if np.any(np.diff(self.time) <= 0):
+            raise ValueError("time must be strictly increasing")
+        if self.errors is not None:
+            self.errors = np.asarray(self.errors, dtype=float)
+            if self.errors.shape != self.values.shape:
+                raise ValueError("errors must match values shape")
+
+    # -------------------------------------------------------------- metadata
+    @property
+    def duration(self) -> float:
+        """Total time span."""
+        return float(self.time[-1] - self.time[0])
+
+    @property
+    def mean_cadence(self) -> float:
+        """Mean sampling interval."""
+        return self.duration / (self.time.size - 1)
+
+    @property
+    def median_cadence(self) -> float:
+        """Median sampling interval."""
+        return float(np.median(np.diff(self.time)))
+
+    @property
+    def nyquist_frequency(self) -> float:
+        """Nyquist frequency from the median cadence."""
+        return 0.5 / self.median_cadence
+
+    @property
+    def is_evenly_sampled(self, rtol: float = 0.05) -> bool:
+        """True if the cadence is uniform within `rtol` of its median."""
+        dt = np.diff(self.time)
+        return bool(np.all(np.abs(dt - np.median(dt))
+                           <= rtol * np.median(dt)))
+
+    def snr(self) -> Optional[float]:
+        """Mean signal-to-noise ratio (requires errors)."""
         if self.errors is None:
-            self.errors = np.ones_like(self.values)
+            return None
+        return float(np.mean(np.abs(self.values) / self.errors))
+
+    def detrend(self, order: int = 1) -> "TimeSeries":
+        """Remove a polynomial trend of the given order."""
+        coeffs = np.polyfit(self.time - self.time.mean(), self.values, order)
+        trend = np.polyval(coeffs, self.time - self.time.mean())
+        return TimeSeries(self.time, self.values - trend, self.errors,
+                          name=self.name + "_detrended")
 
 
 @dataclass
 class PeriodogramResult:
-    """Result from periodogram analysis"""
-    frequencies: np.ndarray  # Hz or cycles/day
-    power: np.ndarray  # Power spectral density
-    periods: np.ndarray = None  # Periods (days)
-    peaks: List[Dict] = field(default_factory=list)
-    false_alarm_prob: np.ndarray = None
-    confidence: Dict[str, Any] = field(default_factory=dict)
+    """Result of a periodogram / power-spectrum analysis."""
+    frequencies: np.ndarray          # frequency grid
+    power: np.ndarray                # power at each frequency
+    nyquist: float                   # Nyquist frequency
+    best_frequency: Optional[float] = None
+    best_power: Optional[float] = None
+    best_period: Optional[float] = None
+    false_alarm_probability: Optional[float] = None
+    spectral_slope: Optional[float] = None      # P ~ f^-slope
+    method: str = "lomb_scargle"
+    signal_type: Optional[SignalType] = None
 
+    def peak_above(self, threshold: float) -> np.ndarray:
+        """Indices of power peaks above a threshold."""
+        return np.where(self.power > threshold)[0]
+
+
+# =============================================================================
+# POWER SPECTRUM
+# =============================================================================
 
 class PowerSpectrumAnalyzer:
     """
-    Power spectrum and frequency analysis.
+    Power spectral density estimation for astronomical series.
 
-    Methods:
-    - Lomb-Scargle periodogram
-    - Welch's method
-    - Multi-taper method
-    - Wavelet power spectrum
+    Evenly sampled data use the FFT periodogram (with optional
+    Hann-window detrending); unevenly sampled data use the Lomb-Scargle
+    periodogram (Scargle 1982; Horne & Baliunas 1986 normalization).
     """
 
-    def __init__(self):
-        self.nyquist_mult = 2.0  # Frequency multiplier for Nyquist
+    def __init__(self, oversampling: int = 5, min_frequency: float = 0.0):
+        self.oversampling = oversampling
+        self.min_frequency = min_frequency
 
-    def lomb_scargle(self, times: np.ndarray, values: np.ndarray,
-                     errors: np.ndarray = None,
-                     min_freq: float = None,
-                     max_freq: float = None,
-                     n_freqs: int = 10000) -> PeriodogramResult:
+    # --------------------------------------------------------------- methods
+    def periodogram(self, series: TimeSeries,
+                    method: str = "auto") -> PeriodogramResult:
         """
-        Lomb-Scargle periodogram for unevenly spaced data.
+        Compute the power spectrum.
 
-        Args:
-            times: Time values (days)
-            values: Measurement values
-            errors: Measurement uncertainties
-            min_freq: Minimum frequency (cycles/day)
-            max_freq: Maximum frequency (cycles/day)
-            n_freqs: Number of frequency points
-
-        Returns:
-            Periodogram result
+        method: 'fft' (even sampling), 'lombscargle' (any sampling),
+                'auto' (fft when evenly sampled).
         """
-        # Frequency range
-        t_span = times.max() - times.min()
-        avg_dt = np.mean(np.diff(times))
+        if method == "auto":
+            method = "fft" if series.is_evenly_sampled else "lombscargle"
 
-        if min_freq is None:
-            min_freq = 1.0 / t_span
-        if max_freq is None:
-            max_freq = 1.0 / (2 * avg_dt)  # Nyquist
-
-        frequencies = np.linspace(min_freq, max_freq, n_freqs)
-
-        # Use scipy's lombscargle
-        from scipy.signal import lombscargle
-        power = lombscargle(times, values, frequencies)
-
-        # Periods
-        periods = 1.0 / frequencies
-
-        # False alarm probability
-        n = len(times)
-        false_alarm_prob = 1 - (1 - np.exp(-power))**(n-1)
+        t0 = series.time[0]
+        if method == "fft":
+            freqs, power = self._fft_periodogram(series)
+        else:
+            freqs, power = self._ls_periodogram(series)
 
         result = PeriodogramResult(
-            frequencies=frequencies,
-            power=power,
-            periods=periods,
-            false_alarm_prob=false_alarm_prob
-        )
-
+            frequencies=freqs, power=power,
+            nyquist=series.nyquist_frequency, method=method)
+        self._annotate_peak(result, series)
         return result
 
-    def welch_method(self, times: np.ndarray, values: np.ndarray,
-                    nperseg: int = 256,
-                    overlap: int = None) -> PeriodogramResult:
+    def _fft_periodogram(self, series: TimeSeries) \
+            -> Tuple[np.ndarray, np.ndarray]:
+        dt = series.median_cadence
+        y = series.values - series.values.mean()
+        # Hann window suppresses spectral leakage
+        window = np.hanning(y.size)
+        yw = y * window
+        power = (np.abs(np.fft.rfft(yw)) ** 2) * \
+            (2.0 * dt / np.sum(window ** 2))
+        freqs = np.fft.rfftfreq(y.size, d=dt)
+        mask = freqs >= max(self.min_frequency, 1.0 / series.duration)
+        return freqs[mask], power[mask]
+
+    def _ls_periodogram(self, series: TimeSeries) \
+            -> Tuple[np.ndarray, np.ndarray]:
+        t = series.time - series.time.mean()
+        y = series.values - series.values.mean()
+        # Frequency grid from the series duration to Nyquist
+        f_min = max(self.min_frequency, 1.0 / series.duration)
+        f_max = series.nyquist_frequency
+        n_freq = int(self.oversampling * f_max / f_min)
+        freqs = np.linspace(f_min, f_max, max(n_freq, 10))
+        # lombscargle angular frequency; normalize to Horne & Baliunas
+        p = lombscargle(t, y, 2.0 * np.pi * freqs, precenter=False)
+        norm = 2.0 * np.var(y) / max(y.size, 1)
+        power = p / norm
+        return freqs, power
+
+    def _annotate_peak(self, result: PeriodogramResult,
+                       series: TimeSeries) -> None:
+        """Record the highest peak, its FAP, and the spectral slope."""
+        i = int(np.argmax(result.power))
+        result.best_frequency = float(result.frequencies[i])
+        result.best_power = float(result.power[i])
+        if result.best_frequency > 0:
+            result.best_period = 1.0 / result.best_frequency
+        result.false_alarm_probability = self.false_alarm_probability(
+            result.best_power, series, result)
+        result.spectral_slope = self.spectral_slope(result)
+        result.signal_type = self.classify(result)
+
+    @staticmethod
+    def false_alarm_probability(peak_power: float, series: TimeSeries,
+                                result: PeriodogramResult) -> float:
         """
-        Welch's method for evenly spaced data.
+        Baluev (2008)-style single-peak FAP for the normalized
+        Lomb-Scargle power z:
 
-        Args:
-            times: Time values (should be evenly spaced)
-            values: Measurement values
-            nperseg: Length of each segment
-            overlap: Overlap between segments
+            FAP ~ N_eff exp(-z)
 
-        Returns:
-            Periodogram result
+        with N_eff the number of independent frequencies (~ the number
+        of grid points folded by the bandwidth-time product).
         """
-        # Check if evenly spaced
-        dt = np.mean(np.diff(times))
-        if np.std(np.diff(times)) / dt > 0.01:
-            warnings.warn("Data not evenly spaced, consider interpolation")
+        n_indep = min(result.frequencies.size,
+                      max(int(series.duration * result.nyquist), 1))
+        return float(min(1.0, n_indep * np.exp(-max(peak_power, 0.0))))
 
-        fs = 1.0 / dt  # Sampling frequency (1/day)
-
-        frequencies, power = signal.welch(values, fs=fs,
-                                             nperseg=nperseg,
-                                             noverlap=overlap)
-
-        # Convert to cycles/day
-        result = PeriodogramResult(
-            frequencies=frequencies,  # cycles/day
-            power=power,
-            periods=1.0 / frequencies
-        )
-
-        return result
-
-    def find_peaks(self, result: PeriodogramResult,
-                   threshold: float = 0.1,
-                   min_distance: int = 10) -> List[Dict]:
+    @staticmethod
+    def spectral_slope(result: PeriodogramResult) -> Optional[float]:
         """
-        Find peaks in periodogram.
-
-        Args:
-            result: Periodogram result
-            threshold: Minimum peak height (relative)
-            min_distance: Minimum distance between peaks (indices)
-
-        Returns:
-            List of peak properties
+        Log-log power-law slope beta of P(f) ~ f^-beta via least
+        squares. White noise -> 0, red noise -> positive beta.
         """
-        from scipy.signal import find_peaks
+        f, p = result.frequencies, result.power
+        mask = (f > 0) & (p > 0)
+        if mask.sum() < 5:
+            return None
+        lf, lp = np.log10(f[mask]), np.log10(p[mask])
+        slope = np.polyfit(lf, lp, 1)[0]
+        return float(-slope)
 
-        # Normalize power
-        power_norm = result.power / np.max(result.power)
+    @staticmethod
+    def classify(result: PeriodogramResult) -> SignalType:
+        """Coarse signal-type classification from the periodogram."""
+        if result.spectral_slope is None:
+            return SignalType.STOCHASTIC
+        beta = result.spectral_slope
+        peak_power = result.best_power or 0.0
+        # A strong narrow peak with a flat-ish background -> periodic
+        if peak_power > 3.0 and abs(beta) < 1.0:
+            return SignalType.PERIODIC
+        if peak_power > 1.0:
+            return SignalType.QUASI_PERIODIC
+        if beta > 1.0:
+            return SignalType.RED_NOISE
+        if abs(beta) < 0.3:
+            return SignalType.WHITE_NOISE
+        return SignalType.STOCHASTIC
 
-        peaks, properties = find_peaks(power_norm,
-                                        height=threshold,
-                                        distance=min_distance)
+    def log_binned(self, result: PeriodogramResult,
+                   n_bins: int = 30) -> Tuple[np.ndarray, np.ndarray]:
+        """Geometrically log-binned power spectrum (median per bin)."""
+        f, p = result.frequencies, result.power
+        edges = np.geomspace(f[f > 0].min(), f.max(), n_bins + 1)
+        centers, means = [], []
+        for lo, hi in zip(edges[:-1], edges[1:]):
+            m = (f >= lo) & (f < hi) & (p > 0)
+            if m.sum() > 0:
+                centers.append(np.sqrt(lo * hi))
+                means.append(float(np.median(p[m])))
+        return np.array(centers), np.array(means)
 
-        peak_list = []
-        for peak_idx in peaks:
-            peak_list.append({
-                'period': result.periods[peak_idx],
-                'frequency': result.frequencies[peak_idx],
-                'power': result.power[peak_idx],
-                'power_norm': power_norm[peak_idx],
-                'fap': result.false_alarm_prob[peak_idx] if result.false_alarm_prob is not None else None
-            })
 
-        return peak_list
-
+# =============================================================================
+# VARIABILITY
+# =============================================================================
 
 class VariabilityDetector:
     """
-    Detect and characterize variability.
+    Quantify variability of a series against its measurement errors.
 
-    Methods:
-    - Stetson index
-    - Chi-squared test against constancy
-    - Structure function
-    - Autocorrelation
+    Metrics:
+    - reduced chi^2 around the mean: chi^2_r = sum((x-<x>)^2/e^2)/(N-1)
+    - excess variance (Nandra et al. 1997) and its error
+    - fractional variability F_var (Vaughan et al. 2003)
+    - robust normalized excess variance (MAD-based)
     """
 
-    def __init__(self):
-        pass
+    def reduced_chi2(self, series: TimeSeries) -> Optional[float]:
+        if series.errors is None:
+            return None
+        r = (series.values - series.values.mean()) / series.errors
+        return float(np.sum(r ** 2) / (series.values.size - 1))
 
-    def stetson_index(self, times: np.ndarray, values: np.ndarray) -> float:
+    def excess_variance(self, series: TimeSeries) -> Optional[Dict[str, float]]:
         """
-        Calculate Stetson's variability index.
-
-        Measures autocorrelation of variability.
-
-        Args:
-            times: Time values
-            values: Measurement values
-
-        Returns:
-            Stetson's J index
+        sigma_NXS^2 = S^2 / <x>^2 - mean(e^2)/<x>^2 with analytic error
+        from Vaughan et al. (2003) eq. B2.
         """
-        # Normalize to unit variance
-        mean_val = np.mean(values)
-        std_val = np.std(values)
-        if std_val == 0:
-            return 0.0
+        if series.errors is None:
+            return None
+        x, e = series.values, series.errors
+        mean_sq = x.mean() ** 2
+        s2 = x.var(ddof=1)
+        sigma_nxs = s2 / mean_sq - np.mean(e ** 2) / mean_sq
+        n = x.size
+        err_sq = (np.sqrt(2.0 / n) * np.mean(e ** 2) / mean_sq) ** 2 + \
+                 (np.sqrt(s2 / n) / (2.0 * mean_sq) *
+                  (1.0 + sigma_nxs)) ** 2
+        return {'excess_variance': float(sigma_nxs),
+                'error': float(np.sqrt(err_sq))}
 
-        normalized = (values - mean_val) / std_val
+    def fractional_variability(self, series: TimeSeries) \
+            -> Optional[Dict[str, float]]:
+        """F_var = sqrt(sigma_NXS^2) with propagated error."""
+        ev = self.excess_variance(series)
+        if ev is None or ev['excess_variance'] <= 0:
+            return None
+        f_var = np.sqrt(ev['excess_variance'])
+        err = ev['error'] / (2.0 * f_var)
+        return {'fractional_variability': float(f_var), 'error': float(err)}
 
-        # Calculate Stetson's J
-        J = 0
-        n = len(times)
-
-        for i in range(n):
-            for j in range(n):
-                if i != j:
-                    delta_i = normalized[i]
-                    delta_j = normalized[j]
-                    J += np.sign(delta_i) * np.sign(delta_j) * min(abs(delta_i), abs(delta_j))
-
-        J = J / (n * (n - 1))
-
-        return J
-
-    def chi2_constancy(self, values: np.ndarray, errors: np.ndarray) -> Tuple[float, float]:
+    def robust_nex(self, series: TimeSeries) -> float:
         """
-        Chi-squared test against constant flux.
-
-        Args:
-            values: Measured values
-            errors: Measurement uncertainties
-
-        Returns:
-            (chi_squared, p_value)
+        Robust normalized excess variance: 1.4826^2 MAD^2 / median^2
+        (outlier-resistant; no error bars required).
         """
-        mean_val = np.mean(values)
+        med = np.median(series.values)
+        mad = np.median(np.abs(series.values - med))
+        return float((1.4826 * mad) ** 2 / med ** 2) if med != 0 else 0.0
 
-        chi2 = np.sum(((values - mean_val) / errors)**2)
-        dof = len(values) - 1
+    def analyze(self, series: TimeSeries) -> Dict[str, Any]:
+        """All variability metrics plus the variability verdict."""
+        chi2 = self.reduced_chi2(series)
+        ev = self.excess_variance(series)
+        fv = self.fractional_variability(series)
+        r_nex = self.robust_nex(series)
+        # Variable if chi2_r clearly exceeds unity (99% one-sided)
+        variable = bool(chi2 is not None and chi2 >
+                        1.0 + 3.0 * np.sqrt(2.0 / series.values.size))
+        if chi2 is None:
+            variable = bool(r_nex > 0.01)
+        return {
+            'variable': variable,
+            'reduced_chi2': chi2,
+            'excess_variance': ev,
+            'fractional_variability': fv,
+            'robust_normalized_excess_variance': r_nex,
+            'n_samples': int(series.values.size),
+            'mean': float(series.values.mean()),
+            'std': float(series.values.std(ddof=1)),
+        }
 
-        # P-value from chi-squared distribution
-        p_value = 1 - stats.chi2.cdf(chi2, dof)
 
-        return chi2, p_value
-
-    def structure_function(self, times: np.ndarray, values: np.ndarray,
-                         max_lag: int = None) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Calculate structure function.
-
-        SF(dt) = <(x(t) - x(t+dt))^2>
-
-        Args:
-            times: Time values
-            values: Measured values
-            max_lag: Maximum lag to compute
-
-        Returns:
-            (lags, structure_function)
-        """
-        n = len(times)
-
-        if max_lag is None:
-            max_lag = n // 2
-
-        lags = []
-        sf_values = []
-
-        for lag in range(1, max_lag + 1):
-            sf_pairs = []
-
-            for i in range(n - lag):
-                diff = values[i] - values[i + lag]
-                sf_pairs.append(diff**2)
-
-            if sf_pairs:
-                lags.append(lag)
-                sf_values.append(np.mean(sf_pairs))
-
-        return np.array(lags), np.array(sf_values)
-
+# =============================================================================
+# WAVELETS
+# =============================================================================
 
 class WaveletAnalyzer:
     """
-    Wavelet analysis for time-frequency decomposition.
+    Morlet continuous wavelet transform (Torrence & Compo 1998).
 
-    Useful for:
-    - Time-varying periodicities
-    - Quasi-periodic oscillations
-    - Burst detection
+    The daughter wavelet psi_s(t) = s^(-1/2) pi^(-1/4)
+    exp(i w0 t/s) exp(-(t/s)^2 / 2) is convolved directly with the
+    signal (conjugate convolution; no scipy.signal.cwt, which was
+    removed in scipy 1.16). Scales grow geometrically from twice the
+    median cadence; the Morlet (w0 = 6) Fourier factor 1.03 converts
+    scale to period. Edge regions within e-folding length 2.5 s of the
+    ends are affected by zero padding (no cone-of-influence mask is
+    applied; interpret borders with care).
     """
 
-    def __init__(self):
-        pass
+    FOURIER_FACTOR = 1.03  # period = FOURIER_FACTOR * scale (Morlet w0=6)
 
-    def continuous_wavelet_transform(self, times: np.ndarray,
-                                     values: np.ndarray,
-                                     frequencies: np.ndarray) -> np.ndarray:
+    def __init__(self, n_scales: int = 48, w0: float = 6.0):
+        self.n_scales = n_scales
+        self.w0 = w0
+
+    def _morlet_daughter(self, scale: float, dt: float) -> np.ndarray:
+        """Unit-energy Morlet daughter sampled on the series time grid."""
+        support = 5.0 * scale
+        n = max(int(2 * support / dt) + 1, 8)
+        t = np.linspace(-support, support, n)
+        u = t / scale
+        psi = (np.pi ** -0.25) * np.exp(1j * self.w0 * u) * \
+            np.exp(-0.5 * u ** 2)
+        psi *= (dt / scale) ** 0.5      # L2-energy normalization
+        return psi
+
+    def scalogram(self, series: TimeSeries) -> Dict[str, np.ndarray]:
         """
-        Compute continuous wavelet transform.
+        Compute the wavelet power |W(t, s)|^2.
 
-        Args:
-            times: Time values
-            values: Measurement values
-            frequencies: Analysis frequencies (cycles/day)
-
-        Returns:
-            Wavelet power [n_freqs, n_times]
+        Returns dict with 'time', 'periods', 'power' (n_scales x n_times).
         """
-        import pywt
+        dt = series.median_cadence
+        dj = 0.125                       # octaves per scale step
+        s0 = 2.0 * dt                    # smallest scale
+        # Cap the largest scale so the wavelet support (10 s) stays
+        # within half the series (otherwise the kernel outgrows the
+        # data and edge artifacts dominate).
+        j_max = min(self.n_scales - 1,
+                    int(np.log2(series.duration / (20.0 * s0)) / dj))
+        j = np.arange(max(j_max, 0) + 1)
+        scales = s0 * 2.0 ** (j * dj)
 
-        # Interpolate to evenly spaced grid
-        dt = np.mean(np.diff(times))
-        time_grid = np.arange(times.min(), times.max(), dt)
+        y = series.values - series.values.mean()
+        sigma_y = y.std(ddof=1) if y.std(ddof=1) > 0 else 1.0
+        y = y / sigma_y
 
-        # Linear interpolation
-        interp = interp1d(times, values, kind='linear', fill_value='extrapolate')
-        values_grid = interp(time_grid)
+        power = np.zeros((scales.size, y.size))
+        for k, s in enumerate(scales):
+            psi = self._morlet_daughter(s, dt)
+            # CWT: W[n] = sum_m y[m] psi*( (m-n) dt / s )
+            # (correlation with the conjugate daughter wavelet)
+            coef = np.correlate(y, psi, mode='same')
+            power[k] = np.abs(coef) ** 2
+        periods = self.FOURIER_FACTOR * scales
+        return {'time': series.time.copy(), 'periods': periods,
+                'power': power, 'normalized': True, 'sigma_y': sigma_y}
 
-        # CWT
-        # Use Morlet wavelet
-        scales = 1.0 / frequencies  # Approximate scaling
-        cwt_coeffs, scales_result = pywt.cwt(values_grid, scales, 'morlet')
+    def global_wavelet_spectrum(self, series: TimeSeries) \
+            -> Tuple[np.ndarray, np.ndarray]:
+        """Time-averaged wavelet power versus period."""
+        sc = self.scalogram(series)
+        gws = sc['power'].mean(axis=1)
+        return sc['periods'], gws
 
-        # Power
-        power = np.abs(cwt_coeffs)**2
+    def dominant_period(self, series: TimeSeries) -> Optional[float]:
+        """Period of the global-wavelet-spectrum peak."""
+        periods, gws = self.global_wavelet_spectrum(series)
+        if gws.size == 0:
+            return None
+        return float(periods[int(np.argmax(gws))])
 
-        return power
 
-    def global_wavelet_spectrum(self, times: np.ndarray,
-                                values: np.ndarray,
-                                frequencies: np.ndarray) -> np.ndarray:
-        """
-        Calculate global wavelet spectrum (time-averaged).
-
-        Args:
-            times: Time values
-            values: Measurement values
-            frequencies: Analysis frequencies
-
-        Returns:
-            Global wavelet power spectrum
-        """
-        power_2d = self.continuous_wavelet_transform(times, values, frequencies)
-        global_power = np.mean(power_2d, axis=1)
-
-        return global_power
-
+# =============================================================================
+# CROSS-CORRELATION
+# =============================================================================
 
 class CrossCorrelationAnalyzer:
     """
-    Cross-correlation and coherence analysis.
+    Cross-correlation of two time series.
 
-    Useful for:
-    - Time delays
-    - Reverberation mapping
-    - Multi-wavelength correlations
+    Evenly sampled: discrete CCF over integer lags (normalized).
+    Unevenly sampled: the discrete correlation function (DCF) of
+    Edelson & Krolik (1988) with bin-averaged correlation coefficients.
     """
 
-    def __init__(self):
-        pass
-
-    def cross_correlate(self, times1: np.ndarray, values1: np.ndarray,
-                        times2: np.ndarray, values2: np.ndarray,
-                        max_lag: int = None) -> Tuple[np.ndarray, np.ndarray]:
+    def ccf(self, a: TimeSeries, b: TimeSeries,
+            max_lag: Optional[int] = None) -> Dict[str, np.ndarray]:
         """
-        Cross-correlate two time series.
+        Normalized cross-correlation function for evenly sampled series
+        assumed on the same grid.
 
-        Args:
-            times1: Time values for series 1
-            values1: Measurement values for series 1
-            times2: Time values for series 2
-            values2: Measurement values for series 2
-            max_lag: Maximum lag to compute
-
-        Returns:
-            (lags, correlation)
+        Convention: ccf(tau) = corr[a(t), b(t + tau)]; a POSITIVE peak
+        lag means b lags a by that amount (b delayed relative to a).
         """
-        # Interpolate to common time grid
-        t_min = max(times1.min(), times2.min())
-        t_max = min(times1.max(), times2.max())
+        x = a.values - a.values.mean()
+        y = b.values - b.values.mean()
+        n = min(x.size, y.size)
+        x, y = x[:n], y[:n]
+        # correlate(y, x)[k] = sum_m y[m] x[m + k - (n-1)]
+        # = corr[y(t), x(t + s)] = corr[a(t), b(t - s)] at s = lag;
+        # thus the k-th entry reports the lag by which b trails a.
+        full = np.correlate(y, x, mode='full')
+        lags = np.arange(-n + 1, n)
+        denom = np.sqrt(np.sum(x ** 2) * np.sum(y ** 2))
+        ccf = full / denom if denom > 0 else full
+        if max_lag is not None:
+            m = np.abs(lags) <= max_lag
+            lags, ccf = lags[m], ccf[m]
+        dt = max(a.median_cadence, 1e-12)
+        return {'lags': lags, 'lag_times': lags * dt, 'ccf': ccf}
 
-        dt = min(np.mean(np.diff(times1)), np.mean(np.diff(times2)))
-        t_grid = np.arange(t_min, t_max, dt)
-
-        interp1 = interp1d(times1, values1, kind='linear', fill_value='extrapolate')
-        interp2 = interp1d(times2, values2, kind='linear', fill_value='extrapolate')
-
-        v1 = interp1(t_grid)
-        v2 = interp2(t_grid)
-
-        # Cross-correlation
-        correlation = signal.correlate(v1 - np.mean(v1),
-                                        v2 - np.mean(v2),
-                                        mode='same')
-
-        # Normalize
-        norm = np.sqrt(np.sum(v1**2) * np.sum(v2**2))
-        correlation = correlation / norm
-
-        # Lags
-        lags = t_grid - t_grid[len(t_grid)//2]
-
-        return lags, correlation
-
-    def coherence(self, times1: np.ndarray, values1: np.ndarray,
-                 times2: np.ndarray, values2: np.ndarray,
-                 nperseg: int = 256) -> Tuple[np.ndarray, np.ndarray]:
+    def peak_lag(self, a: TimeSeries, b: TimeSeries) -> Dict[str, float]:
         """
-        Calculate magnitude-squared coherence.
+        Lag of maximum (signed) CCF and its significance.
 
-        Args:
-            times1: Time values for series 1
-            values1: Measurement values for series 1
-            times2: Time values for series 2
-            values2: Measurement values for series 2
-            nperseg: Segment length
-
-        Returns:
-            (frequencies, coherence)
+        The maximum of the SIGNED correlation is used (not |ccf|) so
+        that a half-cycle anticorrelation cannot masquerade as the lag.
+        Positive peak_lag = b lags a.
         """
-        # Interpolate to common grid
-        t_min = max(times1.min(), times2.min())
-        t_max = min(times1.max(), times2.max())
+        result = self.ccf(a, b)
+        i = int(np.argmax(result['ccf']))
+        r_peak = float(result['ccf'][i])
+        # Significance against randomly permuted values (empirical null)
+        rng = np.random.default_rng(12345)
+        n = min(a.values.size, b.values.size)
+        null = []
+        x = a.values[:n] - a.values[:n].mean()
+        y0 = b.values[:n]
+        for _ in range(200):
+            y = rng.permutation(y0)
+            y = y - y.mean()
+            null.append(abs(np.correlate(x, y, 'valid')[0]
+                            / (np.linalg.norm(x) * np.linalg.norm(y))))
+        p_value = float(np.mean(np.array(null) >= abs(r_peak))) \
+            if null else 1.0
+        return {'peak_lag': float(result['lag_times'][i]),
+                'peak_correlation': r_peak, 'p_value': p_value}
 
-        dt = min(np.mean(np.diff(times1)), np.mean(np.diff(times2)))
-        t_grid = np.arange(t_min, t_max, dt)
-        fs = 1.0 / dt
+    def dcf(self, a: TimeSeries, b: TimeSeries, lag_bins: np.ndarray) \
+            -> Dict[str, Any]:
+        """
+        Discrete correlation function (Edelson & Krolik 1988) for
+        arbitrary sampling.
 
-        interp1 = interp1d(times1, values1, kind='linear', fill_value='extrapolate')
-        interp2 = interp1d(times2, values2, kind='linear', fill_value='extrapolate')
+        UDCF_ij = (a_i - <a>)(b_j - <b>) / (sigma_a sigma_b),
+        DCF(tau) = mean of UDCF over pairs with lag in [tau, tau+dt).
+        """
+        t1, x = a.time, a.values
+        t2, y = b.time, b.values
+        mx, my = x.mean(), y.mean()
+        sx = x.std(ddof=1)
+        sy = y.std(ddof=1)
+        lags = t2[None, :] - t1[:, None]   # positive = b lags a
+        ud = ((x[:, None] - mx) * (y[None, :] - my)) / (sx * sy)
+        lags, ud = lags.ravel(), ud.ravel()
+        centers, dcf_vals, n_pairs = [], [], []
+        for lo, hi in zip(lag_bins[:-1], lag_bins[1:]):
+            m = (lags >= lo) & (lags < hi)
+            if m.sum() >= 2:
+                centers.append(0.5 * (lo + hi))
+                dcf_vals.append(float(ud[m].mean()))
+                n_pairs.append(int(m.sum()))
+        return {'lag_centers': np.array(centers),
+                'dcf': np.array(dcf_vals),
+                'n_pairs': np.array(n_pairs)}
 
-        v1 = interp1(t_grid)
-        v2 = interp2(t_grid)
 
-        # Coherence
-        frequencies, coherence = signal.coherence(v1, v2, fs=fs,
-                                                     nperseg=nperseg)
-
-        return frequencies, coherence
-
+# =============================================================================
+# BURSTS
+# =============================================================================
 
 class BurstDetector:
     """
-    Detect transients and bursts in time series.
+    Episodic-burst detection via sigma-thresholding with hysteresis.
 
-    Methods:
-    - Sigma clipping
-    - Bayesian blocks
-    - Peak finding
-    - Change point detection
+    A burst is a run of >= min_duration consecutive samples at least
+    `threshold` robust sigmas (1.4826*MAD units) above the running
+    baseline. Reports start/end times, peak, fluence (integral of the
+    baseline-subtracted signal), and rise time.
     """
 
-    def __init__(self, threshold: float = 5.0):
-        """
-        Initialize burst detector.
-
-        Args:
-            threshold: Detection threshold in sigma
-        """
+    def __init__(self, threshold: float = 5.0, min_duration: int = 3,
+                 baseline_halfwindow: Optional[int] = None):
         self.threshold = threshold
+        self.min_duration = max(min_duration, 1)
+        self.baseline_halfwindow = baseline_halfwindow
 
-    def sigma_clip(self, values: np.ndarray, errors: np.ndarray = None,
-                  n_sigma: float = 5.0) -> List[Dict]:
-        """
-        Detect bursts using sigma clipping.
+    def _baseline(self, series: TimeSeries) -> np.ndarray:
+        if self.baseline_halfwindow is None:
+            med = np.median(series.values)
+            return np.full_like(series.values, med)
+        t, v = series.time, series.values
+        base = np.empty_like(v)
+        for i in range(v.size):
+            m = np.abs(t - t[i]) <= self.baseline_halfwindow * \
+                series.median_cadence
+            base[i] = np.median(v[m]) if m.sum() else med_global(v)
+        return base
 
-        Args:
-            values: Measurement values
-            errors: Measurement uncertainties
-            n_sigma: Detection threshold
-
-        Returns:
-            List of burst detections
-        """
-        if errors is None:
-            errors = np.std(values) * np.ones_like(values)
-
-        # Compute significance
-        mean_val = np.mean(values)
-        significance = (values - mean_val) / errors
-
-        # Find detections
-        detections = np.where(significance > n_sigma)[0]
+    def detect(self, series: TimeSeries) -> Dict[str, Any]:
+        base = self._baseline(series)
+        resid = series.values - base
+        mad = np.median(np.abs(resid - np.median(resid)))
+        sigma = 1.4826 * mad if mad > 0 else resid.std(ddof=1)
+        active = resid > self.threshold * sigma
 
         bursts = []
-        for idx in detections:
-            bursts.append({
-                'index': idx,
-                'value': values[idx],
-                'significance': significance[idx],
-                'time': idx  # Placeholder
-            })
-
-        return bursts
-
-    def bayesian_blocks(self, times: np.ndarray, values: np.ndarray,
-                       errors: np.ndarray = None) -> List[Tuple[int, int]]:
-        """
-        Detect change points using Bayesian Blocks algorithm.
-
-        Args:
-            times: Time values
-            values: Measurement values
-            errors: Measurement uncertainties
-
-        Returns:
-            List of change point (start_idx, end_idx)
-        """
-        # Simplified Bayesian Blocks
-        # Full implementation would be more complex
-
-        n = len(values)
-        edges = [0]
-
-        # Simple variance-based change detection
-        window = 10
-        for i in range(window, n - window):
-            before = values[i-window:i]
-            after = values[i:i+window]
-
-            # Kolmogorov-Smirnov test
-            ks_stat, ks_p = stats.ks_2samp(before, after)
-
-            if ks_p < 0.01:  # Significant change
-                edges.append(i)
-
-        edges.append(n)
-
-        # Create edge pairs
-        change_points = [(edges[i], edges[i+1]) for i in range(len(edges)-1)]
-
-        return change_points
+        i = 0
+        while i < active.size:
+            if active[i]:
+                j = i
+                while j + 1 < active.size and active[j + 1]:
+                    j += 1
+                if (j - i + 1) >= self.min_duration:
+                    sl = slice(i, j + 1)
+                    peak_i = i + int(np.argmax(resid[sl]))
+                    fluence = float(np.trapezoid(resid[sl], series.time[sl]))
+                    t_rise = series.time[peak_i] - series.time[i]
+                    bursts.append({
+                        'start': float(series.time[i]),
+                        'end': float(series.time[j]),
+                        'duration': float(series.time[j] - series.time[i]),
+                        'peak_time': float(series.time[peak_i]),
+                        'peak_value': float(series.values[peak_i]),
+                        'peak_sigma': float(resid[peak_i] / sigma),
+                        'fluence': fluence,
+                        'rise_time': float(t_rise),
+                        'n_samples': int(j - i + 1),
+                    })
+                i = j + 1
+            else:
+                i += 1
+        return {
+            'n_bursts': len(bursts),
+            'bursts': bursts,
+            'burst_rate': len(bursts) / series.duration
+            if series.duration > 0 else 0.0,
+            'threshold_sigma': self.threshold,
+            'robust_sigma': float(sigma),
+        }
 
 
-# Factory functions
-def analyze_power_spectrum(times: np.ndarray, values: np.ndarray,
-                          method: str = 'lomb_scargle') -> PeriodogramResult:
+def med_global(values: np.ndarray) -> float:
+    return float(np.median(values))
+
+
+# =============================================================================
+# STRUCTURE FUNCTION
+# =============================================================================
+
+def compute_structure_function(time: np.ndarray, values: np.ndarray,
+                               order: int = 2,
+                               n_bins: int = 15) -> Dict[str, np.ndarray]:
     """
-    Analyze power spectrum of time series.
+    Structure function SF(tau) = < |x(t+tau) - x(t)|^order > binned in
+    lag. For a random walk SF_2 ~ tau^1; for white noise SF_2 ~ tau^0
+    at lags beyond the correlation time.
 
-    Args:
-        times: Time values (days)
-        values: Measurement values
-        method: Analysis method ('lomb_scargle', 'welch')
+    Lags are binned geometrically (standard practice: small lags are
+    far better sampled than large lags).
 
-    Returns:
-        Periodogram result
+    Returns dict with 'lag_centers', 'sf', 'sf_error' (standard error).
     """
-    analyzer = PowerSpectrumAnalyzer()
+    t = np.asarray(time, dtype=float)
+    x = np.asarray(values, dtype=float)
+    lag_matrix = t[None, :] - t[:, None]
+    diff = np.abs(x[None, :] - x[:, None]) ** order
+    iu = np.triu_indices(t.size, k=1)
+    lags, diffs = lag_matrix[iu], diff[iu]
+    lags = np.abs(lags)
+    positive = lags[lags > 0]
 
-    if method == 'lomb_scargle':
-        return analyzer.lomb_scargle(times, values)
-    elif method == 'welch':
-        return analyzer.welch_method(times, values)
+    edges = np.geomspace(positive.min(), positive.max(), n_bins + 1)
+    centers, sf, err = [], [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = (lags >= lo) & (lags < hi)
+        if m.sum() >= 3:
+            centers.append(np.sqrt(lo * hi))
+            sf.append(float(diffs[m].mean()))
+            err.append(float(diffs[m].std(ddof=1) / np.sqrt(m.sum())))
+    return {'lag_centers': np.array(centers), 'sf': np.array(sf),
+            'sf_error': np.array(err), 'order': order}
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+def analyze_power_spectrum(time: np.ndarray, values: np.ndarray,
+                           errors: Optional[np.ndarray] = None,
+                           method: str = "auto") -> PeriodogramResult:
+    """Full periodogram analysis of a raw (t, x) series."""
+    series = TimeSeries(time, values, errors)
+    return PowerSpectrumAnalyzer().periodogram(series, method)
+
+
+def detect_periodicity(time: np.ndarray, values: np.ndarray,
+                       fap_threshold: float = 0.05) -> Dict[str, Any]:
+    """
+    Detect the best period with false-alarm significance.
+
+    Returns dict with best period/power/FAP and the significance
+    verdict at the given FAP threshold.
+    """
+    result = analyze_power_spectrum(time, values)
+    return {
+        'significant': bool(result.false_alarm_probability is not None
+                            and result.false_alarm_probability
+                            < fap_threshold),
+        'best_period': result.best_period,
+        'best_frequency': result.best_frequency,
+        'best_power': result.best_power,
+        'false_alarm_probability': result.false_alarm_probability,
+        'signal_type': result.signal_type.value if result.signal_type
+        else None,
+        'spectral_slope': result.spectral_slope,
+    }
+
+
+def cross_correlate_series(t1, x1, t2=None, x2=None, max_lag: int = None):
+    """
+    Cross-correlate two series. If t2/x2 omitted, computes the
+    autocorrelation of the first series.
+    """
+    a = TimeSeries(t1, x1)
+    if x2 is None:
+        b = a
     else:
-        raise ValueError(f"Unknown method: {method}")
-
-
-def detect_periodicity(times: np.ndarray, values: np.ndarray,
-                      min_period: float = None,
-                      max_period: float = None) -> Dict[str, Any]:
-    """
-    Detect significant periods in time series.
-
-    Args:
-        times: Time values (days)
-        values: Measurement values
-        min_period: Minimum period to search (days)
-        max_period: Maximum period to search (days)
-
-    Returns:
-        Detection results with period, significance, etc.
-    """
-    analyzer = PowerSpectrumAnalyzer()
-    result = analyzer.lomb_scargle(times, values)
-
-    # Find peaks
-    peaks = analyzer.find_peaks(result, threshold=0.05)
-
-    # Filter by period range
-    if min_period is not None or max_period is not None:
-        filtered_peaks = []
-        for peak in peaks:
-            period = peak['period']
-            if min_period and period < min_period:
-                continue
-            if max_period and period > max_period:
-                continue
-            filtered_peaks.append(peak)
-        peaks = filtered_peaks
-
-    return {
-        'peaks': peaks,
-        'periodogram': result,
-        'best_period': peaks[0]['period'] if peaks else None,
-        'best_significance': peaks[0]['fap'] if peaks else None
-    }
-
-
-def compute_structure_function(times: np.ndarray, values: np.ndarray,
-                             max_lag: int = None) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Compute structure function for variability analysis.
-
-    Args:
-        times: Time values (days)
-        values: Measurement values
-        max_lag: Maximum lag
-
-    Returns:
-        (lags, structure_function)
-    """
-    detector = VariabilityDetector()
-    return detector.structure_function(times, values, max_lag)
-
-
-def cross_correlate_series(times1: np.ndarray, values1: np.ndarray,
-                           times2: np.ndarray, values2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Cross-correlate two time series.
-
-    Args:
-        times1: Time values for series 1
-        values1: Measurement values for series 1
-        times2: Time values for series 2
-        values2: Measurement values for series 2
-
-    Returns:
-        (lags, correlation)
-    """
-    analyzer = CrossCorrelationAnalyzer()
-    return analyzer.cross_correlate(times1, values1, times2, values2)
-
-
-
-def check_temporal_constraints(events: List[Dict[str, Any]],
-                             constraints: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Check if temporal sequence satisfies temporal logic constraints.
-
-    Supports:
-    - Before (A before B)
-    - After (A after B)
-    - Between (A between B and C)
-    - Within (A within time_delta of B)
-
-    Args:
-        events: List of events with 'type' and 'timestamp'
-        constraints: List of temporal constraints
-
-    Returns:
-        Dictionary with constraint satisfaction results
-    """
-    import numpy as np
-
-    event_times = {e['type']: e['timestamp'] for e in events}
-
-    results = {
-        'all_satisfied': True,
-        'constraint_results': [],
-        'violations': []
-    }
-
-    for constraint in constraints:
-        ctype = constraint['type']
-        satisfied = True
-        details = {}
-
-        if ctype == 'before':
-            # A must occur before B
-            time_a = event_times.get(constraint['A'])
-            time_b = event_times.get(constraint['B'])
-
-            if time_a is None or time_b is None:
-                satisfied = False
-            else:
-                satisfied = time_a < time_b
-                details = {'time_difference': time_b - time_a}
-
-        elif ctype == 'within':
-            # A must occur within delta of B
-            time_a = event_times.get(constraint['A'])
-            time_b = event_times.get(constraint['B'])
-            delta = constraint['delta']
-
-            if time_a is None or time_b is None:
-                satisfied = False
-            else:
-                satisfied = abs(time_a - time_b) <= delta
-                details = {'actual_difference': abs(time_a - time_b), 'allowed': delta}
-
-        elif ctype == 'between':
-            # A must occur between B and C
-            time_a = event_times.get(constraint['A'])
-            time_b = event_times.get(constraint['B'])
-            time_c = event_times.get(constraint['C'])
-
-            if time_a is None or time_b is None or time_c is None:
-                satisfied = False
-            else:
-                satisfied = min(time_b, time_c) <= time_a <= max(time_b, time_c)
-                details = {'in_range': satisfied}
-
-        results['constraint_results'].append({
-            'constraint': constraint,
-            'satisfied': satisfied,
-            'details': details
-        })
-
-        if not satisfied:
-            results['all_satisfied'] = False
-            results['violations'].append(constraint)
-
-    return results
-
-
-def temporal_sequence_inference(observed: List[Dict[str, Any]],
-                                knowledge_base: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Infer likely sequence completion based on temporal patterns.
-
-    Args:
-        observed: Observed events in sequence
-        knowledge_base: Known temporal patterns
-
-    Returns:
-        Predicted next events with probabilities
-    """
-    import numpy as np
-
-    # Extract observed sequence
-    sequence_types = [e['type'] for e in observed]
-
-    # Find matching patterns
-    pattern_scores = []
-
-    for pattern in knowledge_base:
-        pattern_seq = pattern.get('sequence', [])
-
-        # Check if observed matches pattern prefix
-        matches_prefix = True
-        match_length = 0
-
-        for i, (obs, pat) in enumerate(zip(sequence_types, pattern_seq)):
-            if obs == pat:
-                match_length += 1
-            else:
-                matches_prefix = False
-                break
-
-        if matches_prefix and match_length > 0:
-            # Score by match length and pattern confidence
-            score = match_length * pattern.get('confidence', 0.5)
-            pattern_scores.append({
-                'pattern': pattern,
-                'match_length': match_length,
-                'score': score,
-                'next_event': pattern_seq[match_length] if match_length < len(pattern_seq) else None
-            })
-
-    if not pattern_scores:
-        return {'predictions': [], 'confidence': 0.0}
-
-    # Sort by score
-    pattern_scores.sort(key=lambda x: x['score'], reverse=True)
-
-    # Get top predictions
-    predictions = []
-    for ps in pattern_scores[:5]:
-        if ps['next_event']:
-            predictions.append({
-                'event_type': ps['next_event'],
-                'confidence': ps['score'] / len(observed),
-                'matched_pattern': ps['pattern'].get('name', 'unknown')
-            })
-
-    overall_confidence = max([p['confidence'] for p in predictions]) if predictions else 0.0
-
-    return {
-        'predictions': predictions,
-        'confidence': overall_confidence,
-        'num_patterns_matched': len(pattern_scores)
-    }
-
-
-
-def integrate_cross_scale_predictions(predictions: Dict[str, np.ndarray],
-                                    scale_weights: Dict[str, float] = None) -> Dict[str, Any]:
-    """
-    Integrate predictions from multiple scales with learned weights.
-
-    Args:
-        predictions: Dictionary mapping scale names to predictions
-        scale_weights: Optional weights for each scale
-
-    Returns:
-        Integrated prediction with confidence
-    """
-    import numpy as np
-
-    scales = list(predictions.keys())
-
-    if not scales:
-        return {'prediction': None, 'confidence': 0.0}
+        b = TimeSeries(t2, x2)
+    return CrossCorrelationAnalyzer().ccf(a, b, max_lag)

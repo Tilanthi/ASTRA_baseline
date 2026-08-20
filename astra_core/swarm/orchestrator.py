@@ -25,8 +25,8 @@ import threading
 from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .pheromone_dynamics import DigitalPheromoneField, PheromoneType
-from .leapcore_evolution import LEAPCoreEvolution, Chromosome
+from ..intelligence.pheromone_dynamics import DigitalPheromoneField, PheromoneType
+from ..intelligence.leapcore_evolution import LEAPCoreEvolution, Chromosome
 
 
 class AgentType(Enum):

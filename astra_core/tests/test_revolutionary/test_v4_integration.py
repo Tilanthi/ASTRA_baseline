@@ -23,7 +23,7 @@ class TestV4Integration:
 
     def test_v4_coordinator_creation(self):
         """Test that V4 coordinator can be created."""
-        from astra_core.v4_revolutionary import create_v4_coordinator
+        from astra_core.revolutionary import create_v4_coordinator
 
         coordinator = create_v4_coordinator()
         assert coordinator is not None
@@ -31,7 +31,7 @@ class TestV4Integration:
 
     def test_v4_system_status(self):
         """Test getting system status."""
-        from astra_core.v4_revolutionary import create_v4_coordinator
+        from astra_core.revolutionary import create_v4_coordinator
 
         coordinator = create_v4_coordinator()
         status = coordinator.get_system_status()
@@ -42,7 +42,7 @@ class TestV4Integration:
 
     def test_v4_process_query(self):
         """Test processing a query."""
-        from astra_core.v4_revolutionary import create_v4_coordinator, IntegrationMode
+        from astra_core.revolutionary import create_v4_coordinator, IntegrationMode
 
         coordinator = create_v4_coordinator()
         result = coordinator.process_query(
@@ -57,7 +57,7 @@ class TestV4Integration:
 
     def test_v4_graceful_degradation(self):
         """Test graceful degradation."""
-        from astra_core.v4_revolutionary import create_v4_coordinator
+        from astra_core.revolutionary import create_v4_coordinator
 
         coordinator = create_v4_coordinator()
 

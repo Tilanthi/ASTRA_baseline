@@ -355,6 +355,48 @@ class BenchmarkSuite:
             with open(self.config.report_path, 'w') as f:
                 json.dump(report, f, indent=2)
 
+    def run_quick_assess(self, system) -> Dict[str, Any]:
+        """
+        Quick capability assessment: short autonomous training burst plus a
+        capability snapshot from the system itself.
+
+        Real measurements only - reward trend from the burst, capability
+        fields from ``system.assess_self_teaching_capability()`` when the
+        system provides it.
+        """
+        results: Dict[str, Any] = {}
+
+        # 1. Learning rate from a short training burst
+        rewards: List[float] = []
+        if hasattr(system, 'train_autonomously'):
+            try:
+                burst = system.train_autonomously(
+                    n_iterations=3, generate_report=False, verbose=False)
+                rewards = [float(getattr(r, 'total_reward', 0.0)) for r in burst]
+            except TypeError:
+                burst = system.train_autonomously(3)
+                rewards = [float(getattr(r, 'total_reward', 0.0)) for r in burst]
+            except Exception:
+                pass  # degraded: burst training unavailable
+        if len(rewards) >= 2:
+            mean_r = max(sum(rewards) / len(rewards), 1e-9)
+            results['learning_rate'] = max(
+                0.0, min(1.0, (rewards[-1] - rewards[0]) / mean_r + 0.5))
+
+        # 2. Capability snapshot from the system
+        if hasattr(system, 'assess_self_teaching_capability'):
+            try:
+                results.update(system.assess_self_teaching_capability())
+            except Exception:
+                pass  # degraded: assessment unavailable
+
+        components = [results.get(k, 0.0) for k in
+                      ('self_teaching_score', 'learning_rate',
+                       'transfer_efficiency', 'autonomy_level')]
+        results['overall_score'] = sum(components) / len(components)
+        results['n_benchmark_iterations'] = len(rewards)
+        return results
+
     def add_test(self, test: BenchmarkTest) -> None:
         """Add a test to the benchmark suite."""
         self.tests[test.name] = test

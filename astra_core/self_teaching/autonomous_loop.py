@@ -102,7 +102,8 @@ class IterationResult:
     def __post_init__(self):
         if self.end_time == 0.0:
             self.end_time = time.time()
-        self.total_time = self.end_time - self.start_time
+        if self.total_time == 0.0:
+            self.total_time = self.end_time - self.start_time
 
 
 @dataclass
@@ -206,7 +207,7 @@ class AutonomousTrainingLoop:
         Returns:
             IterationResult with all iteration data
         """
-        iteration_start = time.time()
+        iteration_start = time.perf_counter()
 
         # Create iteration object
         iteration = TrainingIteration(
@@ -249,7 +250,7 @@ class AutonomousTrainingLoop:
         result = IterationResult(
             iteration=iteration,
             total_reward=iteration.intrinsic_reward,
-            computation_time=time.time() - iteration_start
+            total_time=time.perf_counter() - iteration_start
         )
 
         # Archive
@@ -278,6 +279,19 @@ class AutonomousTrainingLoop:
             "best_reward": self.best_reward,
             "current_difficulty": self.current_difficulty,
             "total_computation_time": self.total_computation_time
+        }
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Statistics over the recorded iteration history."""
+        rewards = self.reward_history
+        return {
+            "iteration": self.current_iteration,
+            "n_results": len(self.iteration_history),
+            "best_reward": max(rewards) if rewards else 0.0,
+            "average_reward": (sum(rewards) / len(rewards)) if rewards else 0.0,
+            "total_discoveries": sum(
+                1 for r in self.iteration_history if r.iteration.discovery_made),
+            "total_computation_time": self.total_computation_time,
         }
 
 

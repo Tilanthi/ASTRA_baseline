@@ -11,40 +11,85 @@ The central coordinator that integrates:
 This system is designed for astronomical applications with physics-aware inference.
 """
 
-import sys
-from pathlib import Path
+try:
+    import sys
+except Exception:
+    sys = None  # degraded: unavailable
+try:
+    from pathlib import Path
+except Exception:
+    Path = None  # degraded: unavailable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import numpy as np
-from typing import Dict, List, Optional, Any, Type
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-import json
-import asyncio
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Optional, Any, Type
+except Exception:
+    Dict = List = Optional = Any = Type = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from datetime import datetime
+except Exception:
+    datetime = None  # degraded: unavailable
+try:
+    from enum import Enum
+except Exception:
+    Enum = None  # degraded: unavailable
+try:
+    import json
+except Exception:
+    json = None  # degraded: unavailable
+try:
+    import asyncio
+except Exception:
+    asyncio = None  # degraded: unavailable
 
 # V36 imports
-from ..symbolic import (
+try:
+    from ..symbolic import (
     V38CompleteSystem,
     # MechanismDiscoveryEngine,  # Not available in new structure
     SymbolicCausalAbstraction,
     CrossDomainAnalogyEngine,
-)
+    )
+except Exception:
+    V38CompleteSystem = SymbolicCausalAbstraction = CrossDomainAnalogyEngine = None  # degraded: unavailable
 
 # MORK imports
-from ..swarm import AgentNamespace, BiologicalField, FieldType, LocalMORKStorage
+try:
+    from ..swarm import AgentNamespace, BiologicalField, FieldType, LocalMORKStorage
+except Exception:
+    AgentNamespace = BiologicalField = FieldType = LocalMORKStorage = None  # degraded: unavailable
 
 # ASTRO-SWARM components (local imports)
-from .physics import PhysicsEngine, PhysicalConstants, AstrophysicalConstraints
-from .knowledge_graph import (
+try:
+    from .physics import PhysicsEngine, PhysicalConstants, AstrophysicalConstraints
+except Exception:
+    PhysicsEngine = PhysicalConstants = AstrophysicalConstraints = None  # degraded: unavailable
+try:
+    from .knowledge_graph import (
     AstronomicalKnowledgeGraph, AstroNode, AstroEdge,
     AstroNodeType, RelationType, MechanismNode, HypothesisNode
-)
-from .inference import BayesianSwarmInference, InferenceResult
-from .agents import (
+    )
+except Exception:
+    AstronomicalKnowledgeGraph = AstroNode = AstroEdge = AstroNodeType = RelationType = MechanismNode = HypothesisNode = None  # degraded: unavailable
+try:
+    from .inference import BayesianSwarmInference, InferenceResult
+except Exception:
+    BayesianSwarmInference = InferenceResult = None  # degraded: unavailable
+try:
+    from .agents import (
     AstroAgent, SpectroscopicAgent, PhotometricAgent,
     DynamicalAgent, ImagingAgent, StigmergicMemory, PheromoneTrail
-)
+    )
+except Exception:
+    AstroAgent = SpectroscopicAgent = PhotometricAgent = DynamicalAgent = ImagingAgent = StigmergicMemory = PheromoneTrail = None  # degraded: unavailable
 
 
 # =============================================================================

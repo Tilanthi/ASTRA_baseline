@@ -29,28 +29,59 @@ Example Use:
     result = rag.query("What are our power saving efforts?")
 """
 
-import time
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Callable
-from enum import Enum
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from typing import List, Dict, Any, Optional, Callable
+except Exception:
+    List = Dict = Any = Optional = Callable = None  # degraded: unavailable
+try:
+    from enum import Enum
+except Exception:
+    Enum = None  # degraded: unavailable
 
-from .hybrid_search import (
+try:
+    from .hybrid_search import (
     HybridRetriever, Document, TfidfRetriever, VectorRetriever,
     HybridSearchResult
-)
-from .context_distiller import (
+    )
+except Exception:
+    HybridRetriever = Document = TfidfRetriever = VectorRetriever = HybridSearchResult = None  # degraded: unavailable
+try:
+    from .context_distiller import (
     ContextDistiller, RelevancyCheck, DistillationResult,
     SimpleKeywordChecker
-)
-from .sharded_retrieval import (
-    ShardedRetriever, DomainShard, ShardStrategy,
+    )
+except Exception:
+    ContextDistiller = RelevancyCheck = DistillationResult = SimpleKeywordChecker = None  # degraded: unavailable
+try:
+    from .sharded_retrieval import ShardStrategy
+except Exception:
+    ShardStrategy = None  # degraded: unavailable
+try:
+    from .sharded_retrieval import (
+    ShardedRetriever, DomainShard,
     ShardedRetrievalResult
-)
-from .query_expander import (
+    )
+except Exception:
+    ShardedRetriever = DomainShard = ShardedRetrievalResult = None  # degraded: unavailable
+try:
+    from .query_expander import (
     QueryExpander, RuleBasedExpander, ParallelQueryExpander,
     ExpandedQueries
-)
-from ..intelligence.redundant_executor import RedundantExecutor, ExecutionResult
+    )
+except Exception:
+    QueryExpander = RuleBasedExpander = ParallelQueryExpander = ExpandedQueries = None  # degraded: unavailable
+try:
+    from ..intelligence.redundant_executor import RedundantExecutor, ExecutionResult
+except Exception:
+    RedundantExecutor = ExecutionResult = None  # degraded: unavailable
 
 
 class RetrievalMode(Enum):
@@ -85,7 +116,7 @@ class ParallelRAGConfig:
     max_query_variations: int = 9
 
     # Sharding parameters
-    shard_strategy: ShardStrategy = ShardStrategy.ALL
+    shard_strategy: ShardStrategy = ShardStrategy.ALL if ShardStrategy is not None else None
 
     # Performance
     max_workers: int = 5

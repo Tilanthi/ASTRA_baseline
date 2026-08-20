@@ -28,25 +28,41 @@ Date: 2025-12-10
 Version: 38.0
 """
 
-import sys
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Tuple
+try:
+    import sys
+except Exception:
+    sys = None  # degraded: unavailable
+try:
+    from pathlib import Path
+except Exception:
+    Path = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Optional, Any, Callable, Tuple
+except Exception:
+    Dict = List = Optional = Any = Callable = Tuple = None  # degraded: unavailable
 
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # V37 imports (includes V36)
-from ..v37 import V37CompleteSystem
+try:
+    from ..v37 import V37CompleteSystem
+except Exception:
+    V37CompleteSystem = None  # degraded: unavailable
 
 # Swarm memory imports (updated for V38)
-from ...memory import (
+try:
+    from ....memory import (
     ExpandedMORK,
     MORKConcept,
     ScientificDomain
-)
+    )
+except Exception:
+    ExpandedMORK = MORKConcept = ScientificDomain = None  # degraded: unavailable
 
 # Advanced capabilities imports
-from ...capabilities import (
+try:
+    from ....capabilities import (
     # Bayesian
     BayesianInference,
     Prior,
@@ -72,14 +88,19 @@ from ...capabilities import (
     LocalRAG,
     RetrievalResult,
     KnowledgeBaseBuilder
-)
+    )
+except Exception:
+    BayesianInference = Prior = Likelihood = Posterior = OnlineUpdater = BayesFactorComparison = SelfConsistencyEngine = EnhancedSelfConsistency = ConsistencyResult = ToolIntegration = WikipediaAPI = ArXivAPI = MathTool = PythonExecutor = ToolResult = LocalRAG = RetrievalResult = KnowledgeBaseBuilder = None  # degraded: unavailable
 
 # STAN Enhanced unified system
-from ...capabilities.stan_enhanced import (
+try:
+    from ....capabilities.stan_enhanced import (
     STANEnhanced,
     EnhancedAnswer,
     ReasoningType
-)
+    )
+except Exception:
+    STANEnhanced = EnhancedAnswer = ReasoningType = None  # degraded: unavailable
 
 
 class V38CompleteSystem(V37CompleteSystem):
@@ -180,7 +201,7 @@ class V38CompleteSystem(V37CompleteSystem):
 
     def _initialize_bayesian_priors(self):
         """Initialize domain-specific Bayesian priors"""
-        from ...capabilities.bayesian_inference import PriorType, LikelihoodType
+        from ....capabilities.bayesian_inference import PriorType, LikelihoodType
 
         # Prior for domain classification confidence
         self.bayesian.create_prior(

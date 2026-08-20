@@ -43,6 +43,8 @@ Version: 3.0.0
 Date: 2026-03-16
 """
 
+from .star_learn_system import STARLearnSystem, create_star_learn_system
+
 from .self_rewarding import (
     SelfRewardingEngine,
     IntrinsicReward,

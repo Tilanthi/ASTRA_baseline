@@ -441,9 +441,3 @@ def vectorize_operations(func):
     return wrapper
 
 
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-

@@ -35,74 +35,49 @@ import warnings
 
 # Import V5.0 capabilities
 try:
-    from astra_core.capabilities.v101_temporal_causal import (
-        create_temporal_fci_discovery,
-        create_granger_fci_hybrid,
-        TemporalFCIDiscovery
-    )
+    from astra_core.capabilities.causal.temporal_causal import create_temporal_fci_discovery, create_granger_fci_hybrid, TemporalFCIDiscovery
     V101_AVAILABLE = True
 except ImportError:
     V101_AVAILABLE = False
 
 try:
-    from astra_core.capabilities.v102_counterfactual_engine import (
-        create_counterfactual_engine,
-        CounterfactualEngine
-    )
+    from astra_core.capabilities.synthesis.counterfactual_engine import create_counterfactual_engine, CounterfactualEngine
     V102_AVAILABLE = True
 except ImportError:
     V102_AVAILABLE = False
 
 try:
-    from astra_core.capabilities.v103_multimodal_evidence import (
-        create_multimodal_evidence_fusion,
-        MultiModalEvidenceFusion
-    )
+    from astra_core.capabilities.multimodal.multimodal_evidence import create_multimodal_evidence_fusion, MultiModalEvidenceFusion
     V103_AVAILABLE = True
 except ImportError:
     V103_AVAILABLE = False
 
 try:
-    from astra_core.capabilities.v104_adversarial_discovery import (
-        create_adversarial_discovery_system,
-        AdversarialDiscoverySystem
-    )
+    from astra_core.capabilities.discovery.adversarial_discovery import create_adversarial_discovery_system, AdversarialDiscoverySystem
     V104_AVAILABLE = True
 except ImportError:
     V104_AVAILABLE = False
 
 try:
-    from astra_core.capabilities.v105_meta_discovery import (
-        create_meta_discovery_transfer_engine,
-        MetaDiscoveryTransferEngine
-    )
+    from astra_core.capabilities.discovery.meta_discovery import create_meta_discovery_transfer_engine, MetaDiscoveryTransferEngine
     V105_AVAILABLE = True
 except ImportError:
     V105_AVAILABLE = False
 
 try:
-    from astra_core.capabilities.v106_explainable_causal import (
-        create_explainable_causal_reasoner,
-        ExplainableCausalReasoner
-    )
+    from astra_core.capabilities.causal.explainable_causal import create_explainable_causal_reasoner, ExplainableCausalReasoner
     V106_AVAILABLE = True
 except ImportError:
     V106_AVAILABLE = False
 
 try:
-    from astra_core.capabilities.v107_discovery_triage import (
-        create_discovery_triage_system,
-        DiscoveryTriageSystem
-    )
+    from astra_core.capabilities.discovery.discovery_triage import create_discovery_triage_system, DiscoveryTriageSystem
     V107_AVAILABLE = True
 except ImportError:
     V107_AVAILABLE = False
 
 try:
-    from astra_core.capabilities.v108_streaming_discovery import (
-        create_streaming_discovery_engine,
-        StreamingDiscoveryEngine
-    )
+    from astra_core.capabilities.discovery.streaming_discovery import create_streaming_discovery_engine, StreamingDiscoveryEngine
     V108_AVAILABLE = True
 except ImportError:
     V108_AVAILABLE = False
@@ -347,7 +322,6 @@ class V5DiscoveryOrchestrator:
     ) -> Optional[Any]:
         """Run baseline causal discovery (V98 FCI)"""
         try:
-            from astra_core.capabilities.v98_fci_causal_discovery import create_fci_discovery
             fci = create_fci_discovery()
             return fci.discover_causal_graph(data, variable_names)
         except (ImportError, Exception):
@@ -622,7 +596,7 @@ class V5DiscoveryOrchestrator:
             # V108 is optional, return empty results
             return []
 
-        from astra_core.capabilities.v108_streaming_discovery import monitor_streaming_data
+        from astra_core.capabilities.discovery.streaming_discovery import monitor_streaming_data
 
         return monitor_streaming_data(
             data_stream, variable_names, batch_size
@@ -651,7 +625,7 @@ class V5DiscoveryOrchestrator:
             # V105 is optional, return empty results
             return {}
 
-        from astra_core.capabilities.v105_meta_discovery import meta_discovery_across_domains
+        from astra_core.capabilities.discovery.meta_discovery import meta_discovery_across_domains
 
         return meta_discovery_across_domains(
             target_domain, target_data, variable_names, known_patterns

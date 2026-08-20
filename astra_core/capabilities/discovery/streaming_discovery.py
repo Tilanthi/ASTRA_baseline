@@ -313,7 +313,7 @@ class OnlineCausalDiscovery:
 
         try:
             # Try to import FCI
-            from astra_core.capabilities.v98_fci_causal_discovery import FCIDiscovery
+            from astra_core.capabilities.causal.fci_discovery import FCIDiscovery
             fci = FCIDiscovery(alpha=0.05)
 
             # Convert numpy array to dict format expected by V98

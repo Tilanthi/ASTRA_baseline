@@ -21,7 +21,7 @@ from enum import Enum
 import time
 
 from .mork_ontology import MORKOntology
-from .memory_graph import MemoryGraph, EdgeType
+from ..memory.memory_graph import MemoryGraph, EdgeType
 from .milvus_store import MilvusVectorStore
 
 
@@ -191,7 +191,7 @@ class ThreeWayRRF:
                 self.graph.nodes.get(list(self.graph.nodes.keys())[0]).node_type
                 if self.graph.nodes else None
             )
-            from .memory_graph import NodeType
+            from ..memory.memory_graph import NodeType
             latent_nodes = self.graph.get_nodes_by_type(NodeType.LATENT)
             candidates = [n.node_id for n in latent_nodes]
 
@@ -249,7 +249,7 @@ class ThreeWayRRF:
         """
         Find similar SCMs using three-way fusion.
         """
-        from .memory_graph import NodeType
+        from ..memory.memory_graph import NodeType
 
         if candidates is None:
             scm_nodes = self.graph.get_nodes_by_type(NodeType.SCM)
@@ -288,7 +288,7 @@ class ThreeWayRRF:
         """
         Find constraints relevant to a theory/SCM.
         """
-        from .memory_graph import NodeType
+        from ..memory.memory_graph import NodeType
 
         constraint_nodes = self.graph.get_nodes_by_type(NodeType.CONSTRAINT)
         candidates = [n.node_id for n in constraint_nodes]
@@ -338,7 +338,7 @@ class ThreeWayRRF:
         Useful for MechanismDiscoveryEngine to find known mechanisms
         before attempting symbolic regression.
         """
-        from .memory_graph import NodeType
+        from ..memory.memory_graph import NodeType
 
         if candidates is None:
             mech_nodes = self.graph.get_nodes_by_type(NodeType.MECHANISM)

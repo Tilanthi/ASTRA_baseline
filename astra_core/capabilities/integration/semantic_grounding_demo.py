@@ -17,14 +17,7 @@ its ability to detect and prevent hallucinations.
 Run with: python -m astra_core.capabilities.v95_semantic_grounding_demo
 """
 
-from astra_core.capabilities.v95_semantic_grounding import (
-    SemanticGroundingLayer,
-    GroundedOutputGenerator,
-    VerificationLevel,
-    validate_scientific_content,
-    check_formula,
-    register_hallucination
-)
+from astra_core.capabilities.learning.semantic_grounding import SemanticGroundingLayer, GroundedOutputGenerator, VerificationLevel, validate_scientific_content, check_formula, register_hallucination
 
 
 def demo_hallucination_detection():
@@ -229,23 +222,11 @@ if __name__ == "__main__":
 
 
 
-def utility_function_12(*args, **kwargs):
-    """Utility function 12."""
-    return None
-
-
-
 # Test helper for uncertainty_quantification
 def test_uncertainty_quantification_function(data):
     """Test function for uncertainty_quantification."""
     import numpy as np
     return {'passed': True, 'result': None}
-
-
-
-def utility_function_17(*args, **kwargs):
-    """Utility function 17."""
-    return None
 
 
 
@@ -274,11 +255,5 @@ def test_predictive_modeling_function(data):
     """Test function for predictive_modeling."""
     import numpy as np
     return {'passed': True, 'result': None}
-
-
-
-def utility_function_2(*args, **kwargs):
-    """Utility function 2."""
-    return None
 
 

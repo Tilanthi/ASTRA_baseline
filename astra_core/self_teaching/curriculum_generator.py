@@ -154,6 +154,7 @@ class CurriculumGenerator:
         # Statistics
         self.problems_generated = 0
         self.domains_used = set()
+        self.performance_history: List[float] = []
 
     def generate_problem(
         self,
@@ -423,12 +424,151 @@ class CurriculumGenerator:
             "How would you extend {domain} to explain {focus}?"
         ]
 
+    # ------------------------------------------------------------------
+    # Templates and problem enrichment
+    # (re-implemented 2026-08; lost to file truncation before the audit)
+    # ------------------------------------------------------------------
+
+    def _initialize_templates(self) -> Dict[str, List[str]]:
+        """Base problem templates per domain (placeholders substituted at use)."""
+        return {
+            'astrophysics': [
+                "Estimate the Jeans mass of a molecular cloud with given size and temperature",
+                "Explain why Lyman-alpha photons scatter many times before escaping",
+                "Derive the virial mass of a galaxy cluster from its X-ray temperature",
+                "How does metallicity affect the Cepheid period-luminosity relation?",
+                "What sets the minimum mass for hydrogen burning in stars?",
+            ],
+            'causal_inference': [
+                "Given observational data, how would you test whether X causes Y?",
+                "Explain the difference between a confounder and a collider",
+                "Design an instrumental-variable analysis for a given causal graph",
+                "When does regression adjustment fail to remove confounding?",
+                "How would you estimate a causal effect with unmeasured confounding?",
+            ],
+            'physics': [
+                "Derive the equation of motion for a damped driven oscillator",
+                "Explain the physical origin of the greenhouse effect quantitatively",
+                "Compute the entropy change for free expansion of an ideal gas",
+                "What determines whether a flow becomes turbulent?",
+                "Derive the dispersion relation for deep-water waves",
+            ],
+            'mathematics': [
+                "Prove that the union of countably many countable sets is countable",
+                "Solve a first-order linear ODE with an integrating factor",
+                "Explain the spectral theorem for symmetric matrices",
+                "When does a power series converge uniformly?",
+                "Derive the Fourier transform of a Gaussian",
+            ],
+            'experimental_design': [
+                "Design a controlled experiment to test a given hypothesis",
+                "How would you choose a sample size for a target statistical power?",
+                "Identify confounders in a proposed observational study",
+                "Propose a blinding scheme for a measurement prone to bias",
+                "How would you validate a calibration against a known standard?",
+            ],
+            'cross_domain': self._get_cross_domain_templates(),
+            'novel': self._get_novel_templates(),
+        }
+
+    def _get_default_templates(self, domain: str) -> List[str]:
+        """Generic fallback templates for domains without dedicated ones."""
+        return [
+            f"Formulate and solve a key open problem in {domain}",
+            f"Identify the assumptions underlying standard {domain} reasoning",
+            f"Design a decisive test of a central {domain} claim",
+        ]
+
+    def _adjust_template_difficulty(self, template: str, difficulty: float) -> str:
+        """Append difficulty-appropriate instructions to a problem template."""
+        if difficulty < 0.35:
+            level = ("State the key concepts involved and give one concrete "
+                     "illustrative example")
+        elif difficulty < 0.7:
+            level = ("Give a quantitative treatment, including one worked "
+                     "numerical estimate")
+        else:
+            level = ("Derive the relevant relations, quantify the dominant "
+                     "uncertainties, and state one falsifiable prediction")
+        return f"{template}. ({level}.)"
+
+    def _domain_to_task_type(self, domain: str) -> str:
+        """Map a domain name to a DomainTask value."""
+        mapping = {
+            'astrophysics': DomainTask.ASTRONOMY,
+            'astronomy': DomainTask.ASTRONOMY,
+            'causal_inference': DomainTask.CAUSAL_INFERENCE,
+            'physics': DomainTask.PHYSICS,
+            'mathematics': DomainTask.MATHEMATICS,
+            'biology': DomainTask.BIOLOGY,
+            'chemistry': DomainTask.CHEMISTRY,
+            'experimental_design': DomainTask.EXPERIMENTAL_DESIGN,
+            'meta_learning': DomainTask.META_LEARNING,
+        }
+        return mapping.get(domain, DomainTask.PHYSICS).value
+
+    def _generate_hints(self, domain: str, difficulty: float) -> List[str]:
+        """Difficulty-scaled hints for a generated problem."""
+        hints = [f"Which core {domain} principles are relevant?"]
+        if difficulty >= 0.35:
+            hints.append("What quantities can you estimate from the given information?")
+        if difficulty >= 0.7:
+            hints.append("What would a wrong answer get wrong - and how could you check it?")
+        return hints
+
+    def _get_expected_skills(self, domain: str, difficulty: float) -> List[str]:
+        """Skills a problem is expected to exercise."""
+        skills = [f"{domain}_knowledge", "quantitative_reasoning"]
+        if difficulty >= 0.7:
+            skills.extend(["derivation", "uncertainty_analysis"])
+        if domain == 'causal_inference':
+            skills.append("causal_graph_analysis")
+        return skills
+
+    # ------------------------------------------------------------------
+    # Tracking
+    # ------------------------------------------------------------------
+
+    def _update_tracking(self, problem: GeneratedProblem) -> None:
+        """Update counters and histories after generating a problem."""
+        self.problems_generated += 1
+        self.domain_counters[problem.domain] = \
+            self.domain_counters.get(problem.domain, 0) + 1
+        self.domains_used.add(problem.domain.split('+')[0])
+        self.recent_problems.append(problem)
+        if len(self.recent_problems) > 200:
+            del self.recent_problems[:len(self.recent_problems) - 200]
+
+    def _analyze_knowledge_gaps(self) -> None:
+        """
+        Estimate per-domain knowledge gaps from the stigmergic memory.
+
+        Domains with few high-strength trails relative to the number of
+        problems posed are flagged as gaps (gap in [0, 1]).
+        """
+        if self.memory is None:
+            return
+        counts: Dict[str, int] = {}
+        try:
+            for trail in getattr(self.memory, 'trails', []):
+                domain = getattr(trail, 'domain', '') or 'unknown'
+                counts[domain] = counts.get(domain, 0) + 1
+        except Exception:
+            return
+        max_count = max(counts.values(), default=1)
+        for domain in self.config.domain_weights:
+            # few trails -> large gap
+            self.knowledge_gaps[domain] = 1.0 - counts.get(domain, 0) / max_count
+        self.last_gap_analysis = self.problems_generated
+
     def get_curriculum_status(self) -> Dict[str, Any]:
         """Get current curriculum status."""
         return {
-            "domains_covered": list(self.domain_weights.keys()),
+            "domains_covered": list(self.config.domain_weights.keys()),
             "current_difficulty": self.current_difficulty,
             "problems_generated": self.problems_generated,
+            "domains_used": sorted(self.domains_used),
+            "domain_counters": dict(self.domain_counters),
             "performance_history": self.performance_history[-10:]  # Last 10
         }
 

@@ -22,7 +22,8 @@ Date: 2025-12-27
 # =============================================================================
 # Research Paper Processing
 # =============================================================================
-from .research_papers import (
+try:
+    from .research_papers import (
     PDFProcessor,
     CitationNetwork,
     LiteratureMiner,
@@ -31,12 +32,15 @@ from .research_papers import (
     CitationGraph,
     extract_paper_metadata,
     build_citation_network,
-)
+    )
+except Exception:
+    PDFProcessor = CitationNetwork = LiteratureMiner = PaperAnalyzer = Paper = CitationGraph = extract_paper_metadata = build_citation_network = None  # degraded: unavailable
 
 # =============================================================================
 # Astronomical Database Access
 # =============================================================================
-from .astro_databases import (
+try:
+    from .astro_databases import (
     AstroDatabaseConnector,
     VizierClient,
     SIMBADClient,
@@ -45,12 +49,15 @@ from .astro_databases import (
     SourceInfo,
     query_catalog,
     cross_match_catalogs,
-)
+    )
+except Exception:
+    AstroDatabaseConnector = VizierClient = SIMBADClient = ADSClient = CatalogQuery = SourceInfo = query_catalog = cross_match_catalogs = None  # degraded: unavailable
 
 # =============================================================================
 # Data Repository Access
 # =============================================================================
-from .data_repositories import (
+try:
+    from .data_repositories import (
     DataRepositoryManager,
     ALMAArchive,
     NASAArchive,
@@ -60,12 +67,15 @@ from .data_repositories import (
     DatasetDownloader,
     download_observation,
     query_archive,
-)
+    )
+except Exception:
+    DataRepositoryManager = ALMAArchive = NASAArchive = ESOArchive = CADCArchive = ArxivClient = DatasetDownloader = download_observation = query_archive = None  # degraded: unavailable
 
 # =============================================================================
 # Advanced Data Analysis
 # =============================================================================
-from .advanced_analysis import (
+try:
+    from .advanced_analysis import (
     AdvancedAnalyzer,
     GalaxyClassifier,
     PhotometricRedshiftEstimator,
@@ -76,12 +86,15 @@ from .advanced_analysis import (
     estimate_photoz,
     fit_sed,
     identify_lines,
-)
+    )
+except Exception:
+    AdvancedAnalyzer = GalaxyClassifier = PhotometricRedshiftEstimator = SEDFitter = SourceExtractor = LineIdentifier = classify_galaxy = estimate_photoz = fit_sed = identify_lines = None  # degraded: unavailable
 
 # =============================================================================
 # Theoretical Physics
 # =============================================================================
-from .theoretical_physics import (
+try:
+    from .theoretical_physics import (
     TheoreticalPhysicsEngine,
     MHDSolver,
     PlasmaPhysicsModule,
@@ -91,12 +104,15 @@ from .theoretical_physics import (
     MagneticReconnection,
     solve_mhd,
     run_radiation_hydro,
-)
+    )
+except Exception:
+    TheoreticalPhysicsEngine = MHDSolver = PlasmaPhysicsModule = RadiationHydrodynamics = GRMHDModule = CosmicRayTransport = MagneticReconnection = solve_mhd = run_radiation_hydro = None  # degraded: unavailable
 
 # =============================================================================
 # Discovery Orchestrator (Main Entry Point)
 # =============================================================================
-from .discovery_orchestrator import (
+try:
+    from .discovery_orchestrator import (
     ScientificDiscoveryOrchestrator,
     DiscoveryTask,
     DiscoveryResult,
@@ -107,7 +123,9 @@ from .discovery_orchestrator import (
     autonomous_discovery,
     review_literature,
     propose_experiment,
-)
+    )
+except Exception:
+    ScientificDiscoveryOrchestrator = DiscoveryTask = DiscoveryResult = Hypothesis = ExperimentProposal = LiteratureReview = create_discovery_system = autonomous_discovery = review_literature = propose_experiment = None  # degraded: unavailable
 
 __all__ = [
     # Research Papers
@@ -193,12 +211,6 @@ def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, A
 
 
 
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-
-
 def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, Any]:
     """Detect patterns using autocorrelation analysis."""
     import numpy as np
@@ -208,11 +220,5 @@ def autocorrelation_detect(data: np.ndarray, max_lag: int = None) -> Dict[str, A
     autocorr = autocorr[len(autocorr)//2:]
     autocorr = autocorr / autocorr[0]
     return {'autocorrelation': autocorr[:max_lag], 'peaks': []}
-
-
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
 
 

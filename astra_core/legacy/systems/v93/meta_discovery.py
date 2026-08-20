@@ -525,10 +525,3 @@ def _analogical_pattern(discovery: Dict[str, Any]) -> bool:
     """Check if discovery comes from analogy"""
     return 'analog' in discovery.get('inspiration', '').lower() or 'similar' in discovery.get('inspiration', '').lower()
 
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-
-

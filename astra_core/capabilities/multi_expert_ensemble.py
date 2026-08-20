@@ -619,9 +619,3 @@ def test_predictive_modeling_function(data):
     return {'passed': True, 'result': None}
 
 
-
-def utility_function_2(*args, **kwargs):
-    """Utility function 2."""
-    return None
-
-

@@ -959,9 +959,3 @@ def gaussian_process_predict(X_train: np.ndarray, y_train: np.ndarray, X_test: n
     return {'mean': np.zeros(len(X_test)), 'std': np.ones(len(X_test))}
 
 
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-

@@ -20,7 +20,8 @@ Date: 2025-12-15
 Version: 1.1
 """
 
-from .archive_query import (
+try:
+    from .archive_query import (
     VOQueryEngine,
     TAP_Client,
     AstroqueryInterface,
@@ -33,18 +34,24 @@ from .archive_query import (
     MWAArchive,
     ESOArchive,
     RadioArchiveManager,
-)
+    )
+except Exception:
+    VOQueryEngine = TAP_Client = AstroqueryInterface = CrossMatchEngine = ArchiveDataManager = ALMAArchive = NRAOArchive = LOFARArchive = MWAArchive = ESOArchive = RadioArchiveManager = None  # degraded: unavailable
 
-from .transient_science import (
+try:
+    from .transient_science import (
     TransientClassifier,
     LightCurveFitter,
     SupernovaModels,
     GRBAfterglowModel,
     KilonovaModel,
     TransientAlertBroker
-)
+    )
+except Exception:
+    TransientClassifier = LightCurveFitter = SupernovaModels = GRBAfterglowModel = KilonovaModel = TransientAlertBroker = None  # degraded: unavailable
 
-from .astrochemistry import (
+try:
+    from .astrochemistry import (
     ChemicalNetwork,
     UMISTNetwork,
     KIDANetwork,
@@ -52,59 +59,80 @@ from .astrochemistry import (
     IsotopologueAnalyzer,
     COMFormationModel,
     DeuteriumFractionation
-)
+    )
+except Exception:
+    ChemicalNetwork = UMISTNetwork = KIDANetwork = GrainSurfaceChemistry = IsotopologueAnalyzer = COMFormationModel = DeuteriumFractionation = None  # degraded: unavailable
 
-from .disk_physics import (
+try:
+    from .disk_physics import (
     ProtoplanetaryDisk,
     DiskEvolutionModel,
     GapOpeningCriteria,
     DustGrainEvolution,
     DiskDispersalModel,
     PlanetDiskInteraction
-)
+    )
+except Exception:
+    ProtoplanetaryDisk = DiskEvolutionModel = GapOpeningCriteria = DustGrainEvolution = DiskDispersalModel = PlanetDiskInteraction = None  # degraded: unavailable
 
-from .galactic_dynamics import (
+try:
+    from .galactic_dynamics import (
     GalacticPotential,
     OrbitIntegrator,
     StellarStreamFinder,
     ChemicalEvolutionModel,
     ActionAngleCalculator,
     ClusterDissolutionModel
-)
+    )
+except Exception:
+    GalacticPotential = OrbitIntegrator = StellarStreamFinder = ChemicalEvolutionModel = ActionAngleCalculator = ClusterDissolutionModel = None  # degraded: unavailable
 
-from .ml_survey import (
+try:
+    from .ml_survey import (
     AnomalyDetector,
     PhotometricRedshiftEstimator,
     SourceClassifier,
     SpectralAutoencoder,
     ActiveLearningSelector
-)
+    )
+except Exception:
+    AnomalyDetector = PhotometricRedshiftEstimator = SourceClassifier = SpectralAutoencoder = ActiveLearningSelector = None  # degraded: unavailable
 
-from .atmospheric_retrieval import (
+try:
+    from .atmospheric_retrieval import (
     AtmosphericRetrieval,
     TransmissionSpectrum,
     EmissionSpectrum,
     CloudModel,
     ChemicalEquilibrium
-)
+    )
+except Exception:
+    AtmosphericRetrieval = TransmissionSpectrum = EmissionSpectrum = CloudModel = ChemicalEquilibrium = None  # degraded: unavailable
 
-from .cosmological_context import (
+try:
+    from .cosmological_context import (
     HaloMassFunction,
     GalaxyHaloConnection,
     EnvironmentalMetrics,
     CGMModel,
     ReionizationModel
-)
+    )
+except Exception:
+    HaloMassFunction = GalaxyHaloConnection = EnvironmentalMetrics = CGMModel = ReionizationModel = None  # degraded: unavailable
 
-from .alert_processing import (
+try:
+    from .alert_processing import (
     AlertStreamProcessor,
     ZTFAlertHandler,
     RubinAlertHandler,
     AlertFilterPipeline,
     FollowUpPrioritizer
-)
+    )
+except Exception:
+    AlertStreamProcessor = ZTFAlertHandler = RubinAlertHandler = AlertFilterPipeline = FollowUpPrioritizer = None  # degraded: unavailable
 
-from .radio_astronomy import (
+try:
+    from .radio_astronomy import (
     RadioFacility,
     ObservingBand,
     RadioObservation,
@@ -122,7 +150,9 @@ from .radio_astronomy import (
     kelvin_to_jy,
     freq_to_wavelength,
     wavelength_to_freq,
-)
+    )
+except Exception:
+    RadioFacility = ObservingBand = RadioObservation = Visibility = RadioSource = FacilitySpecs = RadioContinuumAnalysis = RadioSpectralLine = RadioInterferometry = LowFrequencyRadio = RadioPolarization = RadioSourcePhysics = RadioArchiveInterface = jy_to_kelvin = kelvin_to_jy = freq_to_wavelength = wavelength_to_freq = None  # degraded: unavailable
 
 __all__ = [
     # Archive Query

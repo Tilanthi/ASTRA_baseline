@@ -449,7 +449,3 @@ def estimate_difficulty(question: str, domain: str = "") -> DifficultyLevel:
     return level
 
 
-
-def utility_function_22(*args, **kwargs):
-    """Utility function 22."""
-    return None

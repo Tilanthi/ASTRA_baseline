@@ -19,30 +19,66 @@ Capabilities:
 - Automated theory building and testing
 """
 
-import numpy as np
-import pandas as pd
-from typing import Dict, List, Any, Optional, Tuple, Set
-from dataclasses import dataclass, field
-from enum import Enum
-import time
-import json
-from collections import defaultdict
+try:
+    import numpy as np
+except Exception:
+    np = None  # degraded: unavailable
+try:
+    import pandas as pd
+except Exception:
+    pd = None  # degraded: unavailable
+try:
+    from typing import Dict, List, Any, Optional, Tuple, Set
+except Exception:
+    Dict = List = Any = Optional = Tuple = Set = None  # degraded: unavailable
+try:
+    from dataclasses import dataclass, field
+except Exception:
+    dataclass = field = None  # degraded: unavailable
+try:
+    from enum import Enum
+except Exception:
+    Enum = None  # degraded: unavailable
+try:
+    import time
+except Exception:
+    time = None  # degraded: unavailable
+try:
+    import json
+except Exception:
+    json = None  # degraded: unavailable
+try:
+    from collections import defaultdict
+except Exception:
+    defaultdict = None  # degraded: unavailable
 
-from .hypothesis_engine import (
+try:
+    from .hypothesis_engine import (
     HypothesisGenerator, Hypothesis, HypothesisType
-)
-from .mathematical_intuition import (
+    )
+except Exception:
+    HypothesisGenerator = Hypothesis = HypothesisType = None  # degraded: unavailable
+try:
+    from .mathematical_intuition import (
     MathematicalIntuitionModule, MathematicalConjecture,
     Proof, MathDomain, ProofStatus
-)
-from .causal_discovery import (
+    )
+except Exception:
+    MathematicalIntuitionModule = MathematicalConjecture = Proof = MathDomain = ProofStatus = None  # degraded: unavailable
+try:
+    from .causal_discovery import (
     CausalDiscoveryEngine, CausalModel, CausalRelation,
     Intervention, Counterfactual, DiscoveryMethod
-)
-from .experimental_design import (
+    )
+except Exception:
+    CausalDiscoveryEngine = CausalModel = CausalRelation = Intervention = Counterfactual = DiscoveryMethod = None  # degraded: unavailable
+try:
+    from .experimental_design import (
     ExperimentalDesignEngine, ExperimentalDesign, ExperimentalVariable,
     Treatment, ExperimentalType, SimulationResult
-)
+    )
+except Exception:
+    ExperimentalDesignEngine = ExperimentalDesign = ExperimentalVariable = Treatment = ExperimentalType = SimulationResult = None  # degraded: unavailable
 
 
 @dataclass
@@ -333,4 +369,48 @@ class V92CompleteSystem:
 
         return filtered_conjectures
 
-    def _discover_causal_structure(self, data: pd.DataFrame, domain: str) -> List[CausalModel]:
+# =============================================================================
+# FACTORY FUNCTIONS
+# (Re-implemented 2026-08; bodies were lost to file truncation before the
+#  audit. Each factory is a documented configuration preset over the real
+#  V92CompleteSystem.)
+# =============================================================================
+
+def create_v92_system(config: Optional[V92Config] = None) -> V92CompleteSystem:
+    """General-purpose V92 scientific discovery system (default config)."""
+    return V92CompleteSystem(config)
+
+
+def create_v92_explorer(config: Optional[V92Config] = None) -> V92CompleteSystem:
+    """Explorer preset: high exploration, low threshold, wide domains."""
+    config = config or V92Config()
+    config.exploration_rate = max(config.exploration_rate, 0.7)
+    config.confidence_threshold = min(config.confidence_threshold, 0.4)
+    config.primary_domains = list(dict.fromkeys(
+        config.primary_domains + config.secondary_domains))
+    return V92CompleteSystem(config)
+
+
+def create_v92_validator(config: Optional[V92Config] = None) -> V92CompleteSystem:
+    """Validator preset: conservative - high confidence bar, low novelty."""
+    config = config or V92Config()
+    config.confidence_threshold = max(config.confidence_threshold, 0.9)
+    config.exploration_rate = min(config.exploration_rate, 0.1)
+    return V92CompleteSystem(config)
+
+
+def create_v92_mathematician(config: Optional[V92Config] = None) -> V92CompleteSystem:
+    """Mathematician preset: mathematics-first domains and depth."""
+    config = config or V92Config()
+    config.primary_domains = ["mathematics", "physics"]
+    config.secondary_domains = ["computer_science"]
+    config.synthesis_depth = max(config.synthesis_depth, 4)
+    return V92CompleteSystem(config)
+
+
+def create_v92_experimentalist(config: Optional[V92Config] = None) -> V92CompleteSystem:
+    """Experimentalist preset: maximize experimental design throughput."""
+    config = config or V92Config()
+    config.max_experiments_per_design = max(config.max_experiments_per_design, 20)
+    config.enable_experimental_design = True
+    return V92CompleteSystem(config)

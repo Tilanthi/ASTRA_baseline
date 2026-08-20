@@ -52,9 +52,3 @@ __all__ = ['MHDSolver', 'PlasmaPhysicsModule', 'RadiationHydrodynamics',
            'TheoreticalPhysicsEngine', 'solve_mhd', 'run_radiation_hydro']
 
 
-
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-

@@ -4,10 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ASTRA** (Autonomous Scientific Discovery in Astrophysics) is a unified AGI-inspired framework for autonomous hypothesis generation and validation in astronomy and astrophysics. The system integrates ~303,000 lines of clean, functional code across modular cognitive capabilities.
+**ASTRA** (Autonomous Scientific Discovery in Astrophysics) is a unified AGI-inspired framework for autonomous hypothesis generation and validation in astronomy and astrophysics. The system integrates ~317,000 lines of clean, functional code across modular cognitive capabilities.
 
 **Version**: 4.7
 **AGI Capability Estimate**: 70-75%
+
+### Codebase Integrity (August 2026 audit)
+
+A full integrity audit and rebuild was completed in August 2026: every module imports cleanly (567/567 in the runtime walk), all 17 formerly lost symbols were re-implemented with real, hand-validated physics/algorithms (including 14 rebuilt `astro_physics` modules), and ~13,500 dead lines were removed. Every declared test suite passes 100%. The authoritative record of what was found, fixed, and verified is **`User_Manual/User_Manual.md`, Appendix E (v7.2)** — consult it before any maintenance that touches imports or `astro_physics`.
 
 ### IMPORTANT: Naming Convention
 
@@ -97,7 +101,7 @@ print(result['answer'])
 ### V4.0 Revolutionary Capabilities
 
 ```python
-from astra_core.v4_revolutionary import create_v4_system, IntegrationMode
+from astra_core.revolutionary import create_v4_system, IntegrationMode
 
 # Create V4.0 system with MCE, ASC, CRN, MMOL capabilities
 system = create_v4_system()
@@ -134,28 +138,42 @@ optimizer = create_maml_optimizer(model_fn, loss_fn, n_inner_steps=5)
 
 ## Testing
 
+**Run tests from the repository root with `PYTHONPATH=.`** — several suites do not fix their own import path. All suites below pass 100% as of the August 2026 audit.
+
 ### Run All Tests
 
 ```bash
-# Run V4.0 capability tests
-python astra_core/tests/v4/run_tests.py
+# Comprehensive system verification (18/18 capabilities required)
+PYTHONPATH=. python astra_core/comprehensive_system_test.py
 
-# Run specialist capability tests (66 V45 capabilities)
-python astra_core/tests/test_specialist_capabilities.py
+# V4.0 capability tests (5/5 suites)
+PYTHONPATH=. python astra_core/tests/test_revolutionary/run_tests.py
 
-# Run Phase 2-4 enhancement tests
-python astra_core/tests/test_phase_2_4.py
+# Specialist capability tests (66 V45 capabilities, 6/6)
+PYTHONPATH=. python astra_core/tests/test_specialist_capabilities.py
+
+# Phase 2-4 enhancement tests (6/6)
+PYTHONPATH=. python astra_core/tests/test_phase_2_4.py
+
+# Full unit suite (14/14) and self-teaching suite (17/17)
+PYTHONPATH=. python astra_core/tests/test_all.py
+PYTHONPATH=. python astra_core/tests/test_self_teaching.py
+
+# Causal / discovery / outlier suites (all 100%)
+PYTHONPATH=. python astra_core/tests/test_v47_causal_discovery.py
+PYTHONPATH=. python astra_core/tests/test_v6_theoretical_discovery.py
+PYTHONPATH=. python astra_core/tests/test_calibrated_outliers.py
 ```
 
 ### Run Specific Tests
 
 ```bash
-# V4.0 individual capabilities
-python astra_core/tests/v4/run_tests.py --mce        # Meta-Context Engine
-python astra_core/tests/v4/run_tests.py --asc        # Autocatalytic Self-Compiler
-python astra_core/tests/v4/run_tests.py --crn        # Cognitive-Relativity Navigator
-python astra_core/tests/v4/run_tests.py --mmol       # Multi-Mind Orchestration
-python astra_core/tests/v4/run_tests.py --integration # Integration tests
+# V4.0 individual capabilities (this runner self-fixes its import path)
+python astra_core/tests/test_revolutionary/run_tests.py --mce        # Meta-Context Engine
+python astra_core/tests/test_revolutionary/run_tests.py --asc        # Autocatalytic Self-Compiler
+python astra_core/tests/test_revolutionary/run_tests.py --crn        # Cognitive-Relativity Navigator
+python astra_core/tests/test_revolutionary/run_tests.py --mmol       # Multi-Mind Orchestration
+python astra_core/tests/test_revolutionary/run_tests.py --integration # Integration tests
 ```
 
 ### Test Individual Components
@@ -285,7 +303,9 @@ Physics capabilities develop through staged curriculum (`ComplexityLevel.BASIC` 
 
 ### Capability Files
 
-- **V36-V50 capabilities**: `astra_core/capabilities/vXX_*.py`
+- **Capabilities**: `astra_core/capabilities/*.py` and subpackages (`cognitive/`, `metacognitive/`, `memory/`, `integration/`, `causal/`) — organized by function, not by version number
+- **Legacy versioned systems**: `astra_core/legacy/systems/vXX/` (v36–v94 era code kept for back-compatibility; e.g. the V36 causal engines used by `astro_physics/molecular_cloud_v36.py`)
+- **Astrophysics modules**: `astra_core/astro_physics/*.py` (radiative_transfer.py, sph_gas_dynamics.py, turbulence_analysis.py, infrared_submm.py, multiscale_coupling.py, … — all rebuilt/validated in the Aug 2026 audit)
 - **Physics modules**: `astra_core/physics/*.py` (relativistic_physics.py, quantum_mechanics.py, nuclear_astro.py)
 - **Domain modules**: `astra_core/domains/<domain_name>/__init__.py`
 - **Meta-learning**: `astra_core/reasoning/maml_optimizer.py`, `cross_domain_meta_learner.py`
@@ -298,9 +318,9 @@ Physics capabilities develop through staged curriculum (`ComplexityLevel.BASIC` 
 
 ### Test Files
 
-- **Integration tests**: `astra_core/tests/v4/test_v4_integration.py`
+- **V4 integration tests**: `astra_core/tests/test_revolutionary/test_v4_integration.py`
 - **Capability tests**: `astra_core/tests/test_specialist_capabilities.py`
-- **Validation**: `astra_core/tests/validation_benchmarks.py`
+- **Validation**: `astra_core/tests/validation_benchmarks.py` (a library of benchmarks, exercised via `test_phase_2_4.py`; produces no standalone output)
 
 ---
 
@@ -336,7 +356,13 @@ PREDICTIVE, ANALYTICAL, EMOTIONAL, CREATIVE, CRITICAL, SYNTHETIC, NARRATIVE, CON
 
 4. **Skipping Initialization**: Domain modules must call `.initialize(global_config)` after creation before `.process_query()`.
 
-5. **Backup File Accumulation**: Run `cleanup_astra_core.py` if directory exceeds expected size. Backup files (`*.backup`) from `cleanup_bloat.py` can accumulate to GBs.
+5. **Backup File Accumulation**: Stray `*.bak` / `*.backup` files exist in the tree (e.g. `astra_core/core/__init__.py.bak`, `astra_core/utils/pdf_generator.py.backup`); the old `cleanup_astra_core.py` / `cleanup_bloat.py` scripts are gone — delete stale backups manually when encountered.
+
+6. **Test Paths and PYTHONPATH**: Run every suite from the repository root with `PYTHONPATH=.` (see Testing). `tests/ablation/run_ablations.py` must be run from inside `tests/ablation/` by design.
+
+7. **NumPy 2.x**: `np.trapz` was removed — use `np.trapezoid`. `skimage.morphology.skeletonize`, not `scipy.ndimage.skeletonize` (the scipy import path never existed and silently degraded imports).
+
+8. **Silent Degradation Hides Stale Imports**: A `try/except ImportError` fallback means a wrong module path fails *silently* (symbol becomes `None`, `*_AVAILABLE` becomes `False`). After moving or renaming any module, grep for old paths — the Aug 2026 audit found several features disabled for months this way (see User_Manual Appendix E).
 
 ---
 
@@ -392,6 +418,187 @@ def _process_inline_formatting(self, text: str) -> str:
 
 ---
 
+## MNRAS Paper Writing Guidelines
+
+When generating LaTeX papers for submission to *Monthly Notices of the Royal Astronomical Society* (MNRAS), always conform to these standards:
+
+### Document Class and Template
+
+```latex
+\documentclass{mnras}
+% OR for older papers:
+% \documentclass[useAMS]{mnras}
+```
+
+- **Always use** the official `mnras` class (not article, aastex, etc.)
+- **Never hardcode** page breaks, margins, or formatting—let the class handle it
+- **Two-column** format is standard (single-column only for "paper" type if requested)
+
+### Required Packages
+
+```latex
+\usepackage{newtxtext,newtxmath} % Times font (MNRAS standard)
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{natbib}      % MNRAS citation style
+\usepackage{hyperref}     % For \url{} commands
+```
+
+### Title and Authors
+
+```latex
+\title[Short Title]{Full Title of the Paper}
+\author[Author et al.]{
+First Author,\(^1\)
+Second Author,\(^1\) 
+Third Author\(^{1,2}\) 
+and Fourth Author\(^3\)
+\\
+\(^1\)Institution One, \(^2\)Institution Two, \(^3\)Institution Three
+}
+\date{Accepted XXX. Received YYY; in original form ZZZ.}
+```
+
+### Section Headings
+
+- **Section**: `\section{Title}` (numbered, bold)
+- **Subsection**: `\subsection{Title}` (numbered, bold)
+- **Subsubsection**: `\subsubsection{Title}` (numbered, italic)
+- **Paragraph**: `\paragraph{Title}` (not numbered, italic—use sparingly)
+
+### Mathematics
+
+- **Inline math**: Use `$...$` (not `$$...$$` or `\(...\)`)
+- **Display math**: Use `\[...\]` or `$$...$$` for equations
+- **Equation numbering**: Use `\begin{equation}...\end{equation}` for numbered equations
+- **Alignment**: Use `\begin{align}...\end{align}` for multi-line equations
+- **Units**: Use `siunitx` package: `\unit{m.s^{-1}}` or `\si{m.s^{-1}}`
+
+### Figures and Tables
+
+```latex
+% Figures
+\begin{figure}[t!] % Place at top
+\includegraphics[width=\columnwidth]{filename.pdf}
+\caption{Caption text.}
+\label{fig:label}
+\end{figure}
+
+% Tables
+\begin{table}[t!]
+\caption{Caption text.}
+\label{tab:label}
+\begin{tabular}{lcc}
+Column 1 & Column 2 & Column 3 \\
+...
+\end{tabular}
+\end{table}
+```
+
+- **Figures**: Submit as high-resolution PDF, EPS, or PNG (min 300 dpi)
+- **Placement**: Use `[t!]` for top, `[b!]` for bottom, `[h!]` for here
+- **Captions**: Place **above** tables, **below** figures
+- **Width**: Use `\columnwidth` for single-column, `0.5\textwidth` for two-column figures
+
+### References and Citations
+
+```latex
+% In text
+\citep{Author2020}      % (Author, 2020)
+\citet{Author2020}      % Author (2020)
+\citeauthor{Author2020} % Author
+\citeyear{Author2020}   % 2020
+
+% Multiple citations
+\citep{Author1a2020,Author1b2020,Author2}
+
+% In bibliography
+\bibliographystyle{mnras}
+\bibliography{references}
+```
+
+- **Style**: Use `natbib` with `mnras` bibliography style
+- **BibTeX**: Store references in `references.bib`
+- **Format**: `Author, A. A., Year, MNRAS, vol, pages`
+- **DOIs**: Always include DOI in BibTeX entries
+
+### Common BibTeX Entry Format
+
+```bibtex
+@article{Author2020,
+  author = {Author, A. A. and Second, B. B.},
+  title = {Title of the Paper},
+  journal = {MNRAS},
+  year = {2020},
+  volume = {123},
+  pages = {456--467},
+  doi = {10.1093/mnras/staa123}
+}
+```
+
+### Common MNRAS Commands
+
+- `\mnras{volume}{page}` → MNRAS, 123, 456
+- `\aap{volume}{page}` → A\&A, 123, 456
+- `\apj{volume}{page}` → ApJ, 123, 456
+- `\apjl{volume}{page}` → ApJL, 123, 456
+- `\araa{volume}{page}` → ARA\&A, 123, 456
+
+### Color Usage
+
+- **Main text**: Black only
+- **Figures**: Color allowed (online), ensure grayscale readability for print
+- **Highlights**: Avoid red/green (colorblindness considerations)
+
+### Code and Algorithms
+
+- **Pseudocode**: Use `algorithm` environment with `algorithmic` package
+- **Listings**: Use `listings` package for code snippets
+- **File names**: `\texttt{filename.py}` (monospaced)
+
+### Critical Formatting Rules
+
+1. **Never** use `\newpage` or `\clearpage`—let LaTeX paginate
+2. **Never** hardcode page numbers or margins
+3. **Always** check for widows/orphans in final draft
+4. **Always** run BibTeX after `\cite{}` changes
+5. **Never** use `\mathcal{}` for standard math—use `\mathit{}` for multi-letter variables
+6. **Always** escape special characters: `& % $ # _ { } ~ ^ \`
+7. **Never** use `\\` for line breaks in text (use blank line instead)
+
+### Compilation Sequence
+
+```bash
+pdflatex paper.tex
+bibtex paper
+pdflatex paper.tex
+pdflatex paper.tex
+```
+
+### Submission Checklist
+
+- [ ] Document class is `mnras`
+- [ ] All figures are high-resolution (min 300 dpi)
+- [ ] All tables have `\caption{}` above
+- [ ] All figures have `\caption{}` below
+- [ ] References use `natbib` with `\citep{}` or `\citet{}`
+- [ ] BibTeX file is `references.bib`
+- [ ] DOI included for all modern references
+- [ ] No hardcoded page breaks or formatting
+- [ ] Math uses proper delimiters (`$...$` inline, `\[...\]` display)
+- [ ] Author affiliations use superscripts: `First Author,\(^1\)`
+- [ ] Abstract is 250 words or less
+- [ ] Keywords included (5-8 recommended)
+
+### When to Override These Rules
+
+Only deviate from MNRAS style when:
+1. Explicitly requested by referee
+2. Using `arXiv` overlay class (then revert to `mnras` for submission)
+3. Author guidelines have been updated (check current MNRAS author guide)
+
+---
+
 ## Post-Upgrade Verification Testing
 
 **CRITICAL**: After any substantial upgrade to ASTRA functionality or astra_core components, comprehensive verification testing MUST be performed to ensure all dependencies, files, and components remain properly linked.
@@ -410,8 +617,8 @@ Run the comprehensive system verification after:
 ### Comprehensive Test Procedure
 
 ```bash
-# Run the comprehensive system test
-python astra_core/comprehensive_system_test.py
+# Run the comprehensive system test (from repo root)
+PYTHONPATH=. python astra_core/comprehensive_system_test.py
 
 # Expected output: All 18 capabilities should PASS (100%)
 ```
@@ -425,6 +632,10 @@ The comprehensive test verifies:
 - **V4 Capabilities**: Meta-Context Engine (if available)
 - **Orchestrator Integration**: create_stan_system(), answer(), process_query()
 
+After any substantial change, also confirm:
+- **Full import sweep**: every module in the `astra_core` tree imports with zero failures (567/567 as of Aug 2026)
+- **Zero UserWarnings on `import astra_core.core`** — a warning here means a stale import path is silently disabling a component
+
 ### Fix-Test Loop
 
 If errors are found:
@@ -437,30 +648,21 @@ If errors are found:
 
 - **Comprehensive Test**: `astra_core/comprehensive_system_test.py`
 - **Domain Validation**: `astra_core/tests/validation_benchmarks.py`
-- **V4 Integration Tests**: `astra_core/tests/v4/test_v4_integration.py`
+- **V4 Integration Tests**: `astra_core/tests/test_revolutionary/test_v4_integration.py`
 - **Specialist Capabilities**: `astra_core/tests/test_specialist_capabilities.py`
 
 ### Verification Report
 
-After successful verification, update the verification report:
-```bash
-# Update RASTI/SYSTEM_VERIFICATION_COMPLETE.md with current status
-```
-
-The report should document:
-- Date and version of verification
-- All 75 domains with PASS status
-- All 18+ advanced capabilities with PASS status
-- Cross-module dependency verification
-- Any issues found and resolved
+The standing verification record lives in **`User_Manual/User_Manual.md` Appendix E** (current version documents the August 2026 audit: 17 re-implemented symbols, the 14-module `astro_physics` rebuild, ~13,500 dead lines removed, and every suite green). After a successful verification, update Appendix E (E.6 test matrix and the document version footer) with the new date and results rather than creating separate report files.
 
 ---
 
 ## Code Statistics
 
-- **Total Lines**: 280,808
-- **Python Files**: 514
-- **Directory Size**: ~9 MB (after cleanup from 3.6 GB of backups)
+- **Total Lines**: 316,898 Python lines
+- **Python Files**: 675
+- **Directory Size**: ~13 MB (excluding `__pycache__`)
 - **Specialist Capabilities**: 66 (V45 baseline)
 - **Domain Modules**: 75 (23 core + 48 astrophysics)
 - **Physics Stages**: 15 learning stages (relativistic, quantum, nuclear)
+- **Audit Delta (Aug 2026)**: ~200 files changed — +12.6k lines of re-implemented lost symbols, −34.8k dead/broken lines (see User_Manual Appendix E)

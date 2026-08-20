@@ -1145,28 +1145,10 @@ def test_quantum_reasoning_function(data):
 
 
 
-def utility_function_2(*args, **kwargs):
-    """Utility function 2."""
-    return None
-
-
-
 # Test helper for predictive_modeling
 def test_predictive_modeling_function(data):
     """Test function for predictive_modeling."""
     import numpy as np
     return {'passed': True, 'result': None}
-
-
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-
-
-def utility_function_17(*args, **kwargs):
-    """Utility function 17."""
-    return None
 
 

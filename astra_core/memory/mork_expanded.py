@@ -1208,7 +1208,3 @@ def import_data(*args, **kwargs):
     return None
 
 
-
-def utility_function_17(*args, **kwargs):
-    """Utility function 17."""
-    return None

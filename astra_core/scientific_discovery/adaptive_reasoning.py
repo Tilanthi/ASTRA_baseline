@@ -138,56 +138,248 @@ class ReasoningState:
 # Uncertainty Tracker
 # =============================================================================
 
+@dataclass
+class ConfidenceRecord:
+    """One confidence-vs-outcome observation for calibration"""
+    confidence: float
+    success: bool
+    timestamp: float = field(default_factory=time.time)
+
+
 class UncertaintyTracker:
     """
-    Track and calibrate confidence levels across discovery process.
+    Confidence calibration and drift detection.
 
-    Maintains running estimates of uncertainty and provides
-    confidence-based decision support.
+    Records (stated confidence, realised success) pairs and estimates the
+    systematic bias between them, so downstream mode selection can tell
+    over-confidence from genuine uncertainty.
     """
 
-    def __init__(self):
-        self.confidence_history: List[float] = []
-        self.calibration_data: Dict[str, List[Tuple[float, bool]]] = defaultdict(list)
+    def __init__(self, max_records: int = 500):
+        self.records: List[ConfidenceRecord] = []
+        self.max_records = max_records
 
-    def update(self, confidence: float, phase: DiscoveryPhase):
-        """Update confidence tracking"""
-        self.confidence_history.append(confidence)
+    def record(self, confidence: float, success: bool) -> None:
+        self.records.append(ConfidenceRecord(float(confidence), bool(success)))
+        if len(self.records) > self.max_records:
+            del self.records[:len(self.records) - self.max_records]
 
-    def get_calibrated_confidence(self, raw_confidence: float,
-                                  phase: DiscoveryPhase) -> float:
-        """
-        Calibrate raw confidence based on historical performance.
+    @property
+    def bias(self) -> float:
+        """mean(confidence) - mean(success); >0 means over-confident."""
+        if not self.records:
+            return 0.0
+        conf = sum(r.confidence for r in self.records) / len(self.records)
+        succ = sum(1.0 for r in self.records if r.success) / len(self.records)
+        return conf - succ
 
-        If we consistently over/under-estimate, adjust accordingly.
-        """
-        # Simple calibration: if we have history, adjust
-        if len(self.confidence_history) > 10:
-            # Check if we're consistently over-confident
-            avg_confidence = sum(self.confidence_history[-10:]) / 10
-            if avg_confidence > 0.8:
-                # Slightly reduce confidence (we might be over-confident)
-                return raw_confidence * 0.9
-            elif avg_confidence < 0.4:
-                # Slightly increase (we might be under-confident)
-                return raw_confidence * 1.1
+    def calibrate(self, confidence: float) -> float:
+        """Remove the estimated bias from a stated confidence."""
+        return float(min(1.0, max(0.0, confidence - 0.5 * self.bias)))
 
-        return raw_confidence
-
-    def should_seek_validation(self, confidence: float) -> bool:
-        """Determine if we need additional validation"""
-        return confidence < 0.6
-
-    def estimate_remaining_uncertainty(self, current_confidence: float,
-                                      phase: DiscoveryPhase) -> float:
-        """Estimate how much uncertainty remains to resolve"""
-        return 1.0 - current_confidence
+    def summary(self) -> Dict[str, Any]:
+        return {'n_records': len(self.records), 'bias': self.bias}
 
 
-# =============================================================================
-# Metacognitive Monitor
-# =============================================================================
+def _clip01(x: float) -> float:
+    return min(1.0, max(0.0, float(x)))
+
 
 class MetacognitiveMonitor:
     """
-    Monitor reasoning quality using V41 metacognition.
+    Quality assessment for reasoning episodes.
+
+    Uses the V41 metacognitive controller when available for monitoring
+    hooks; the quality score itself is a weighted aggregate of caller
+    supplied metrics (no invented numbers).
+    """
+
+    # Default weights for the recognised quality metrics
+    DEFAULT_WEIGHTS = {
+        'completeness': 0.3,
+        'consistency': 0.3,
+        'novelty': 0.2,
+        'evidence_strength': 0.2,
+    }
+
+    def __init__(self):
+        self.v41_controller = None
+        if V41_AVAILABLE:
+            try:
+                self.v41_controller = get_metacognitive_controller()
+            except Exception:
+                self.v41_controller = None  # degraded: monitoring unavailable
+        self.quality_history: List[float] = []
+
+    def assess_quality(self, metrics: Optional[Dict[str, float]] = None) -> float:
+        """Weighted mean of supplied metrics in [0, 1]; 0.5 when absent."""
+        if not metrics:
+            return 0.5
+        total_w = 0.0
+        score = 0.0
+        for key, weight in self.DEFAULT_WEIGHTS.items():
+            if key in metrics:
+                score += weight * _clip01(metrics[key])
+                total_w += weight
+        # Unknown extra metrics are averaged in at a small residual weight
+        extra = [k for k in metrics if k not in self.DEFAULT_WEIGHTS]
+        if extra and total_w < 1.0:
+            residual = (1.0 - total_w) / len(extra)
+            for key in extra:
+                score += residual * _clip01(metrics[key])
+                total_w += residual
+        quality = score / total_w if total_w > 0 else 0.5
+        self.quality_history.append(quality)
+        return quality
+
+    @property
+    def quality_trend(self) -> float:
+        """Slope of recent quality scores (positive = improving)."""
+        h = self.quality_history[-10:]
+        if len(h) < 2:
+            return 0.0
+        return (h[-1] - h[0]) / (len(h) - 1)
+
+
+class ReasoningModeSelector:
+    """
+    Phase-to-mode mapping with adaptive overrides.
+
+    Base mapping comes from PHASE_TO_MODE_MAP; overrides respond to being
+    stuck (switch to DELIBERATIVE for a fresh perspective) and low
+    confidence mid-analysis (switch to ADAPTIVE).
+    """
+
+    def __init__(self, phase_map: Optional[Dict[DiscoveryPhase, ReasoningMode]] = None):
+        self.phase_map = phase_map or dict(PHASE_TO_MODE_MAP)
+
+    def select(self, state: ReasoningState) -> Tuple[ReasoningMode, str]:
+        """Return (mode, reason) for the current state."""
+        base = self.phase_map.get(state.phase, ReasoningMode.ADAPTIVE)
+
+        if state.stuck_count >= 3:
+            if state.phase != DiscoveryPhase.VALIDATION:
+                return ReasoningMode.DELIBERATIVE, (
+                    f"stuck {state.stuck_count}x in {state.phase.value}; "
+                    "opening multiple perspectives")
+
+        if (state.phase == DiscoveryPhase.ANALYSIS_EXECUTION
+                and state.confidence < 0.3 and state.iterations > 5):
+            return ReasoningMode.ADAPTIVE, (
+                "low confidence during analysis; switching to responsive mode")
+
+        return base, f"default mapping for {state.phase.value}"
+
+    def suggest_next_phase(self, state: ReasoningState) -> DiscoveryPhase:
+        """Advance the cycle when quality and confidence are both healthy."""
+        order = list(DiscoveryPhase)
+        if state.confidence >= 0.7 and state.quality_score >= 0.7:
+            return order[(order.index(state.phase) + 1) % len(order)]
+        return state.phase
+
+
+class AdaptiveReasoningController:
+    """
+    Main controller: tracks discovery state and switches reasoning modes.
+
+    Typical use::
+
+        controller = get_adaptive_reasoning_controller()
+        controller.update_phase(DiscoveryPhase.HYPOTHESIS_GENERATION)
+        ...
+        controller.record_iteration(confidence=0.6, quality_metrics={...})
+        mode = controller.get_current_mode()
+    """
+
+    def __init__(self,
+                 initial_phase: DiscoveryPhase = DiscoveryPhase.LITERATURE_REVIEW,
+                 initial_confidence: float = 0.5):
+        self.uncertainty = UncertaintyTracker()
+        self.monitor = MetacognitiveMonitor()
+        self.selector = ReasoningModeSelector()
+        self.state = ReasoningState(phase=initial_phase, mode=ReasoningMode.ANALYTICAL,
+                                    confidence=initial_confidence)
+        self.state.mode, _ = self.selector.select(self.state)
+        self.switch_log: List[Dict[str, Any]] = []
+
+    # ----------------------------------------------------------------- state
+    def update_phase(self, phase: DiscoveryPhase, reason: str = "") -> None:
+        self.state.update_phase(phase)
+        self._reselect(reason=f"phase -> {phase.value}")
+
+    def _reselect(self, reason: str = "") -> None:
+        new_mode, why = self.selector.select(self.state)
+        if new_mode is not self.state.mode:
+            self.switch_log.append({
+                'from': self.state.mode.name, 'to': new_mode.name,
+                'reason': f"{reason} | {why}", 'time': time.time()})
+            logger.info("Mode switch %s -> %s (%s)",
+                        self.state.mode.name, new_mode.name, why)
+            self.state.update_mode(new_mode)
+
+    # ---------------------------------------------------------------- events
+    def record_iteration(self, confidence: Optional[float] = None,
+                         success: Optional[bool] = None,
+                         quality_metrics: Optional[Dict[str, float]] = None,
+                         stuck: bool = False) -> ReasoningMode:
+        """
+        Record one reasoning iteration and re-select the mode if warranted.
+
+        Returns the (possibly switched) current mode.
+        """
+        self.state.tick()
+        if confidence is not None:
+            calibrated = self.uncertainty.calibrate(confidence)
+            # exponential smoothing of confidence
+            alpha = 0.3
+            self.state.confidence = (alpha * calibrated
+                                     + (1 - alpha) * self.state.confidence)
+            if success is not None:
+                self.uncertainty.record(calibrated, success)
+        if quality_metrics is not None:
+            self.state.quality_score = self.monitor.assess_quality(quality_metrics)
+
+        if stuck:
+            self.state.stuck_count += 1
+        else:
+            self.state.stuck_count = 0
+
+        self._reselect()
+        return self.state.mode
+
+    # ------------------------------------------------------------------ read
+    def get_current_mode(self) -> ReasoningMode:
+        return self.state.mode
+
+    def suggest_next_phase(self) -> DiscoveryPhase:
+        return self.selector.suggest_next_phase(self.state)
+
+    def get_state_summary(self) -> Dict[str, Any]:
+        s = self.state
+        return {
+            'mode': s.mode.name,
+            'phase': s.phase.value,
+            'confidence': s.confidence,
+            'quality_score': s.quality_score,
+            'iterations': s.iterations,
+            'stuck_count': s.stuck_count,
+            'time_in_phase': s.time_in_phase,
+            'mode_history': [m.name for m in s.mode_history],
+            'phase_history': [p.value for p in s.phase_history],
+            'calibration_bias': self.uncertainty.bias,
+            'quality_trend': self.monitor.quality_trend,
+            'n_mode_switches': len(self.switch_log),
+            'v41_available': V41_AVAILABLE,
+        }
+
+
+# Module-level singleton (mirrors reasoning.metacognition pattern)
+_adaptive_reasoning_controller: Optional[AdaptiveReasoningController] = None
+
+
+def get_adaptive_reasoning_controller() -> AdaptiveReasoningController:
+    """Get or create the global adaptive reasoning controller."""
+    global _adaptive_reasoning_controller
+    if _adaptive_reasoning_controller is None:
+        _adaptive_reasoning_controller = AdaptiveReasoningController()
+    return _adaptive_reasoning_controller

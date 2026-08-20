@@ -897,18 +897,6 @@ __all__ = [
 
 
 
-def utility_function_27(*args, **kwargs):
-    """Utility function 27."""
-    return None
-
-
-
-def utility_function_7(*args, **kwargs):
-    """Utility function 7."""
-    return None
-
-
-
 # Test helper for uncertainty_quantification
 def test_uncertainty_quantification_function(data):
     """Test function for uncertainty_quantification."""

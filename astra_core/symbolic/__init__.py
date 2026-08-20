@@ -28,9 +28,11 @@ Version: 38.0
 
 from .self_consistency import (
     SelfConsistencyEngine,
-    EnhancedSelfConsistency,
     ConsistencyResult
 )
+
+# EnhancedSelfConsistency lives in the reasoning package
+from ..reasoning.enhanced_self_consistency import EnhancedSelfConsistency
 
 from .mork_expanded import (
     ExpandedMORK,
@@ -38,7 +40,8 @@ from .mork_expanded import (
     DomainRouter
 )
 
-from .tool_integration import (
+# Tool integration implementation lives in the capabilities package
+from ..capabilities.tool_integration import (
     ToolIntegration,
     ToolResult,
     WikipediaAPI,
@@ -49,9 +52,11 @@ from .tool_integration import (
 
 from .local_rag import (
     LocalRAG,
-    RetrievalResult,
-    KnowledgeBaseBuilder
+    RetrievalResult
 )
+
+# KnowledgeBaseBuilder implementation lives in the capabilities package
+from ..capabilities.local_rag import KnowledgeBaseBuilder
 
 from .stan_enhanced import (
     STANEnhanced,
@@ -60,12 +65,15 @@ from .stan_enhanced import (
 )
 
 # Import V36 components for backward compatibility
-from .v36_system import (
-    SymbolicCausalAbstraction,
-    CrossDomainAnalogyEngine,
-    MechanismDiscoveryEngine,
-    V36CompleteSystem as _V36CompleteSystem
-)
+try:
+    from .v36_system import (
+        SymbolicCausalAbstraction,
+        CrossDomainAnalogyEngine,
+        MechanismDiscoveryEngine,
+        V36CompleteSystem as _V36CompleteSystem
+    )
+except Exception:
+    SymbolicCausalAbstraction = CrossDomainAnalogyEngine = MechanismDiscoveryEngine = _V36CompleteSystem = None  # degraded: unavailable
 
 __all__ = [
     # Self-Consistency

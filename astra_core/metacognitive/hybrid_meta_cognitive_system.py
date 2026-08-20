@@ -39,7 +39,8 @@ from .data_sufficiency_evaluator import (
 
 # Try to import advanced capabilities
 try:
-    from ..capabilities.v50_causal_engine import CausalDiscovery, PCAlgorithm
+    from ..capabilities.causal_discovery import CausalDiscovery
+    from ..causal.discovery.pc_algorithm import PCAlgorithm
     CAUSAL_AVAILABLE = True
 except ImportError:
     CAUSAL_AVAILABLE = False
@@ -60,7 +61,7 @@ except ImportError:
     print("WARNING: Multi-expert ensemble not available")
 
 try:
-    from ..capabilities.v60_persistent_memory import EpisodicMemory
+    from ..capabilities.memory.persistent_memory import EpisodicMemory
     MEMORY_AVAILABLE = True
 except ImportError:
     MEMORY_AVAILABLE = False
