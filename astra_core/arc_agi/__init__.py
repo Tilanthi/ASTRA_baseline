@@ -44,39 +44,43 @@ except Exception as _exc:  # pragma: no cover - optional surface
 
 try:
     from .pattern_library import (
-    Pattern, PatternType,
-    PatternDetector, PatternPrimitives,
-    ObjectRelationships, CompositeTransform
+        Pattern, PatternType, PatternDetector, PatternPrimitives,
     )
 except Exception as _exc:  # pragma: no cover - optional surface
     _degraded_warn(".pattern_library", _exc)
-    Pattern = PatternType = PatternDetector = PatternPrimitives = ObjectRelationships = CompositeTransform = None  # degraded: unavailable
+    Pattern = PatternType = PatternDetector = PatternPrimitives = None
+# AUDIT-FLAG: ObjectRelationships, CompositeTransform is/are imported by name here but
+# defined nowhere in pattern_library.py (truncated module). Left as None rather
+# than re-implemented, so the working symbols above are no longer nulled too.
+ObjectRelationships = CompositeTransform = None
 
 try:
     from .systematic_search import (
-    SearchState, TaskAnalysis,
-    ConstraintPropagator, ProgramSynthesizer,
-    BeamSearchSolver, AnalogicalTransfer,
-    ARCSolver
+        SearchState, TaskAnalysis, ConstraintPropagator, ProgramSynthesizer,
     )
 except Exception as _exc:  # pragma: no cover - optional surface
     _degraded_warn(".systematic_search", _exc)
-    SearchState = TaskAnalysis = ConstraintPropagator = ProgramSynthesizer = BeamSearchSolver = AnalogicalTransfer = ARCSolver = None  # degraded: unavailable
+    SearchState = TaskAnalysis = ConstraintPropagator = ProgramSynthesizer = None
+# AUDIT-FLAG: BeamSearchSolver, AnalogicalTransfer, ARCSolver is/are imported by name here but
+# defined nowhere in systematic_search.py (truncated module). Left as None rather
+# than re-implemented, so the working symbols above are no longer nulled too.
+BeamSearchSolver = AnalogicalTransfer = ARCSolver = None
 
-try:
-    from .extended_generators import ExtendedGenerators
-except Exception as _exc:  # pragma: no cover - optional surface
-    _degraded_warn(".extended_generators", _exc)
-    ExtendedGenerators = None  # degraded: unavailable
+# AUDIT-FLAG: extended_generators.py defines no symbols at all (empty after a
+# past truncation); ExtendedGenerators has no implementation anywhere.
+ExtendedGenerators = None
 
 try:
     from .deep_synthesis import (
-    DeepProgramSynthesizer, EnumerativeSynthesizer,
-    ProgramNode, TypedPrimitive
+        DeepProgramSynthesizer, ProgramNode, TypedPrimitive,
     )
 except Exception as _exc:  # pragma: no cover - optional surface
     _degraded_warn(".deep_synthesis", _exc)
-    DeepProgramSynthesizer = EnumerativeSynthesizer = ProgramNode = TypedPrimitive = None  # degraded: unavailable
+    DeepProgramSynthesizer = ProgramNode = TypedPrimitive = None
+# AUDIT-FLAG: EnumerativeSynthesizer is/are imported by name here but
+# defined nowhere in deep_synthesis.py (truncated module). Left as None rather
+# than re-implemented, so the working symbols above are no longer nulled too.
+EnumerativeSynthesizer = None
 
 try:
     from .neural_patterns import (
@@ -90,14 +94,15 @@ except Exception as _exc:  # pragma: no cover - optional surface
 
 try:
     from .iterative_refinement import (
-    SolutionAttempt, ErrorAnalysis,
-    ErrorAnalyzer, SolutionRefiner,
-    IterativeRefinementSolver, HypothesisCombiner,
-    ConstraintBasedRepair
+        SolutionAttempt, ErrorAnalysis, ErrorAnalyzer, SolutionRefiner, IterativeRefinementSolver,
     )
 except Exception as _exc:  # pragma: no cover - optional surface
     _degraded_warn(".iterative_refinement", _exc)
-    SolutionAttempt = ErrorAnalysis = ErrorAnalyzer = SolutionRefiner = IterativeRefinementSolver = HypothesisCombiner = ConstraintBasedRepair = None  # degraded: unavailable
+    SolutionAttempt = ErrorAnalysis = ErrorAnalyzer = SolutionRefiner = IterativeRefinementSolver = None
+# AUDIT-FLAG: HypothesisCombiner, ConstraintBasedRepair is/are imported by name here but
+# defined nowhere in iterative_refinement.py (truncated module). Left as None rather
+# than re-implemented, so the working symbols above are no longer nulled too.
+HypothesisCombiner = ConstraintBasedRepair = None
 
 try:
     from .enhanced_solver import EnhancedARCSolver, SolveResult

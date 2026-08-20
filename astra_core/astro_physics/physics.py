@@ -449,22 +449,35 @@ class StellarStructureModel(ForwardModel):
 
     def main_sequence_mass_luminosity(self, mass: float) -> float:
         """
-        Mass-luminosity relation for main sequence stars
+        Mass-luminosity relation for main sequence stars.
 
-        L/L_sun ≈ (M/M_sun)^α where α depends on mass range
+        L/L_sun = k (M/M_sun)^alpha, piecewise (standard textbook fit, e.g.
+        Duric, *Advanced Astrophysics*, CUP 2004, Sec. 1.4):
+
+            M/M_sun < 0.43 : L = 0.23  M^2.3
+            0.43 - 2       : L = 1.0   M^4.0
+            2 - 55         : L = 1.4   M^3.5
+            > 55           : L = 32000 M     (Eddington/electron-scattering regime)
+
+        Note: even with the correct coefficients this published fit is not exactly
+        continuous at the break points (-3.4% at 0.43 M_sun, +1.0% at 2 M_sun,
+        -1.8% at 55 M_sun); that is a property of the fit, not of this code.
         """
         m = mass / self.pc.M_sun
 
+        # FIX(audit H1): restore the normalisation constants k, which had all been
+        # dropped (code returned L_sun*m**alpha). Before: L(55.1 M_sun) = 55 L_sun,
+        # a factor 2.2e4 discontinuity at 55 M_sun; now 1.76e6 L_sun.
         if m < 0.43:
-            alpha = 2.3
+            coeff, alpha = 0.23, 2.3
         elif m < 2:
-            alpha = 4.0
+            coeff, alpha = 1.0, 4.0
         elif m < 55:
-            alpha = 3.5
+            coeff, alpha = 1.4, 3.5
         else:
-            alpha = 1.0
+            coeff, alpha = 32000.0, 1.0
 
-        return self.pc.L_sun * m**alpha
+        return self.pc.L_sun * coeff * m**alpha
 
     def predict(self, parameters: Dict) -> Dict:
         """Predict observables from stellar parameters"""

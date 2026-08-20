@@ -344,15 +344,19 @@ class StarFormationRateTracer:
                nonthermal combined; verified against M82, M33 and
                the Milky Way within a factor ~3)
     - X-ray  : SFR = 3.8e-40 L_X(0.5-8 keV)  (Mineo et al. 2012)
-    - HCN    : SFR = 1.5e-4 L_HCN[K km/s pc^2]  (Gao & Solomon 2004
-               dense-gas linear law, anchored on M82 and converted
-               through the TIR calibration; approximate)
+    - HCN    : SFR = 1.34e-7 L'_HCN[K km/s pc^2]  (Gao & Solomon 2004
+               dense-gas linear law L_IR/L'_HCN = 900 Lsun/(K km/s pc^2),
+               converted through the KE12 TIR calibration; approximate)
     """
 
     # Constants in the Kroupa IMF convention
     _KROUPA = {
         SFTRindicator.H_ALPHA: 5.25e-42,
-        SFTRindicator.H_BETA: 5.25e-42 / 2.86,
+        # FIX(audit B-SF-1): Case B gives L(Ha) = 2.86 L(Hb) (Osterbrock &
+        # Ferland 2006, T = 1e4 K, n_e = 1e2), so SFR = C_Ha * 2.86 * L(Hb):
+        # the Hb coefficient must be LARGER than the Ha one.
+        # Before: 5.25e-42/2.86 = 1.835e-42 -> SFR low by 2.86^2 = 8.18x.
+        SFTRindicator.H_BETA: 5.25e-42 * 2.86,
         SFTRindicator.TIR: 3.88e-44,
         SFTRindicator.FUV: 4.5e-44,
         SFTRindicator.IR_24: 2.5e-43,
@@ -360,6 +364,9 @@ class StarFormationRateTracer:
     }
     # Salpeter equivalents (K98): ratio ~ 1.6 (0.63 inverse)
     _SALPETER_SCALE = 1.6
+    # HCN dense-gas law: 3.88e-44 (KE12 TIR, Kroupa) * 900 (Gao & Solomon 2004
+    # L_IR/L'_HCN, Lsun per K km/s pc^2) * 3.828e33 (Lsun in erg/s).
+    _HCN_COEFF = 3.88e-44 * 900.0 * 3.828e33  # = 1.337e-7 (Msun/yr) / (K km/s pc^2)
 
     def __init__(self, imf: str = 'kroupa'):
         if imf not in ('kroupa', 'salpeter'):
@@ -379,11 +386,15 @@ class StarFormationRateTracer:
         if tracer == SFTRindicator.RADIO_1_4GHZ:
             return 1.4e-28 * luminosity       # L_nu in erg/s/Hz
         if tracer == SFTRindicator.HCN:
-            # L_HCN in K km/s pc^2; anchored on M82 (L_HCN ~ 6e4,
-            # L_FIR ~ 6e10 Lsun -> L_FIR ~ 1e6 Lsun per K km/s pc^2),
-            # then converted through the KE12 TIR calibration:
-            # SFR = 3.88e-44 * 3.828e33 * 1e6 * L_HCN ~ 1.5e-4 L_HCN
-            return 1.5e-4 * luminosity
+            # FIX(audit B-SF-2): the old anchor assumed L_IR ~ 1e6 Lsun per
+            # (K km/s pc^2) of L_HCN, giving 1.5e-4. Gao & Solomon (2004,
+            # ApJ 606, 271) measure L_IR/L'_HCN = 900 Lsun (K km/s pc^2)^-1
+            # (their linear dense-gas relation). Converting through the KE12
+            # TIR calibration:
+            #   SFR = 3.88e-44 [erg/s]^-1 * 900 * 3.828e33 erg/s * L'_HCN
+            #       = 1.337e-7 L'_HCN
+            # Before: L'_HCN = 1e8 -> 1.5e4 Msun/yr (ratio 1122 too high).
+            return self._HCN_COEFF * luminosity
         raise ValueError(f"No calibration for tracer {tracer}")
 
     def luminosity_from_sfr(self, sfr_msun_yr: float,
@@ -398,7 +409,7 @@ class StarFormationRateTracer:
         if tracer == SFTRindicator.RADIO_1_4GHZ:
             return sfr_msun_yr / 1.4e-28
         if tracer == SFTRindicator.HCN:
-            return sfr_msun_yr / 1.5e-4
+            return sfr_msun_yr / self._HCN_COEFF  # FIX(audit B-SF-2)
         raise ValueError(f"No calibration for tracer {tracer}")
 
 
@@ -579,9 +590,19 @@ class SupernovaFeedback:
         if m < 8.0:
             return {'total': 0.0, 'O': 0.0, 'Fe': 0.0, 'C': 0.0}
         frac_O = min(0.10 + 0.005 * (m - 8.0), 0.25)
+        # AUDIT-FLAG (B-SF-9): frac_Fe grows without bound, giving 1.87 Msun of
+        # Fe from a 100 Msun progenitor where observed 56Ni yields are
+        # 0.03-0.3 Msun. Left as-is: this "Portinari-style heuristic" has no
+        # stated source to correct it against, and capping it would be a guess.
         frac_Fe = 5e-3 + 2e-4 * (m - 8.0)
         frac_C = 0.02 + 1e-3 * (m - 8.0)
-        ejecta = min(0.8 * m, m - 1.4)
+        # FIX(audit B-SF-5): ejecta must be M_init - M_remnant, using the SAME
+        # remnant relation as StellarEvolution.remnant_mass(). The old
+        # min(0.8*m, m - 1.4) hardcoded a neutron-star remnant even in the
+        # black-hole regime, so yields + remnant exceeded the progenitor mass:
+        # 100 Msun -> 80 (ejecta) + 70 (remnant) = 150 Msun. Now 30 + 70 = 100.
+        # (This is an upper limit: pre-SN wind mass loss is not subtracted.)
+        ejecta = max(m - StellarEvolution.remnant_mass(m), 0.0)
         return {'total': ejecta, 'O': frac_O * ejecta,
                 'Fe': frac_Fe * ejecta, 'C': frac_C * ejecta}
 
@@ -619,8 +640,13 @@ def create_stellar_population(n_stars: int = 1000, imf: str = 'kroupa',
     masses = imf_sampler.sample(n_stars, rng=rng)
     stars = []
     for m in masses:
+        # FIX(audit B-SF-3): the star used to be *created* at age_myrs and then
+        # evolved by a further age_myrs (evolve_star does age_myrs += dt_myr),
+        # so every population came out at twice the requested age
+        # (create_stellar_population(age_myrs=10) -> stars at 20 Myr).
+        # Create at t = 0 and evolve once.
         star = Star(mass_msun=float(m), initial_mass_msun=float(m),
-                    phase=StellarPhase.MAIN_SEQUENCE, age_myrs=age_myrs,
+                    phase=StellarPhase.MAIN_SEQUENCE, age_myrs=0.0,
                     luminosity_lsun=StellarEvolution
                     .main_sequence_luminosity(m),
                     effective_temperature=StellarEvolution

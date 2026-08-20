@@ -33,7 +33,17 @@ except ImportError:  # executed as a script from inside tests/ablation/
     get_critical_ablations,
     get_ablation_by_name
 )
-from metrics import (
+try:
+    from .metrics import (
+    QueryResult,
+    MetricScore,
+    AblationEvaluation,
+    get_all_metrics,
+    evaluate_result,
+    compute_overall_score
+)
+except ImportError:  # executed as a script from inside tests/ablation/
+    from metrics import (
     QueryResult,
     MetricScore,
     AblationEvaluation,

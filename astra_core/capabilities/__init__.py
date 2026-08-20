@@ -158,11 +158,18 @@ from .neural_symbolic_bridge import (
     HybridReasoner,
     NeuralToSymbolicTranslator,
     SymbolicToNeuralTranslator,
-    SymbolicVerifier,
     PromptScaffolder,
     SymbolicStructure,
     SymbolicStructureType,
-    VerificationResult
+)
+# AUDIT-FIX: `SymbolicVerifier` and `VerificationResult` are ALSO defined by
+# `symbolic_verification` and `verification_guided_search` respectively, and the
+# later (V43) imports silently shadowed these V39 classes -- which have entirely
+# different fields.  Expose the V39 ones under explicit names instead of letting
+# the collision decide.
+from .neural_symbolic_bridge import (
+    SymbolicVerifier as NSSymbolicVerifier,
+    VerificationResult as NSVerificationResult,
 )
 # Note: Constraint imported with alias to avoid conflict
 from .neural_symbolic_bridge import Constraint as NSConstraint

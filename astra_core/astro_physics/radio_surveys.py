@@ -458,22 +458,68 @@ def load_survey_catalog(filename: str, survey: SurveyType) -> SurveyCatalog:
     )
 
 
-def estimate_luminosity(flux: float, redshift: float,
-                       frequency: float, spectral_index: float = -0.7) -> float:
+def luminosity_distance_mpc(redshift: float, H0: float = 67.66,
+                            Omega_m: float = 0.30966) -> float:
     """
-    Estimate radio luminosity from flux.
+    Flat-LambdaCDM luminosity distance [Mpc].
+
+    D_L = (1+z) * (c/H0) * Integral_0^z dz' / E(z'),
+    E(z) = sqrt(Omega_m (1+z)^3 + (1 - Omega_m)).
+
+    Defaults are the Planck 2018 TT,TE,EE+lowE+lensing+BAO values
+    (H0 = 67.66 km/s/Mpc, Omega_m = 0.30966) -- i.e. the `Planck18` cosmology the
+    original (truncated) implementation intended to use. Radiation density is
+    neglected, which is a <0.1% effect on D_L for z < 5.
+
+    FIX(audit M5): replaces a function body that consisted of two `astropy`
+    import statements and nothing else (returned None where astropy exists,
+    ModuleNotFoundError where it does not).
+    """
+    if redshift < 0:
+        raise ValueError("redshift must be >= 0")
+    if redshift == 0:
+        return 0.0
+
+    from scipy.integrate import quad
+
+    c_km_s = 2.99792458e5  # km/s
+
+    def inv_E(zp):
+        return 1.0 / np.sqrt(Omega_m * (1.0 + zp) ** 3 + (1.0 - Omega_m))
+
+    integral, _ = quad(inv_E, 0.0, redshift, epsabs=1e-10, epsrel=1e-10)
+    return (1.0 + redshift) * (c_km_s / H0) * integral
+
+
+def estimate_luminosity(flux: float, redshift: float,
+                       frequency: float = 1.4e9, spectral_index: float = -0.7,
+                       H0: float = 67.66, Omega_m: float = 0.30966) -> float:
+    """
+    Estimate the rest-frame radio luminosity density from an observed flux density.
+
+    For a power-law source S_nu ~ nu^alpha, the observed flux density relates to the
+    rest-frame luminosity density at the *observing* frequency by the standard radio
+    K-correction (e.g. Condon 1992; Hogg 1999, eq. 22):
+
+        S_nu(nu_obs) = (1+z) L_nu((1+z) nu_obs) / (4 pi D_L^2)
+        L_nu((1+z) nu_obs) = L_nu(nu_obs) (1+z)^alpha
+      =>  L_nu(nu_obs) = 4 pi D_L^2 S_nu / (1+z)^(1+alpha)
 
     Args:
         flux: Flux density (Jy)
         redshift: Source redshift
-        frequency: Observing frequency (Hz)
-        spectral_index: Spectral index
+        frequency: Observing frequency (Hz). Only labels the frequency at which the
+            returned rest-frame luminosity density applies; it cancels out of the
+            K-correction for a pure power law.
+        spectral_index: alpha in S_nu ~ nu^alpha (negative for steep spectra)
+        H0, Omega_m: flat-LambdaCDM parameters (default Planck 2018)
 
     Returns:
-        Luminosity in erg/s/Hz
+        Rest-frame luminosity density at `frequency`, in erg/s/Hz.
     """
-    from astropy.cosmology import Planck18 as cosmo
-    import astropy.units as u
+    d_l_cm = luminosity_distance_mpc(redshift, H0=H0, Omega_m=Omega_m) * MPC
+    s_cgs = flux * JANSKY  # Jy -> erg/s/cm^2/Hz
+    return 4.0 * np.pi * d_l_cm ** 2 * s_cgs / (1.0 + redshift) ** (1.0 + spectral_index)
 
 
 # Custom optimization variant 26

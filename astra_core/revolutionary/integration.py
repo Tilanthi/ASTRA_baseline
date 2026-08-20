@@ -19,6 +19,7 @@ Version: 4.0.0
 Date: 2026-03-17
 """
 
+import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -63,6 +64,9 @@ class V4IntegrationState:
     performance_metrics: Dict[str, float] = field(default_factory=dict)
 
 
+logger = logging.getLogger(__name__)
+
+
 class V4IntegrationCoordinator:
     """
     Coordinates all four V4.0 capabilities with existing systems.
@@ -90,28 +94,28 @@ class V4IntegrationCoordinator:
             self.capabilities["mce"] = create_meta_context_engine()
             self.state.mce_active = True
         except Exception as e:
-            print(f"Warning: MCE initialization failed: {e}")
+            logger.warning("MCE initialization failed: %s", e)
 
         try:
             from ..self_teaching.autocatalytic_compiler import create_autocatalytic_self_compiler
             self.capabilities["asc"] = create_autocatalytic_self_compiler()
             self.state.asc_active = True
         except Exception as e:
-            print(f"Warning: ASC initialization failed: {e}")
+            logger.warning("ASC initialization failed: %s", e)
 
         try:
-            from ..abstraction.cognitive_relativity_navigator import create_cognitive_relativity_navigator
+            from ..reasoning.cognitive_relativity_navigator import create_cognitive_relativity_navigator
             self.capabilities["crn"] = create_cognitive_relativity_navigator()
             self.state.crn_active = True
         except Exception as e:
-            print(f"Warning: CRN initialization failed: {e}")
+            logger.warning("CRN initialization failed: %s", e)
 
         try:
-            from ..multi_mind.multi_mind_orchestration import create_multi_mind_orchestrator
+            from ..intelligence.multi_mind_orchestrator import create_multi_mind_orchestrator
             self.capabilities["mmol"] = create_multi_mind_orchestrator()
             self.state.mmol_active = True
         except Exception as e:
-            print(f"Warning: MMOL initialization failed: {e}")
+            logger.warning("MMOL initialization failed: %s", e)
 
     def process_query(
         self,
@@ -138,10 +142,20 @@ class V4IntegrationCoordinator:
         mind_contributions = {}
 
         # Apply MCE for context layering
+        # FIX(audit): every capability below was invoked through a method name
+        # that does not exist, so all four always fell into the `except` branch,
+        # `used_capabilities` was always empty, and the failures were buried in
+        # `reasoning_trace` while the runner still printed "tests passed".
         if self.state.mce_active and mode in [IntegrationMode.FULL, IntegrationMode.METACOGNITIVE, IntegrationMode.COLLABORATIVE]:
             try:
-                mce_result = self.capabilities["mce"].layer_context(query, dimensions=["temporal", "perceptual"])
-                context_layers.extend(mce_result.get("layers", []))
+                from ..metacognitive.meta_context_engine import ContextDimension
+                layered = self.capabilities["mce"].layer_context(
+                    query,
+                    dimensions=[ContextDimension.TEMPORAL, ContextDimension.PERCEPTUAL],
+                )
+                context_layers.extend(
+                    str(getattr(layer, "frame", layer)) for layer in layered.layers
+                )
                 used_capabilities.append("mce")
             except Exception as e:
                 reasoning_trace.append(f"MCE processing error: {e}")
@@ -149,8 +163,9 @@ class V4IntegrationCoordinator:
         # Apply CRN for abstraction navigation
         if self.state.crn_active and mode in [IntegrationMode.FULL, IntegrationMode.SELF_IMPROVING]:
             try:
-                crn_result = self.capabilities["crn"].navigate_abstraction(query, start_level=50)
-                abstraction_levels.append(crn_result.get("final_level", 50))
+                crn_result = self.capabilities["crn"].navigate_query(query)
+                abstraction_levels.append(crn_result.actual_abstraction)
+                reasoning_trace.extend(crn_result.reasoning_trace[:3])
                 used_capabilities.append("crn")
             except Exception as e:
                 reasoning_trace.append(f"CRN processing error: {e}")
@@ -158,8 +173,10 @@ class V4IntegrationCoordinator:
         # Apply MMOL for multi-mind reasoning
         if self.state.mmol_active and mode in [IntegrationMode.FULL, IntegrationMode.METACOGNITIVE, IntegrationMode.COLLABORATIVE]:
             try:
-                mmol_result = self.capabilities["mmol"].orchestrate_minds(query)
-                mind_contributions = mmol_result.get("contributions", {})
+                mmol_result = self.capabilities["mmol"].multi_mind_processing(query, context)
+                mind_contributions = {
+                    str(k): str(v) for k, v in (mmol_result.individual_results or {}).items()
+                }
                 used_capabilities.append("mmol")
             except Exception as e:
                 reasoning_trace.append(f"MMOL processing error: {e}")
@@ -167,8 +184,9 @@ class V4IntegrationCoordinator:
         # Apply ASC for self-improvement
         if self.state.asc_active and mode in [IntegrationMode.FULL, IntegrationMode.SELF_IMPROVING]:
             try:
-                asc_result = self.capabilities["asc"].compile_and_optimize(query)
-                reasoning_trace.extend(asc_result.get("optimizations", []))
+                asc_result = self.capabilities["asc"].compilation_cycle()
+                improvements = getattr(asc_result, "improvements", None) or []
+                reasoning_trace.extend(str(i) for i in improvements[:3])
                 used_capabilities.append("asc")
             except Exception as e:
                 reasoning_trace.append(f"ASC processing error: {e}")
@@ -212,6 +230,24 @@ class V4IntegrationCoordinator:
         if parts:
             return f"Analysis of '{query}': " + " | ".join(parts)
         return f"Processed query: {query}"
+
+    def graceful_degradation(self, capability: str) -> bool:
+        """
+        Report whether the coordinator can continue without `capability`.
+
+        Every V4 capability is optional: `process_query` skips any capability
+        that failed to initialise, so degradation is always survivable.  Returns
+        True for a known capability name, False for an unknown one (which would
+        indicate a caller typo rather than a degraded system).
+        """
+        known = {"mce", "asc", "crn", "mmol"}
+        if capability not in known:
+            logger.warning(
+                "graceful_degradation() called with unknown capability %r "
+                "(known: %s)", capability, ", ".join(sorted(known)),
+            )
+            return False
+        return True
 
     def get_status(self) -> Dict[str, Any]:
         """Get current status of V4.0 integration."""

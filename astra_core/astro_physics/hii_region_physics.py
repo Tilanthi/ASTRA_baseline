@@ -17,6 +17,7 @@ Version: 43.0
 """
 
 import math
+import warnings
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Callable
 from enum import Enum, auto
@@ -234,17 +235,67 @@ class StromgrenSphere:
             return q_h_table[spectral_type]
 
         if temperature:
-            # Approximate fit for Q_H vs T_eff
-            if temperature > 30000:
-                return 10**(0.0003 * temperature + 39)
-            else:
-                return 0.0
+            # FIX(audit B-HII-1): the old fit, 10**(3e-4*T_eff + 39) with a hard
+            # 0 below 30 000 K, was unbounded and unphysical -- Q_H(50 kK) = 1e54
+            # photons/s (~5e9 Lsun of Lyman continuum from one star), a factor
+            # 713 too high at 44 850 K, and discontinuous 0 -> 1e48 at 30 000 K.
+            # Replaced by log-linear interpolation of the Martins, Schaerer &
+            # Hillier (2005, A&A 436, 1049) Table 1 luminosity-class-V grid
+            # (theoretical Teff scale), which is the calibration this module
+            # already cites.
+            return self._q_h_from_teff(float(temperature))
 
         if luminosity:
             # Rough estimate assuming O star
             return luminosity / (H_PLANCK * C_LIGHT / (912e-8))  # 912 Å photon
 
         return 1e49  # Default O6V-like star
+
+    # Martins, Schaerer & Hillier (2005), A&A 436, 1049, Table 1:
+    # Galactic O dwarfs (luminosity class V), theoretical Teff scale.
+    # (T_eff [K], log10 Q0 [s^-1]) for spectral types O3V ... O9.5V.
+    _MSH05_DWARF_TEFF_LOGQ0 = (
+        (30488, 47.56), (31524, 47.90), (32522, 48.10), (33383, 48.29),
+        (34419, 48.44), (35531, 48.63), (36826, 48.80), (38151, 48.96),
+        (40062, 49.11), (41540, 49.26), (43419, 49.47), (44616, 49.63),
+    )
+
+    @classmethod
+    def _q_h_from_teff(cls, temperature: float) -> float:
+        """
+        Q_H [photons/s] for a main-sequence (class V) star of given T_eff.
+
+        Linear interpolation of log10 Q0 in T_eff over the Martins et al. (2005)
+        O-dwarf grid (30 488 - 44 616 K). Outside that range the value is a
+        log-linear extrapolation using the slope of the two nearest grid points
+        and a warning is issued: Q_H falls extremely steeply for B stars and
+        rises into a poorly calibrated regime above O3V, so extrapolated values
+        should be treated as order-of-magnitude only.
+        """
+        grid = cls._MSH05_DWARF_TEFF_LOGQ0
+        t_lo, q_lo = grid[0]
+        t_hi, q_hi = grid[-1]
+
+        if temperature < t_lo:
+            slope = (grid[1][1] - grid[0][1]) / (grid[1][0] - grid[0][0])
+            warnings.warn(
+                f"T_eff = {temperature:.0f} K is below the Martins et al. (2005) "
+                f"O-star grid ({t_lo} K); Q_H is extrapolated and is an "
+                f"order-of-magnitude estimate only.", RuntimeWarning)
+            return 10.0 ** (q_lo + slope * (temperature - t_lo))
+        if temperature > t_hi:
+            slope = (grid[-1][1] - grid[-2][1]) / (grid[-1][0] - grid[-2][0])
+            warnings.warn(
+                f"T_eff = {temperature:.0f} K is above the Martins et al. (2005) "
+                f"O-star grid ({t_hi} K); Q_H is extrapolated and is an "
+                f"order-of-magnitude estimate only.", RuntimeWarning)
+            return 10.0 ** (q_hi + slope * (temperature - t_hi))
+
+        for (t0, q0), (t1, q1) in zip(grid[:-1], grid[1:]):
+            if t0 <= temperature <= t1:
+                frac = (temperature - t0) / (t1 - t0)
+                return 10.0 ** (q0 + frac * (q1 - q0))
+        raise RuntimeError("unreachable: T_eff bracketing failed")
 
     def stromgren_radius(self, q_h: float, n_e: float,
                          temperature: float = 1e4,
@@ -442,30 +493,30 @@ class NebularDiagnosticsCalculator:
         Returns:
             Electron temperature (K)
         """
-        # Empirical fit (valid for T_e ~ 5000-20000 K)
+        # FIX(audit B-HII-3): the previous anchor "R = 0.0100 at T_e = 1e4 K
+        # => C = 0.275" was wrong by 2.17x and biased T_e low by 18-45%.
         #
-        # The auroral line 4363 A (upper level 1S0, 43196 cm^-1) and the
-        # nebular lines 4959+5007 A (upper 1D2, 20169 cm^-1) are both
-        # collisionally excited from the ground term. Their ratio is
+        # The auroral line 4363 A (upper level 1S0) and the nebular lines
+        # 4959+5007 A (upper 1D2) are both collisionally excited from the
+        # ground term, so R = I(4363)/I(4959+5007) = C exp(-Delta E / k T_e).
+        # Osterbrock & Ferland (2006), eq. 5.4, give the low-density limit
         #
-        #     R = I(4363)/I(4959+5007)
-        #       = C exp(-Delta E / k T_e),   Delta E = 23027 cm^-1
-        #                                    Delta E / k = 33134 K
+        #     j(4959)+j(5007)         exp(3.29e4 / T_e)
+        #     ---------------  = 7.90 -----------------
+        #        j(4363)              1 + 4.5e-4 n_e/sqrt(T_e)
         #
-        # with C weakly temperature dependent through the ratio of
-        # collision strengths and branching ratios. We adopt the
-        # canonical low-density anchor R = 0.0100 at T_e = 1e4 K
-        # (Osterbrock & Ferland 2006), which gives C = 0.275.
-        # Inverting,
+        # i.e. C = 1/7.90 = 0.12658 and Delta E / k = 3.29e4 K, so that
+        # R(1e4 K) = 4.72e-3 (NOT 1.00e-2). Inverting the low-density limit,
         #
-        #     T_e = 33134 / ln(0.275 / R)   [K]
+        #     T_e = 32900 / ln(0.12658 / R)   [K]
         #
-        # Valid for n_e << 10^4 cm^-3; at higher densities collisional
-        # de-excitation of 1S0 raises R and this formula overestimates T_e
-        # by a few percent.
+        # Valid for n_e << 10^4 cm^-3 (the density term above is neglected);
+        # at higher densities collisional de-excitation raises R and this
+        # formula overestimates T_e.
+        # Before/after at R = 0.0100: 9 998 K -> 12 961 K.
         if ratio_4363_5007 <= 0.0:
             raise ValueError("ratio must be positive")
-        t_e = 33134.0 / math.log(0.275 / ratio_4363_5007)
+        t_e = 32900.0 / math.log((1.0 / 7.90) / ratio_4363_5007)
         if not (4000.0 < t_e < 50000.0):
             raise ValueError(
                 f"T_e = {t_e:.0f} K outside the valid range of the "

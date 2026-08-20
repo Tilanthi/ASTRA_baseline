@@ -889,16 +889,32 @@ class MultiScaleSimulation:
         """
         One donor-cell advection step on a unit-spaced periodic grid.
         dt_cells is the step in units of cells (velocity is cells/time).
+
+        Upwind (donor-cell) discretisation of df/dt + v df/dx = 0:
+
+            v > 0:  f_i^{n+1} = f_i - v dt (f_i     - f_{i-1})
+            v < 0:  f_i^{n+1} = f_i - v dt (f_{i+1} - f_i    )
+
+        Both branches are the *backward*/forward difference taken on
+        the upwind side, and both are TVD for |v| dt <= 1.
         """
         f = field
-        out = f.copy()
         for axis, v in enumerate(velocity):
             if v == 0.0:
                 continue
-            up = np.roll(f, 1, axis=axis)   # upwind neighbour for v>0
-            down = np.roll(f, -1, axis=axis)
-            src = up if v > 0 else down
-            f = f - v * dt_cells * (f - src)
+            # FIX(audit C2): for v < 0 the donor-cell difference is
+            # (f_{i+1} - f_i), not (f_i - f_{i+1}).  The old code used
+            # `f - src` in both branches, which flips the sign of the
+            # gradient for v<0 and makes the scheme anti-diffusive
+            # (a delta function grew to max|f| = 1.85e6 in 40 steps at
+            # v = -0.5, dt = 0.5).
+            if v > 0.0:
+                upwind = np.roll(f, 1, axis=axis)    # f_{i-1}
+                dfdx = f - upwind
+            else:
+                downwind = np.roll(f, -1, axis=axis)  # f_{i+1}
+                dfdx = downwind - f
+            f = f - v * dt_cells * dfdx
         return f
 
     # ------------------------------------------------------------------
@@ -973,11 +989,15 @@ class HierarchicalRefinement:
 
     so the required refinement level at a cell is
 
-        level = ceil(log2( (lambda_J / (N_J * dx_min)) ))
+        level = ceil(log2( (N_J * dx_base) / lambda_J ))
                 clipped to [0, max_level]
 
-    Cells failing the criterion on the base grid are refined by powers
-    of two until dx < lambda_J / N_J (default N_J = 4).
+    i.e. refinement is demanded where the *base* cell is too coarse
+    (dx_base > lambda_J / N_J).  Halving dx `level` times then gives
+    dx_base / 2**level <= lambda_J / N_J, which is precisely the
+    criterion.  Cells that already resolve the Jeans length get
+    level 0.  (Before the audit fix the reciprocal ratio was used,
+    so the criterion was inverted - see FIX(audit C1).)
     """
 
     G = 6.674e-8           # cm^3 g^-1 s^-2
@@ -1012,8 +1032,12 @@ class HierarchicalRefinement:
         rho = np.asarray(density, dtype=float)
         lambda_J = self.c_s * np.sqrt(np.pi / (self.G * rho))
 
+        # FIX(audit C1): Truelove criterion was inverted - the required
+        # level is set by how many times the base cell must be halved to
+        # satisfy dx <= lambda_J / N_J, i.e. ratio = N_J*dx / lambda_J,
+        # not its reciprocal.
         # dx needed = lambda_J / n_jeans; each level halves dx
-        ratio = lambda_J / (self.n_jeans * self.dx)
+        ratio = (self.n_jeans * self.dx) / lambda_J
         level = np.ceil(np.log2(np.maximum(ratio, 1.0)))
         return np.clip(level, 0, self.max_level).astype(int)
 

@@ -561,7 +561,9 @@ class UnifiedSTANSystem:
             'query': query,
             'task_type': task_type.value if task_type else 'unknown',
             'capabilities_required': requirements,
-            'answer': 'STAN system initialized. For full query processing, use EnhancedUnifiedSTANSystem.',
+            'answer': ('ASTRA base system initialised. This entry point performs task\n'
+                       'classification only -- use create_stan_system() / '
+                       'EnhancedUnifiedSTANSystem for full query processing.'),
             'confidence': 0.5,
             'metadata': {
                 'system': 'UnifiedSTANSystem',
