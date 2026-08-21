@@ -1,111 +1,190 @@
 """
-Statistical Mechanics Domain Module for STAN-XI-ASTRO
+Statistical Mechanics Domain Module for ASTRA
 
-Ensembles, distribution functions, thermodynamics
+Gravitational statistical mechanics: Jeans criterion, virial balance and
+free-fall timescales for self-gravitating gas.
 
-Date: 2026-03-20
-Version: 1.0.0
+This module was one of 48 byte-identical copies of a 110-line template whose
+`process_query` returned ``f"{description}: Analysis of '{query}'"`` with a
+hard-coded ``confidence=0.7`` and performed no computation. It now wraps
+verified routines from :mod:`astra_core.astro_physics.gravitational_collapse`,
+which are pinned by regression tests, and reports a confidence derived from
+whether a computation actually ran.
+
+Version: 2.0.0
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, List
+
+import numpy as np
+
+from .. import DomainConfig, register_domain
+from .._computational import (
+    ComputationalCapability,
+    ComputationalDomainModule,
+    ImplementationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
-# Import domain base
-from .. import BaseDomainModule, DomainConfig
 
-
-@dataclass
-class StatisticalMechanicsDomainState:
-    """Current state of Statistical Mechanics analysis"""
-    analysis_phase: str = "initial"
-    parameters: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.parameters is None:
-            self.parameters = {}
-
-
-class StatisticalMechanicsDomain(BaseDomainModule):
+class StatisticalMechanicsDomain(ComputationalDomainModule):
     """
-    Domain specializing in Statistical Mechanics
+    Gravitational statistical mechanics.
 
-    Capabilities:
-    - ensemble_theory
-    - distribution_functions
-    - thermodynamic_equilibrium
-    - partition_functions
+    Backed by `astro_physics.gravitational_collapse`, whose Jeans,
+    Bonnor-Ebert, Toomre and free-fall routines were verified against
+    hand-derived values during the August 2026 audit.
     """
+
+    implementation_status = ImplementationStatus.COMPUTATIONAL
 
     def get_default_config(self) -> DomainConfig:
-        """Return default configuration for Statistical Mechanics domain"""
-        return DomainConfig(
-            domain_name="statistical_mechanics",
-            version="1.0.0",
-            dependencies=[],
-            description="Ensembles, distribution functions, thermodynamics"
-        )
+        return self.get_config()
 
     def get_config(self) -> DomainConfig:
         return DomainConfig(
             domain_name="statistical_mechanics",
-            version="1.0.0",
+            version="2.0.0",
             dependencies=[],
-            keywords=['statistical mechanics', 'ensembles', 'distribution_function', 'thermodynamics', 'partition_function'],
-            capabilities=['ensemble_theory', 'distribution_functions', 'thermodynamic_equilibrium', 'partition_functions']
+            description=("Gravitational statistical mechanics: Jeans criterion, "
+                         "virial balance, free-fall collapse"),
+            keywords=[
+                "statistical mechanics", "jeans mass", "jeans length",
+                "virial parameter", "virial theorem", "free-fall time",
+                "freefall time", "bonnor-ebert", "toomre", "equipartition",
+                "boltzmann", "sound speed",
+            ],
+            capabilities=[
+                "jeans_mass", "jeans_length", "sound_speed",
+                "virial_parameter", "free_fall_time", "bonnor_ebert_mass",
+                "toomre_q",
+            ],
         )
 
     def initialize(self, global_config: Dict[str, Any]) -> None:
-        """Initialize Statistical Mechanics domain"""
-        logger.info(f"Initializing {self.get_config().domain_name} domain")
-        self.state = StatisticalMechanicsDomainState()
+        super().initialize(global_config)
+        logger.info("Initialising statistical_mechanics domain")
 
-    def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Process a Statistical Mechanics query.
-
-        Args:
-            query: The input query
-            context: Optional context information
-
-        Returns:
-            DomainQueryResult with answer and metadata
-        """
-        from .. import DomainQueryResult
-
-        # Simple implementation for now
-        result = DomainQueryResult(
-            domain_name=self.get_config().domain_name,
-            answer=f"{self.get_config().description}: Analysis of '{query}'",
-            confidence=0.7,
-            reasoning_trace=[],
-            capabilities_used=[],
-            metadata={}
+    def build_capabilities(self) -> List[ComputationalCapability]:
+        from ...astro_physics.gravitational_collapse import (
+            JeansAnalysis, VirialAnalysis, FreefallCollapse,
+            FragmentationCriterion,
         )
 
-        return result
+        jeans = JeansAnalysis()
+        virial = VirialAnalysis()
+        frag = FragmentationCriterion()
 
+        # NOTE ON UNITS. `gravitational_collapse` works in CGS throughout:
+        # sound_speed -> cm/s, jeans_length -> cm, jeans_mass -> g. The wrappers
+        # below convert to the astronomer-facing units they declare, and every
+        # one carries a `self_check` computed by hand from the formula in
+        # `reference` so that a unit slip fails a test instead of silently
+        # returning a number 1e33 times too large.
+        M_SUN = 1.989e33      # g
+        PC = 3.0857e18        # cm
+        KMS = 1.0e5           # cm/s
+        YR = 3.156e7          # s
 
-    def get_capabilities(self) -> List[str]:
-        """Return list of domain capabilities"""
-        config = self.get_config()
-        return config.capabilities if config.capabilities else [
-            "Statistical Mechanics analysis",
-            "query_processing",
-            "modeling",
-            "computation"
+        return [
+            ComputationalCapability(
+                name="jeans_mass",
+                description="Jeans mass of an isothermal self-gravitating gas",
+                function=lambda density, temperature: jeans.jeans_mass(
+                    density=density, temperature=temperature) / M_SUN,
+                parameters=[
+                    ("density|n_h2|n", "cm^-3", "H2 number density"),
+                    ("temperature|t_kin|t", "K", "gas kinetic temperature"),
+                ],
+                returns=("M_J", "Msun"),
+                reference="M_J = (pi^(5/2)/6) c_s^3 G^(-3/2) rho^(-1/2)",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"density": 1e4, "temperature": 10.0}, 2.86841, 1e-3),
+            ),
+            ComputationalCapability(
+                name="jeans_length",
+                description="Jeans length of an isothermal self-gravitating gas",
+                function=lambda density, temperature: jeans.jeans_length(
+                    density=density, temperature=temperature) / PC,
+                parameters=[
+                    ("density|n_h2|n", "cm^-3", "H2 number density"),
+                    ("temperature|t_kin|t", "K", "gas kinetic temperature"),
+                ],
+                returns=("lambda_J", "pc"),
+                reference="lambda_J = c_s sqrt(pi / (G rho))",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"density": 1e4, "temperature": 10.0}, 0.211874, 1e-3),
+            ),
+            ComputationalCapability(
+                name="sound_speed",
+                description="Isothermal sound speed",
+                function=lambda temperature: jeans.sound_speed(
+                    temperature=temperature) / KMS,
+                parameters=[("temperature|t_kin|t", "K", "gas temperature")],
+                returns=("c_s", "km/s"),
+                reference="c_s = sqrt(k_B T / (mu m_H)), mu = 2.33",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"temperature": 10.0}, 0.18817, 1e-3),
+            ),
+            ComputationalCapability(
+                name="virial_parameter",
+                description="Virial parameter of a cloud or clump",
+                # NB the backend adds the thermal sound speed in quadrature,
+                # so `velocity_dispersion` here is the NON-thermal component.
+                function=lambda mass, radius, velocity_dispersion,
+                temperature=10.0: virial.virial_parameter(
+                    mass_msun=mass, radius_pc=radius,
+                    temperature=temperature,
+                    sigma_nt_km_s=velocity_dispersion),
+                parameters=[
+                    ("mass|m", "Msun", "cloud mass"),
+                    ("radius|r", "pc", "cloud radius"),
+                    ("velocity_dispersion|sigma_nt|sigma", "km/s",
+                     "non-thermal 1-D velocity dispersion"),
+                ],
+                returns=("alpha_vir", "dimensionless"),
+                reference="alpha_vir = 5 sigma^2 R / (G M)",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"mass": 1000.0, "radius": 1.0,
+                             "velocity_dispersion": 1.0}, 1.20336, 1e-3),
+            ),
+            ComputationalCapability(
+                name="free_fall_time",
+                description="Gravitational free-fall time",
+                function=lambda density: np.sqrt(
+                    3.0 * np.pi / (32.0 * 6.67430e-8
+                                   * density * 2.33 * 1.6735e-24)) / YR,
+                parameters=[("density|n_h2|n", "cm^-3", "H2 number density")],
+                returns=("t_ff", "yr"),
+                reference="t_ff = sqrt(3 pi / (32 G rho)), rho = n mu m_H",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"density": 1e4}, 337078.0, 1e-3),
+            ),
+            ComputationalCapability(
+                name="bonnor_ebert_mass",
+                description="Bonnor-Ebert critical mass of a pressure-confined core",
+                function=lambda density: frag.bonnor_ebert_mass(
+                    surface_number_density=density) / M_SUN,
+                parameters=[("density|n_h2|n", "cm^-3",
+                             "surface H2 number density")],
+                returns=("M_BE", "Msun"),
+                reference="M_BE = 1.182 c_s^3 / (G^(3/2) rho_S^(1/2)), c_s at 10 K",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"density": 1e4}, 1.16288, 1e-3),
+            ),
         ]
-# Factory function
-def create_statistical_mechanics_domain():
-    """Create a Statistical Mechanics domain instance"""
+
+
+def create_statistical_mechanics_domain() -> StatisticalMechanicsDomain:
+    """Create a StatisticalMechanicsDomain instance."""
     return StatisticalMechanicsDomain()
 
 
-# Domain registration
 try:
-    from .. import register_domain
     register_domain(StatisticalMechanicsDomain)
-except ImportError:
+except ImportError:  # pragma: no cover - registry optional at import time
     pass

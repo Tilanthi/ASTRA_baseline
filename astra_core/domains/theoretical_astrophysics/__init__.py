@@ -1,111 +1,72 @@
 """
-Theoretical Astrophysics Domain Module for STAN-XI-ASTRO
+Theoretical Astrophysics Domain Module for ASTRA
 
 Analytic methods, perturbation theory, scaling laws
 
-Date: 2026-03-20
-Version: 1.0.0
+STATUS: registered but NOT IMPLEMENTED. This module was one of 48 byte-identical
+copies of a 110-line template whose `process_query` returned
+``f"{description}: Analysis of '{query}'"`` with a hard-coded
+``confidence=0.7`` and performed no computation.
+
+There is no computational backend for this domain anywhere in the codebase, and
+inventing authored prose to fill the gap would present writing as analysis. It
+therefore reports `confidence=0.0` and
+`implementation_status=NO_IMPLEMENTATION`, which is a useful signal to an
+orchestrator in a way that 0.7 on an echoed query was not.
+
+Version: 2.0.0
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, List
+
+from .. import DomainConfig, register_domain
+from .._computational import ComputationalCapability, ComputationalDomainModule, ImplementationStatus
 
 logger = logging.getLogger(__name__)
 
-# Import domain base
-from .. import BaseDomainModule, DomainConfig
 
-
-@dataclass
-class TheoreticalAstrophysicsDomainState:
-    """Current state of Theoretical Astrophysics analysis"""
-    analysis_phase: str = "initial"
-    parameters: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.parameters is None:
-            self.parameters = {}
-
-
-class TheoreticalAstrophysicsDomain(BaseDomainModule):
+class TheoreticalAstrophysicsDomain(ComputationalDomainModule):
     """
-    Domain specializing in Theoretical Astrophysics
+    Theoretical Astrophysics.
 
-    Capabilities:
-    - analytic_modeling
-    - perturbation_methods
-    - scaling_relations
-    - approximation_methods
+    Registered so that queries in this area are recognised and routed, but no
+    numerical capability is implemented.
     """
+
+    implementation_status = ImplementationStatus.NO_IMPLEMENTATION
+    referral = ("This is a meta-domain with no routines of its own; specific calculations live in the relevant physical domains.")
 
     def get_default_config(self) -> DomainConfig:
-        """Return default configuration for Theoretical Astrophysics domain"""
-        return DomainConfig(
-            domain_name="theoretical_astrophysics",
-            version="1.0.0",
-            dependencies=[],
-            description="Analytic methods, perturbation theory, scaling laws"
-        )
+        return self.get_config()
 
     def get_config(self) -> DomainConfig:
         return DomainConfig(
             domain_name="theoretical_astrophysics",
-            version="1.0.0",
+            version="2.0.0",
             dependencies=[],
+            description="Analytic methods, perturbation theory, scaling laws",
             keywords=['theoretical', 'analytic', 'perturbation theory', 'scaling laws', 'asymptotic methods'],
-            capabilities=['analytic_modeling', 'perturbation_methods', 'scaling_relations', 'approximation_methods']
+            capabilities=[],
         )
 
     def initialize(self, global_config: Dict[str, Any]) -> None:
-        """Initialize Theoretical Astrophysics domain"""
-        logger.info(f"Initializing {self.get_config().domain_name} domain")
-        self.state = TheoreticalAstrophysicsDomainState()
+        super().initialize(global_config)
+        logger.info("Initialising %s domain (no computational backend)", "theoretical_astrophysics")
 
-    def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Process a Theoretical Astrophysics query.
-
-        Args:
-            query: The input query
-            context: Optional context information
-
-        Returns:
-            DomainQueryResult with answer and metadata
-        """
-        from .. import DomainQueryResult
-
-        # Simple implementation for now
-        result = DomainQueryResult(
-            domain_name=self.get_config().domain_name,
-            answer=f"{self.get_config().description}: Analysis of '{query}'",
-            confidence=0.7,
-            reasoning_trace=[],
-            capabilities_used=[],
-            metadata={}
-        )
-
-        return result
+    def build_capabilities(self) -> List[ComputationalCapability]:
+        """No computational backend exists for this domain."""
+        return []
 
 
-    def get_capabilities(self) -> List[str]:
-        """Return list of domain capabilities"""
-        config = self.get_config()
-        return config.capabilities if config.capabilities else [
-            "Theoretical Astrophysics analysis",
-            "query_processing",
-            "modeling",
-            "computation"
-        ]
-# Factory function
-def create_theoretical_astrophysics_domain():
-    """Create a Theoretical Astrophysics domain instance"""
+def create_theoretical_astrophysics_domain() -> TheoreticalAstrophysicsDomain:
+    """Create a Theoretical Astrophysics domain instance."""
     return TheoreticalAstrophysicsDomain()
 
 
-# Domain registration
 try:
-    from .. import register_domain
     register_domain(TheoreticalAstrophysicsDomain)
-except ImportError:
+except ImportError:  # pragma: no cover - registry optional at import time
     pass
