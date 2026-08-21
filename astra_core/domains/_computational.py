@@ -329,6 +329,7 @@ class ComputationalDomainModule(BaseDomainModule):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._capabilities: Optional[List[ComputationalCapability]] = None
+        self._last_tie: List[str] = []
 
     # -- capability plumbing ------------------------------------------------
 
@@ -366,11 +367,18 @@ class ComputationalDomainModule(BaseDomainModule):
 
         selected = self._select_capability(query, caps)
         if selected is None:
-            trace.append(
-                f"No capability matched the query; {len(caps)} available.")
+            tied = getattr(self, "_last_tie", [])
+            if tied:
+                trace.append("Ambiguous: query matched " + ", ".join(tied))
+                note = ("The query matches more than one computation in this "
+                        "domain (" + ", ".join(tied) + "); name one explicitly "
+                        "rather than have one picked arbitrarily.")
+            else:
+                trace.append(
+                    f"No capability matched the query; {len(caps)} available.")
+                note = "Query did not name any of this domain's computations."
             return self._capability_listing_result(
-                config, query, caps, trace,
-                note="Query did not name any of this domain's computations.")
+                config, query, caps, trace, note=note)
 
         trace.append(f"Selected capability: {selected.signature()}")
         params = extract_parameters(query, selected.parameters)
@@ -422,19 +430,46 @@ class ComputationalDomainModule(BaseDomainModule):
     def _select_capability(self, query: str,
                            caps: List[ComputationalCapability]
                            ) -> Optional[ComputationalCapability]:
-        """Pick the capability whose name/description the query names."""
+        """
+        Pick the capability the query names.
+
+        Scoring weights the capability *name* above its description, because
+        description words are generic and collide: with a flat score,
+        `compression_ratio` (whose description contains "density") swallowed
+        every C-shock query, and `bondi_accretion_rate` swallowed every Shu
+        query, silently, because ties were broken by declaration order.
+
+        On a genuine tie this now returns None rather than guessing. The caller
+        then lists the candidates and asks, which is the correct behaviour for
+        an ambiguous request -- picking one arbitrarily is how you get a
+        confident answer to a question that was never asked.
+        """
         q = query.lower()
-        best, best_score = None, 0
+
+        def hits(text: str) -> int:
+            tokens = {t for t in re.split(r"[^a-z0-9]+", text.lower())
+                      if len(t) > 3}
+            return sum(1 for t in tokens
+                       if re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", q))
+
+        scored = []
         for cap in caps:
-            tokens = set(re.split(r"[^a-z0-9]+", cap.name.lower()))
-            tokens |= set(re.split(r"[^a-z0-9]+", cap.description.lower()))
-            tokens.discard("")
-            score = sum(1 for t in tokens
-                        if len(t) > 3 and re.search(r"(?<!\w)" + re.escape(t) +
-                                                    r"(?!\w)", q))
-            if score > best_score:
-                best, best_score = cap, score
-        return best
+            # name matches are worth 3x a description match
+            score = 3 * hits(cap.name) + hits(cap.description)
+            if score:
+                scored.append((score, cap))
+        if not scored:
+            return None
+        scored.sort(key=lambda sc: -sc[0])
+        best = scored[0][0]
+        tied = [c for s_, c in scored if s_ == best]
+        if len(tied) > 1:
+            logger.debug("ambiguous capability match (%s); not guessing",
+                         ", ".join(c.name for c in tied))
+            self._last_tie = [c.name for c in tied]
+            return None
+        self._last_tie = []
+        return tied[0]
 
     def _capability_listing_result(self, config: Any, query: str,
                                    caps: List[ComputationalCapability],

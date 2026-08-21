@@ -265,13 +265,12 @@ class RadioExtragalacticDomain(BaseDomainModule):
             "through RM grids of millions of sources."
         )
 
-        return DomainResult(
+        return curated_result(
             domain_name=self.config.domain_name,
             answer=answer,
-            confidence=0.89,
+            topics=["faraday_rotation_analysis"],
             reasoning_trace=reasoning_trace,
-            capabilities_used=["faraday_rotation_analysis"],
-            metadata={"query_type": "MAGNETISM_ANALYSIS"}
+            metadata={"query_type": "MAGNETISM_ANALYSIS"},
         )
 
     def _process_radio_source_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
@@ -324,5 +323,3 @@ def create_radio_extragalactic_domain() -> RadioExtragalacticDomain:
     return RadioExtragalacticDomain()
 
 
-# Fix typo in _process_magnetism_query
-DomainResult = DomainQueryResult

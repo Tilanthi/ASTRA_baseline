@@ -1,111 +1,138 @@
 """
-Stellar Atmospheres Domain Module for STAN-XI-ASTRO
+Stellar Atmospheres Domain Module for ASTRA
 
 Model atmospheres, line formation, abundance analysis
 
-Date: 2026-03-20
-Version: 1.0.0
+This module was one of 48 byte-identical copies of a 110-line template whose
+`process_query` returned ``f"{description}: Analysis of '{query}'"`` with a
+hard-coded ``confidence=0.7`` and performed no computation.
+
+**Read this before using the domain.** There is no model-atmosphere code in
+this codebase: no hydrostatic/radiative-equilibrium solver, no opacity tables,
+no line-formation or curve-of-growth machinery and no abundance analysis. What
+*is* available and verified is the continuum blackbody layer - the Planck
+function of :mod:`astra_core.astro_physics.infrared_submm` (verified exact:
+int B_nu dnu = sigma T^4 / pi to 2.2e-16) and the Stefan-Boltzmann relation of
+:mod:`astra_core.astro_physics.physics`. Those give the emergent bolometric
+flux and specific intensity of a grey atmosphere, i.e. the definition of
+T_eff, and nothing more. Three of this domain's four declared capabilities
+(`model_atmospheres`, `line_formation`, `abundance_determination`,
+`spectral_synthesis`) therefore have no implementation, and the domain does
+not pretend otherwise.
+
+Both capabilities below carry a `self_check` recomputed by hand from the
+formula in their `reference` field.
+
+Version: 2.0.0
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, List
+
+from .. import DomainConfig, register_domain
+from .._computational import (
+    ComputationalCapability,
+    ComputationalDomainModule,
+    ImplementationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
-# Import domain base
-from .. import BaseDomainModule, DomainConfig
 
-
-@dataclass
-class StellarAtmospheresDomainState:
-    """Current state of Stellar Atmospheres analysis"""
-    analysis_phase: str = "initial"
-    parameters: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.parameters is None:
-            self.parameters = {}
-
-
-class StellarAtmospheresDomain(BaseDomainModule):
+class StellarAtmospheresDomain(ComputationalDomainModule):
     """
-    Domain specializing in Stellar Atmospheres
+    Continuum (grey/blackbody) atmosphere relations only.
 
-    Capabilities:
-    - model_atmospheres
-    - line_formation
-    - abundance_determination
-    - spectral_synthesis
+    Backed by `astro_physics.infrared_submm.ModifiedBlackbody.planck_function`
+    and `astro_physics.physics.StellarStructureModel.stefan_boltzmann`.
     """
+
+    implementation_status = ImplementationStatus.COMPUTATIONAL
 
     def get_default_config(self) -> DomainConfig:
-        """Return default configuration for Stellar Atmospheres domain"""
-        return DomainConfig(
-            domain_name="stellar_atmospheres",
-            version="1.0.0",
-            dependencies=[],
-            description="Model atmospheres, line formation, abundance analysis"
-        )
+        return self.get_config()
 
     def get_config(self) -> DomainConfig:
         return DomainConfig(
             domain_name="stellar_atmospheres",
-            version="1.0.0",
+            version="2.0.0",
             dependencies=[],
-            keywords=['stellar atmosphere', 'model atmosphere', 'line formation', 'abundance analysis', 'spectral_synthesis'],
-            capabilities=['model_atmospheres', 'line_formation', 'abundance_determination', 'spectral_synthesis']
+            description=("Model atmospheres, line formation, abundance "
+                         "analysis"),
+            keywords=['stellar atmosphere', 'model atmosphere',
+                      'line formation', 'abundance analysis',
+                      'spectral_synthesis', 'planck function', 'blackbody',
+                      'effective temperature', 'emergent flux',
+                      'specific intensity'],
+            capabilities=['model_atmospheres', 'line_formation',
+                          'abundance_determination', 'spectral_synthesis'],
         )
 
     def initialize(self, global_config: Dict[str, Any]) -> None:
-        """Initialize Stellar Atmospheres domain"""
-        logger.info(f"Initializing {self.get_config().domain_name} domain")
-        self.state = StellarAtmospheresDomainState()
+        super().initialize(global_config)
+        logger.info("Initialising stellar_atmospheres domain "
+                    "(continuum blackbody relations only)")
 
-    def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Process a Stellar Atmospheres query.
+    def build_capabilities(self) -> List[ComputationalCapability]:
+        import math
 
-        Args:
-            query: The input query
-            context: Optional context information
+        from ...astro_physics.infrared_submm import ModifiedBlackbody
+        from ...astro_physics.physics import StellarStructureModel
 
-        Returns:
-            DomainQueryResult with answer and metadata
-        """
-        from .. import DomainQueryResult
+        # NOTE ON UNITS. `planck_function` takes microns and K and returns
+        # B_nu in erg/s/cm^2/Hz/sr (CGS). `stefan_boltzmann` is SI: it takes
+        # metres and returns watts, so evaluating it at R = 1 m and dividing
+        # by the surface area 4 pi m^2 gives sigma T^4 in W/m^2, converted to
+        # erg/s/cm^2 by 1e3 (1 W/m^2 = 1e3 erg/s/cm^2). The self_checks pin
+        # both: B_nu(1 um, 1e4 K) = 1.2355e-4 and sigma T^4 at 5772 K =
+        # 6.294e10 erg/s/cm^2.
+        mbb = ModifiedBlackbody()
+        model = StellarStructureModel()
 
-        # Simple implementation for now
-        result = DomainQueryResult(
-            domain_name=self.get_config().domain_name,
-            answer=f"{self.get_config().description}: Analysis of '{query}'",
-            confidence=0.7,
-            reasoning_trace=[],
-            capabilities_used=[],
-            metadata={}
-        )
-
-        return result
-
-
-    def get_capabilities(self) -> List[str]:
-        """Return list of domain capabilities"""
-        config = self.get_config()
-        return config.capabilities if config.capabilities else [
-            "Stellar Atmospheres analysis",
-            "query_processing",
-            "modeling",
-            "computation"
+        return [
+            ComputationalCapability(
+                name="planck_intensity",
+                description=("Planck specific intensity B_nu of a blackbody "
+                             "photosphere"),
+                function=lambda wavelength, temperature: float(
+                    mbb.planck_function(wavelength, temperature)),
+                parameters=[
+                    ("wavelength|lambda", "micron", "wavelength"),
+                    ("temperature|t_eff", "K", "photospheric temperature"),
+                ],
+                returns=("B_nu", "erg/s/cm^2/Hz/sr"),
+                reference=("B_nu(T) = 2 h nu^3 / c^2 / [exp(h nu / k T) - 1], "
+                           "nu = c / lambda"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"wavelength": 1.0, "temperature": 1e4},
+                            1.23552995e-4, 1e-3),
+            ),
+            ComputationalCapability(
+                name="emergent_bolometric_flux",
+                description=("Emergent bolometric surface flux of a star of "
+                             "given effective temperature"),
+                function=lambda temperature: float(
+                    model.stefan_boltzmann(1.0, temperature)
+                    / (4.0 * math.pi)) * 1e3,
+                parameters=[("temperature|t_eff", "K",
+                             "effective temperature")],
+                returns=("F", "erg/s/cm^2"),
+                reference=("F = sigma_SB T_eff^4 = L / (4 pi R^2) "
+                           "(definition of T_eff)"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"temperature": 5772.0}, 6.29385925e10, 1e-3),
+            ),
         ]
-# Factory function
-def create_stellar_atmospheres_domain():
-    """Create a Stellar Atmospheres domain instance"""
+
+
+def create_stellar_atmospheres_domain() -> StellarAtmospheresDomain:
+    """Create a Stellar Atmospheres domain instance."""
     return StellarAtmospheresDomain()
 
 
-# Domain registration
 try:
-    from .. import register_domain
     register_domain(StellarAtmospheresDomain)
-except ImportError:
+except ImportError:  # pragma: no cover - registry optional at import time
     pass

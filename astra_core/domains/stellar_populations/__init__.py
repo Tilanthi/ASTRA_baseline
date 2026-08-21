@@ -1,111 +1,147 @@
 """
-Stellar Populations Domain Module for STAN-XI-ASTRO
+Stellar Populations Domain Module for ASTRA
 
 Population synthesis, isochrones, stellar evolution models
 
-Date: 2026-03-20
-Version: 1.0.0
+This module was one of 48 byte-identical copies of a 110-line template whose
+`process_query` returned ``f"{description}: Analysis of '{query}'"`` with a
+hard-coded ``confidence=0.7`` and performed no computation. It now wraps
+:class:`astra_core.astro_physics.star_formation.InitialMassFunction`, the one
+part of that module the August 2026 audit verified numerically (the
+inverse-CDF sampler reproduces the analytic IMF to 0.05%).
+
+The capabilities are the deterministic moments of the IMF, not the sampler:
+a stochastic draw cannot be pinned by a self_check, whereas <m> can be, and
+each expected value below was obtained by integrating the module's own
+segmented power laws analytically by hand.
+
+Deliberately NOT wired: the `StellarEvolution` prescriptions
+(`main_sequence_lifetime`, `main_sequence_radius`, `remnant_mass`,
+`wind_mass_loss_rate`). Their own docstring calls them "approximate", the
+sub-solar lifetime branch and the black-hole fallback fraction are explicitly
+labelled heuristics with no cited source, and the audit did not verify them;
+`star_formation`'s iron yields carry an in-code AUDIT-FLAG for being uncapped
+(1.87 Msun of Fe from a 100 Msun star). Isochrones, spectral synthesis and
+colour-magnitude fitting are not implemented in this codebase at all.
+
+Version: 2.0.0
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, List
+
+from .. import DomainConfig, register_domain
+from .._computational import (
+    ComputationalCapability,
+    ComputationalDomainModule,
+    ImplementationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
-# Import domain base
-from .. import BaseDomainModule, DomainConfig
 
-
-@dataclass
-class StellarPopulationsDomainState:
-    """Current state of Stellar Populations analysis"""
-    analysis_phase: str = "initial"
-    parameters: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.parameters is None:
-            self.parameters = {}
-
-
-class StellarPopulationsDomain(BaseDomainModule):
+class StellarPopulationsDomain(ComputationalDomainModule):
     """
-    Domain specializing in Stellar Populations
+    Initial mass function moments.
 
-    Capabilities:
-    - population_synthesis
-    - isochrone_fitting
-    - stellar_evolution_tracks
-    - imf_modeling
+    Backed by `astro_physics.star_formation.InitialMassFunction`.
     """
+
+    implementation_status = ImplementationStatus.COMPUTATIONAL
 
     def get_default_config(self) -> DomainConfig:
-        """Return default configuration for Stellar Populations domain"""
-        return DomainConfig(
-            domain_name="stellar_populations",
-            version="1.0.0",
-            dependencies=[],
-            description="Population synthesis, isochrones, stellar evolution models"
-        )
+        return self.get_config()
 
     def get_config(self) -> DomainConfig:
         return DomainConfig(
             domain_name="stellar_populations",
-            version="1.0.0",
+            version="2.0.0",
             dependencies=[],
-            keywords=['stellar population', 'population synthesis', 'isochrone', 'stellar evolution'],
-            capabilities=['population_synthesis', 'isochrone_fitting', 'stellar_evolution_tracks', 'imf_modeling']
+            description=("Population synthesis, isochrones, stellar evolution "
+                         "models"),
+            keywords=['stellar population', 'population synthesis',
+                      'isochrone', 'stellar evolution', 'imf',
+                      'initial mass function', 'kroupa', 'salpeter',
+                      'mean stellar mass', 'cluster mass'],
+            capabilities=['population_synthesis', 'isochrone_fitting',
+                          'stellar_evolution_tracks', 'imf_modeling'],
         )
 
     def initialize(self, global_config: Dict[str, Any]) -> None:
-        """Initialize Stellar Populations domain"""
-        logger.info(f"Initializing {self.get_config().domain_name} domain")
-        self.state = StellarPopulationsDomainState()
+        super().initialize(global_config)
+        logger.info("Initialising stellar_populations domain")
 
-    def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Process a Stellar Populations query.
+    def build_capabilities(self) -> List[ComputationalCapability]:
+        from ...astro_physics.star_formation import InitialMassFunction
 
-        Args:
-            query: The input query
-            context: Optional context information
+        # NOTE ON UNITS. The IMF works in Msun throughout; nothing is
+        # converted here. The self_check values are the analytic ratios
+        # int m xi(m) dm / int xi(m) dm over the quoted range, evaluated by
+        # hand from the module's own segmented power laws:
+        #   Kroupa   0.08-120 : 0.5795 Msun
+        #   Salpeter 0.1-100  : 0.3514 Msun
+        def _mean(form: str, m_min: float, m_max: float) -> float:
+            return float(InitialMassFunction(form=form, m_min=m_min,
+                                             m_max=m_max).mean_mass())
 
-        Returns:
-            DomainQueryResult with answer and metadata
-        """
-        from .. import DomainQueryResult
-
-        # Simple implementation for now
-        result = DomainQueryResult(
-            domain_name=self.get_config().domain_name,
-            answer=f"{self.get_config().description}: Analysis of '{query}'",
-            confidence=0.7,
-            reasoning_trace=[],
-            capabilities_used=[],
-            metadata={}
-        )
-
-        return result
-
-
-    def get_capabilities(self) -> List[str]:
-        """Return list of domain capabilities"""
-        config = self.get_config()
-        return config.capabilities if config.capabilities else [
-            "Stellar Populations analysis",
-            "query_processing",
-            "modeling",
-            "computation"
+        return [
+            ComputationalCapability(
+                name="kroupa_mean_stellar_mass",
+                description=("Mean stellar mass of a Kroupa (2001) initial "
+                             "mass function"),
+                function=lambda m_min, m_max: _mean('kroupa', m_min, m_max),
+                parameters=[
+                    ("m_min|lower_mass", "Msun", "lower mass limit"),
+                    ("m_max|upper_mass", "Msun", "upper mass limit"),
+                ],
+                returns=("<m>", "Msun"),
+                reference=("<m> = int m xi dm / int xi dm with xi ~ m^-1.3 "
+                           "(0.08-0.5) and m^-2.3 (>0.5), continuous at 0.5 "
+                           "(Kroupa 2001)"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"m_min": 0.08, "m_max": 120.0}, 0.5794712, 1e-3),
+            ),
+            ComputationalCapability(
+                name="salpeter_mean_stellar_mass",
+                description=("Mean stellar mass of a Salpeter (1955) initial "
+                             "mass function"),
+                function=lambda m_min, m_max: _mean('salpeter', m_min, m_max),
+                parameters=[
+                    ("m_min|lower_mass", "Msun", "lower mass limit"),
+                    ("m_max|upper_mass", "Msun", "upper mass limit"),
+                ],
+                returns=("<m>", "Msun"),
+                reference=("<m> = int m^-1.35 dm / int m^-2.35 dm "
+                           "(Salpeter 1955, dN/dM ~ M^-2.35)"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"m_min": 0.1, "m_max": 100.0}, 0.35136878, 1e-3),
+            ),
+            ComputationalCapability(
+                name="cluster_birth_mass",
+                description=("Expected total birth mass of N stars drawn from "
+                             "a Kroupa IMF over 0.08-120 Msun"),
+                function=lambda n_stars: float(
+                    InitialMassFunction(form='kroupa', m_min=0.08,
+                                        m_max=120.0)
+                    .total_mass_to_n_stars(n_stars)),
+                parameters=[("n_stars|n", "dimensionless",
+                             "number of stars drawn")],
+                returns=("M_total", "Msun"),
+                reference="M_total = N <m>, <m> = 0.5795 Msun (Kroupa 2001)",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"n_stars": 1000.0}, 579.4712, 1e-3),
+            ),
         ]
-# Factory function
-def create_stellar_populations_domain():
-    """Create a Stellar Populations domain instance"""
+
+
+def create_stellar_populations_domain() -> StellarPopulationsDomain:
+    """Create a Stellar Populations domain instance."""
     return StellarPopulationsDomain()
 
 
-# Domain registration
 try:
-    from .. import register_domain
     register_domain(StellarPopulationsDomain)
-except ImportError:
+except ImportError:  # pragma: no cover - registry optional at import time
     pass

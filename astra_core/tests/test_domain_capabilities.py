@@ -232,3 +232,90 @@ def test_dimensionally_wrong_input_is_rejected(loaded):
     params = [("temperature|t", "K", ""), ("density|n", "cm^-3", "")]
     assert extract_parameters("temperature 10 pc", params) == {}
     assert extract_parameters("temperature 10 K", params) == {"temperature": 10.0}
+
+
+# ---------------------------------------------------------------------------
+# 4. curated (hand-written knowledge) domains
+# ---------------------------------------------------------------------------
+
+def test_curated_domains_do_not_claim_capabilities_they_did_not_run(loaded):
+    """
+    The curated domains used to return e.g.
+    ``capabilities_used=["light_curve_analysis", "classification"]`` with
+    ``confidence=0.91`` when no light curve had been analysed. The text is
+    kept; the claim is not.
+    """
+    from astra_core.domains._computational import Provenance
+
+    probes = {
+        "time_domain": "What causes supernovae?",
+        "ism": "What is the interstellar medium made of?",
+        "cosmology": "What is dark energy?",
+        "star_formation": "How do stars form?",
+        "agn": "What powers an AGN?",
+    }
+    bad = []
+    for name, query in probes.items():
+        domain = loaded.get_domain(name)
+        if domain is None:
+            continue
+        result = domain.process_query(query)
+        if result.metadata.get("provenance") != Provenance.DESCRIPTIVE.value:
+            bad.append(f"{name}: provenance={result.metadata.get('provenance')}")
+        if result.capabilities_used:
+            bad.append(f"{name}: claims capabilities_used={result.capabilities_used}")
+        if result.confidence != 0.20:
+            bad.append(f"{name}: confidence={result.confidence}")
+        if "curated_topics" not in result.metadata:
+            bad.append(f"{name}: curated topics not recorded")
+        if not result.answer.strip():
+            bad.append(f"{name}: curated text was lost")
+    assert not bad, "\n  ".join(bad)
+
+
+def test_no_hardcoded_confidence_literals_remain_in_domains():
+    """
+    194 literal `confidence=0.xx` values were spread through the domain
+    modules. Confidence must be derived from provenance, so none may remain.
+
+    AST-based rather than textual, so that prose in docstrings describing the
+    old behaviour does not trip it.
+    """
+    import ast
+    import pathlib
+
+    offenders = []
+    for path in sorted(pathlib.Path("astra_core/domains").rglob("*.py")):
+        if path.name == "_computational.py":
+            continue          # defines the provenance -> confidence mapping
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for kw in node.keywords:
+                if kw.arg != "confidence":
+                    continue
+                if isinstance(kw.value, ast.Constant) and \
+                        isinstance(kw.value.value, (int, float)):
+                    offenders.append(
+                        f"{path}:{kw.value.lineno}: confidence={kw.value.value}")
+    assert not offenders, (
+        "hardcoded confidence literals (confidence must come from provenance):\n  "
+        + "\n  ".join(offenders))
+
+
+def test_process_query_context_is_optional(loaded):
+    """
+    All 27 curated domains declared `process_query(self, query, context)` with
+    context REQUIRED, breaking BaseDomainModule's contract.
+    """
+    failures = []
+    for name, domain in loaded._domains.items():
+        try:
+            domain.process_query("a probe query")
+        except TypeError as exc:
+            if "context" in str(exc):
+                failures.append(f"{name}: {exc}")
+        except Exception:                                  # noqa: BLE001
+            pass          # other failures are not this test's business
+    assert not failures, "\n  ".join(failures)

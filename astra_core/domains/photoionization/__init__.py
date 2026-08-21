@@ -1,111 +1,186 @@
 """
-Photoionization Domain Module for STAN-XI-ASTRO
+Photoionization Domain Module for ASTRA
 
 Cross-sections, chemistry networks, PDRs/XDRs
 
-Date: 2026-03-20
-Version: 1.0.0
+This module was one of 48 byte-identical copies of a 110-line template whose
+`process_query` returned ``f"{description}: Analysis of '{query}'"`` with a
+hard-coded ``confidence=0.7`` and performed no computation. It now wraps
+:mod:`astra_core.astro_physics.hii_region_physics`, whose Stroemgren radius,
+Case A/B recombination coefficients, Case B Balmer decrement (2.860 / 0.469 /
+0.259) and L(Hbeta)/Q_H = 4.78e-13 were all verified exactly during the
+August 2026 audit.
+
+Every capability carries a `self_check` recomputed by hand from the formula in
+its `reference` field.
+
+Deliberately NOT wired: `ionizing_photon_rate` (now a log-linear interpolation
+of Martins, Schaerer & Hillier 2005 Table 1 rather than the pre-audit fit that
+was 713x high at 50 kK - correct, but it is tabulated data rather than a
+formula, so this wrapper cannot verify it against an independent hand
+derivation), and `NebularDiagnosticsCalculator.oxygen_abundance` /
+`oiii_temperature` (repaired under B-HII-2/B-HII-3 but not independently
+re-derived here). Photoionization *cross-sections* (Verner-style fits),
+photodissociation rates and PDR/XDR chemistry networks are not implemented in
+this codebase; the `PDRInterface` in `radiative_transfer` provides only
+heating-rate and field-conversion constants, not a network.
+
+Version: 2.0.0
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, List
+
+from .. import DomainConfig, register_domain
+from .._computational import (
+    ComputationalCapability,
+    ComputationalDomainModule,
+    ImplementationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
-# Import domain base
-from .. import BaseDomainModule, DomainConfig
 
-
-@dataclass
-class PhotoionizationDomainState:
-    """Current state of Photoionization analysis"""
-    analysis_phase: str = "initial"
-    parameters: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.parameters is None:
-            self.parameters = {}
-
-
-class PhotoionizationDomain(BaseDomainModule):
+class PhotoionizationDomain(ComputationalDomainModule):
     """
-    Domain specializing in Photoionization
+    Photoionized nebulae: Stroemgren spheres and Case B recombination.
 
-    Capabilities:
-    - photoionization_cross_sections
-    - photodissociation_rates
-    - pdr_modeling
-    - xdr_modeling
+    Backed by `astro_physics.hii_region_physics`.
     """
+
+    implementation_status = ImplementationStatus.COMPUTATIONAL
 
     def get_default_config(self) -> DomainConfig:
-        """Return default configuration for Photoionization domain"""
-        return DomainConfig(
-            domain_name="photoionization",
-            version="1.0.0",
-            dependencies=[],
-            description="Cross-sections, chemistry networks, PDRs/XDRs"
-        )
+        return self.get_config()
 
     def get_config(self) -> DomainConfig:
         return DomainConfig(
             domain_name="photoionization",
-            version="1.0.0",
+            version="2.0.0",
             dependencies=[],
-            keywords=['photoionization', 'photodissociation', 'cross_section', 'pdr', 'xdr'],
-            capabilities=['photoionization_cross_sections', 'photodissociation_rates', 'pdr_modeling', 'xdr_modeling']
+            description="Cross-sections, chemistry networks, PDRs/XDRs",
+            keywords=['photoionization', 'photodissociation', 'cross_section',
+                      'pdr', 'xdr', 'stromgren', 'stroemgren',
+                      'recombination', 'case b', 'balmer decrement',
+                      'hii region', 'ionizing photons', 'h beta'],
+            capabilities=['photoionization_cross_sections',
+                          'photodissociation_rates', 'pdr_modeling',
+                          'xdr_modeling'],
         )
 
     def initialize(self, global_config: Dict[str, Any]) -> None:
-        """Initialize Photoionization domain"""
-        logger.info(f"Initializing {self.get_config().domain_name} domain")
-        self.state = PhotoionizationDomainState()
+        super().initialize(global_config)
+        logger.info("Initialising photoionization domain")
 
-    def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Process a Photoionization query.
-
-        Args:
-            query: The input query
-            context: Optional context information
-
-        Returns:
-            DomainQueryResult with answer and metadata
-        """
-        from .. import DomainQueryResult
-
-        # Simple implementation for now
-        result = DomainQueryResult(
-            domain_name=self.get_config().domain_name,
-            answer=f"{self.get_config().description}: Analysis of '{query}'",
-            confidence=0.7,
-            reasoning_trace=[],
-            capabilities_used=[],
-            metadata={}
+    def build_capabilities(self) -> List[ComputationalCapability]:
+        from ...astro_physics.hii_region_physics import (
+            RecombinationCoefficients,
+            RecombinationLines,
+            StromgrenSphere,
         )
 
-        return result
+        # NOTE ON UNITS. `hii_region_physics` is CGS: `stromgren_radius`
+        # returns cm and `recombination_time` returns s. The wrappers below
+        # convert to pc and yr, and every self_check pins the conversion.
+        PC = 3.0856775814913673e18     # cm
+        YR = 3.155693e7                # s
 
+        sphere = StromgrenSphere()
+        recomb = RecombinationCoefficients()
 
-    def get_capabilities(self) -> List[str]:
-        """Return list of domain capabilities"""
-        config = self.get_config()
-        return config.capabilities if config.capabilities else [
-            "Photoionization analysis",
-            "query_processing",
-            "modeling",
-            "computation"
+        return [
+            ComputationalCapability(
+                name="stromgren_radius",
+                description=("Stroemgren radius of an ionization-bounded HII "
+                             "region"),
+                function=lambda q_h, n_e, temperature=1e4: float(
+                    sphere.stromgren_radius(q_h, n_e, temperature)) / PC,
+                parameters=[
+                    ("q_h|ionizing_photon_rate", "s^-1",
+                     "rate of H-ionizing photons"),
+                    ("n_e|electron_density", "cm^-3", "electron density"),
+                    ("temperature|t_e", "K", "electron temperature"),
+                ],
+                returns=("R_S", "pc"),
+                reference=("R_S = [3 Q_H / (4 pi alpha_B(T) n_e^2)]^(1/3) "
+                           "(Stroemgren 1939)"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"q_h": 1e49, "n_e": 100.0, "temperature": 1e4},
+                            3.1539393, 1e-3),
+            ),
+            ComputationalCapability(
+                name="case_b_recombination_rate",
+                description=("Case B hydrogen recombination coefficient "
+                             "alpha_B(T)"),
+                function=lambda temperature: float(recomb.alpha_B(temperature)),
+                parameters=[("temperature|t_e", "K",
+                             "electron temperature")],
+                returns=("alpha_B", "cm^3/s"),
+                reference=("alpha_B = 2.59e-13 t4^(-0.833 - 0.034 ln t4), "
+                           "t4 = T/1e4 (Osterbrock & Ferland 2006)"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"temperature": 8000.0}, 3.1137989e-13, 1e-3),
+            ),
+            ComputationalCapability(
+                name="recombination_time",
+                description="Recombination timescale of ionized hydrogen",
+                function=lambda n_e, temperature=1e4: float(
+                    sphere.recombination_time(n_e, temperature)) / YR,
+                parameters=[
+                    ("n_e|electron_density", "cm^-3", "electron density"),
+                    ("temperature|t_e", "K", "electron temperature"),
+                ],
+                returns=("t_rec", "yr"),
+                reference="t_rec = 1 / (alpha_B(T) n_e)",
+                test_ref="test_domain_capabilities.py",
+                self_check=({"n_e": 100.0, "temperature": 1e4},
+                            1223.50427, 1e-3),
+            ),
+            ComputationalCapability(
+                name="balmer_decrement",
+                description=("Case B H-alpha / H-beta intensity ratio at the "
+                             "given electron temperature"),
+                function=lambda temperature: float(
+                    RecombinationLines(temperature).emissivity_ratio(
+                        'Halpha', 'Hbeta')),
+                parameters=[("temperature|t_e", "K",
+                             "electron temperature")],
+                returns=("I(Ha)/I(Hb)", "dimensionless"),
+                reference=("j(Ha)/j(Hb) = alpha_eff(Ha) nu_Ha / "
+                           "[alpha_eff(Hb) nu_Hb], Case B "
+                           "(Osterbrock & Ferland 2006, table 4.2)"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"temperature": 1e4}, 2.86026642, 1e-3),
+            ),
+            ComputationalCapability(
+                name="hbeta_luminosity",
+                description=("H-beta luminosity of an ionization-bounded "
+                             "nebula from its ionizing photon rate"),
+                function=lambda q_h, temperature=1e4: float(
+                    RecombinationLines(temperature).hbeta_luminosity(q_h)),
+                parameters=[
+                    ("q_h|ionizing_photon_rate", "s^-1",
+                     "rate of H-ionizing photons"),
+                    ("temperature|t_e", "K", "electron temperature"),
+                ],
+                returns=("L(Hbeta)", "erg/s"),
+                reference=("L(Hb) = Q_H [alpha_eff(Hb)/alpha_B] h nu_Hb "
+                           "= 4.78e-13 Q_H at 1e4 K"),
+                test_ref="test_domain_capabilities.py",
+                self_check=({"q_h": 1e49, "temperature": 1e4},
+                            4.78043232e36, 1e-3),
+            ),
         ]
-# Factory function
-def create_photoionization_domain():
-    """Create a Photoionization domain instance"""
+
+
+def create_photoionization_domain() -> PhotoionizationDomain:
+    """Create a Photoionization domain instance."""
     return PhotoionizationDomain()
 
 
-# Domain registration
 try:
-    from .. import register_domain
     register_domain(PhotoionizationDomain)
-except ImportError:
+except ImportError:  # pragma: no cover - registry optional at import time
     pass

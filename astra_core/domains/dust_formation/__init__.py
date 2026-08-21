@@ -1,111 +1,102 @@
 """
-Dust Formation & Evolution Domain Module for STAN-XI-ASTRO
+Dust Formation & Evolution Domain Module for ASTRA
 
 Nucleation, grain growth, sputtering, destruction
 
-Date: 2026-03-20
-Version: 1.0.0
+STATUS: registered but NOT IMPLEMENTED. This module was one of 48
+byte-identical copies of a 110-line template whose `process_query` returned
+``f"{description}: Analysis of '{query}'"`` with a hard-coded
+``confidence=0.7`` and performed no computation.
+
+Every one of this domain's four declared capabilities was checked against the
+codebase during the August 2026 audit follow-up and none has a verified
+computational backend:
+
+* **Nucleation / grain growth** - no classical nucleation theory, no
+  condensation temperatures, no monomer attachment rates anywhere in
+  `astra_core.astro_physics`. `chemical_networks` handles gas-phase UMIST/KIDA
+  reactions only (and every rate there was a factor n_H too fast until audit
+  item C17); it has no grain-surface network.
+* **Sputtering** - `shock_physics.ShockChemistry.grain_sputtering` is a
+  threshold look-up table (0.1 Si, 0.05 Fe, 0.1 Mg, 0.2 C times a linear ramp
+  in v_s/v_threshold) with no cited source; worker B's audit classed it and
+  `h2_survival_fraction` as invented. Wiring it would present fabricated
+  yields as a calculation.
+* **Destruction** - likewise absent; there is no thermal/inertial sputtering
+  or grain-grain shattering model.
+
+Rather than dress any of that up as analysis, the domain reports
+``confidence=0.0`` with ``implementation_status=NO_IMPLEMENTATION``, which is
+a useful signal to an orchestrator in a way that 0.7 on an echoed query was
+not. The verified dust *emission* physics (opacity, modified blackbody,
+dust-traced masses) lives in the `dust_grain_physics` domain.
+
+Version: 2.0.0
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, List
+
+from .. import DomainConfig, register_domain
+from .._computational import (
+    ComputationalCapability,
+    ComputationalDomainModule,
+    ImplementationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
-# Import domain base
-from .. import BaseDomainModule, DomainConfig
 
-
-@dataclass
-class DustFormationDomainState:
-    """Current state of Dust Formation & Evolution analysis"""
-    analysis_phase: str = "initial"
-    parameters: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.parameters is None:
-            self.parameters = {}
-
-
-class DustFormationDomain(BaseDomainModule):
+class DustFormationDomain(ComputationalDomainModule):
     """
-    Domain specializing in Dust Formation & Evolution
+    Dust formation and destruction.
 
-    Capabilities:
-    - dust_nucleation
-    - grain_growth
-    - sputtering
-    - grain_destruction_mechanisms
+    Registered so that queries in this area are recognised and routed, but no
+    numerical capability is implemented: the codebase contains no nucleation,
+    grain-growth or sputtering physics that survived verification.
     """
+
+    implementation_status = ImplementationStatus.NO_IMPLEMENTATION
+    referral = ("Dust nucleation, grain growth and sputtering are not "
+                "modelled anywhere in this codebase; the only grain-sputtering "
+                "routine present (shock_physics.ShockChemistry) is an uncited "
+                "threshold table and is deliberately not used. For "
+                "dust opacity, modified-blackbody emission and dust-traced "
+                "masses use the 'dust_grain_physics' domain.")
 
     def get_default_config(self) -> DomainConfig:
-        """Return default configuration for Dust Formation & Evolution domain"""
-        return DomainConfig(
-            domain_name="dust_formation",
-            version="1.0.0",
-            dependencies=[],
-            description="Nucleation, grain growth, sputtering, destruction"
-        )
+        return self.get_config()
 
     def get_config(self) -> DomainConfig:
         return DomainConfig(
             domain_name="dust_formation",
-            version="1.0.0",
+            version="2.0.0",
             dependencies=[],
-            keywords=['dust formation', 'nucleation', 'grain_growth', 'sputtering', 'dust_destruction'],
-            capabilities=['dust_nucleation', 'grain_growth', 'sputtering', 'grain_destruction_mechanisms']
+            description="Nucleation, grain growth, sputtering, destruction",
+            keywords=['dust formation', 'nucleation', 'grain_growth',
+                      'sputtering', 'dust_destruction', 'condensation',
+                      'grain shattering'],
+            capabilities=[],
         )
 
     def initialize(self, global_config: Dict[str, Any]) -> None:
-        """Initialize Dust Formation & Evolution domain"""
-        logger.info(f"Initializing {self.get_config().domain_name} domain")
-        self.state = DustFormationDomainState()
+        super().initialize(global_config)
+        logger.info("Initialising dust_formation domain "
+                    "(no computational backend)")
 
-    def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Process a Dust Formation & Evolution query.
-
-        Args:
-            query: The input query
-            context: Optional context information
-
-        Returns:
-            DomainQueryResult with answer and metadata
-        """
-        from .. import DomainQueryResult
-
-        # Simple implementation for now
-        result = DomainQueryResult(
-            domain_name=self.get_config().domain_name,
-            answer=f"{self.get_config().description}: Analysis of '{query}'",
-            confidence=0.7,
-            reasoning_trace=[],
-            capabilities_used=[],
-            metadata={}
-        )
-
-        return result
+    def build_capabilities(self) -> List[ComputationalCapability]:
+        """No verified computational backend exists for this domain."""
+        return []
 
 
-    def get_capabilities(self) -> List[str]:
-        """Return list of domain capabilities"""
-        config = self.get_config()
-        return config.capabilities if config.capabilities else [
-            "Dust Formation analysis",
-            "query_processing",
-            "modeling",
-            "computation"
-        ]
-# Factory function
-def create_dust_formation_domain():
-    """Create a Dust Formation & Evolution domain instance"""
+def create_dust_formation_domain() -> DustFormationDomain:
+    """Create a Dust Formation & Evolution domain instance."""
     return DustFormationDomain()
 
 
-# Domain registration
 try:
-    from .. import register_domain
     register_domain(DustFormationDomain)
-except ImportError:
+except ImportError:  # pragma: no cover - registry optional at import time
     pass
