@@ -11,7 +11,10 @@ requires-python = ">=3.9"
 authors = [
     { name = "Glenn J. White", email = "glenn.white@open.ac.uk" },
 ]
+license = { text = "Apache-2.0" }
+license-files = ["LICENSE", "NOTICE"]
 classifiers = [
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Astronomy",
     "Intended Audience :: Science/Research",

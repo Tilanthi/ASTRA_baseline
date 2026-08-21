@@ -2349,6 +2349,6 @@ runs; §10 was rewritten for the 31 / 17 / 27 domain split and provenance-derive
 Appendix E.7 was fixed (`PYTHONPATH=.`) and Appendix E.8 added, recording the measured state
 of the published tree.
 **Authors**: Glenn J. White, Open University and Rutherford Appleton Laboratory, England
-**License**: see the repository root.
+**License**: Apache License 2.0 - see `LICENSE` and `NOTICE` in the repository root.
 
 For the latest version, visit: https://github.com/Tilanthi/ASTRA

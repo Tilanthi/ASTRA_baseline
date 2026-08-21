@@ -219,7 +219,7 @@ If you use ASTRA in your research, please cite:
 
 ## License
 
-[Specify your license here]
+Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
 ## Contributing
 
