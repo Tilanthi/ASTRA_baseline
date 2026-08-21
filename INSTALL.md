@@ -1,72 +1,69 @@
 # Installing ASTRA
 
-Every command below was executed against a clean clone of this branch before
-being written down. Where a step's output is quoted, that is the actual output.
+Every command below was executed against a clean clone of this branch, in an
+empty folder, before being written down. Where output is quoted, it is the
+actual output of that run.
 
 ## Requirements
 
-- **Python 3.9–3.12.** On a Mac, `python3 --version` tells you what you have; if
-  it is older than 3.9, install a newer one (`brew install python@3.12`).
+- **Python 3.9–3.12.** Check with `python3 --version`. On a Mac, if it is older
+  than 3.9: `brew install python@3.12`.
 - **git**. Pre-installed on macOS, or `xcode-select --install`.
-- About **2 GB** of disk for the core install, or ~5 GB if you add PyTorch.
+- About **2 GB** of disk, or ~5 GB if you add PyTorch.
 
 ## Install
 
-```bash
-# 1. a fresh folder
-mkdir -p ~/ASTRA && cd ~/ASTRA
+> **The `--branch` argument matters.** The fixes live on
+> `audit-fixes-aug2026`. A plain `git clone` gives you `main`, which does not
+> import at all.
 
-# 2. clone this branch
+```bash
+# 1. a genuinely fresh folder
+mkdir -p ~/ASTRA_fresh && cd ~/ASTRA_fresh
+
+# 2. clone the corrected branch
 git clone --branch audit-fixes-aug2026 \
     https://github.com/Tilanthi/ASTRA_baseline.git .
 
-# 3. an isolated environment, so ASTRA cannot disturb your other Python work
+# 3. an isolated environment
 python3 -m venv .venv
 source .venv/bin/activate
 
 # 4. install
 pip install --upgrade pip
-pip install -e .
+pip install -e ".[astro,image,dev]"
 ```
 
-`pip install -e .` installs in *editable* mode: the package points at the
-checkout, so `git pull` updates your installation with no reinstall.
+`-e` installs in editable mode, so `git pull` updates your installation with no
+reinstall. The three extras give you FITS I/O (`astro`), the better filament
+skeletoniser (`image`), and `pytest` so you can run the suite (`dev`).
 
-### Optional extras
-
-The core install is deliberately small. Add only what you need:
+Other extras, none of them required:
 
 ```bash
-pip install -e ".[astro]"    # astropy: FITS I/O, archive access
-pip install -e ".[image]"    # scikit-image: better filament skeletonisation
 pip install -e ".[science]"  # matplotlib, emcee, corner, statsmodels
-pip install -e ".[dev]"      # pytest, pyflakes -- needed to run the test suite
-pip install -e ".[pdf]"      # reportlab: PDF generation
+pip install -e ".[pdf]"      # reportlab, for PDF generation
 pip install -e ".[dl]"       # PyTorch (large) -- only for astro_physics/deep_learning
-pip install -e ".[all]"      # everything above
+pip install -e ".[all]"      # everything
 ```
 
-Without an extra, the modules that need it degrade to `None` and log why; they
-do not crash the package. Measured on a core-only install:
-**674 of 680 modules import**, the 6 exceptions being the four
-`astro_physics.deep_learning` modules (PyTorch) and two ablation plotting
-scripts (matplotlib).
+Without an extra, the modules needing it degrade to `None` and log why; they do
+not crash the package.
 
-With `[astro,image,dev]` added: **all 333 tests pass**.
+## Verify
 
-## Verify your installation
+### 1. The test suites
 
 ```bash
-# from the repo root, with the venv active
+# from the repo root, venv active
 PYTHONPATH=. python astra_core/comprehensive_system_test.py   # expect 18/18
-python -m pytest astra_core/tests -q                          # expect 333 passed
+python -m pytest astra_core/tests -q                          # expect 364 passed
 ```
 
-Both exit non-zero on failure, so they are safe to use in a script. (They did
-not before this branch: `comprehensive_system_test.py` exited 0 while reporting
-0/18.)
+Both exit non-zero on failure, so they are safe in a script. They did not before
+this branch: `comprehensive_system_test.py` exited 0 while reporting 0/18.
 
-Full import check:
+### 2. Every module imports
 
 ```bash
 python - <<'EOF'
@@ -92,6 +89,51 @@ for m, t in fail:
 EOF
 ```
 
+Expected with `[astro,image,dev]`: **684/690**, the six exceptions being the
+four `astro_physics.deep_learning` modules (PyTorch) and two ablation plotting
+scripts (matplotlib). With `[all]`: **690/690**.
+
+### 3. ★ That the install is genuinely self-contained
+
+This is the check that matters most, and the one whose absence caused a real
+failure: a developer machine holding several ASTRA checkouts can satisfy an
+import from *a different folder*, so the install looks fine locally and fails
+for everyone else.
+
+**Run this from a directory nowhere near any other ASTRA checkout** — `/tmp` is
+ideal:
+
+```bash
+cd /tmp && python - <<'EOF'
+import os, astra_core
+print("astra_core resolved from:", os.path.dirname(astra_core.__file__))
+
+# the published V5.0 discovery API, which analysis scripts import
+from astra_core.capabilities.v101_temporal_causal import create_temporal_fci_discovery
+from astra_core.capabilities.v102_counterfactual_engine import create_counterfactual_engine
+from astra_core.capabilities.v103_multimodal_evidence import create_multimodal_evidence_fusion
+from astra_core.capabilities.v104_adversarial_discovery import create_adversarial_discovery_system
+from astra_core.capabilities.v105_meta_discovery import create_meta_discovery_transfer_engine
+from astra_core.capabilities.v106_explainable_causal import create_explainable_causal_reasoner
+from astra_core.capabilities.v107_discovery_triage import create_discovery_triage_system
+from astra_core.capabilities.v108_streaming_discovery import create_streaming_discovery_engine
+print("all 8 published V5 capability imports: OK")
+EOF
+```
+
+The printed path **must** be inside the folder you just installed. If it points
+anywhere else, that is what you are really running.
+
+### 4. That the documentation matches the code
+
+```bash
+python astra_core/tests/check_doc_examples.py    # expect 0 failing blocks
+```
+
+This executes every `python` example in `README.md`, `BASELINE_README.md`,
+`CLAUDE.md` and `User_Manual/User_Manual.md`. Sixteen of twenty-four failed
+before this branch.
+
 ## First use
 
 ```python
@@ -101,7 +143,7 @@ system = astra_core.create_stan_system()
 print(system.answer("What causes supernovae?")["answer"])
 ```
 
-Asking a **quantitative** question routes to a domain that computes:
+A **quantitative** question routes to a domain that computes:
 
 ```python
 import os
@@ -120,45 +162,61 @@ print(r["answer"])
 #   (formula: M_J = (pi^(5/2)/6) c_s^3 G^(-3/2) rho^(-1/2))
 ```
 
-`confidence` is derived from what actually happened, not asserted:
+`confidence` is derived from what actually happened, never asserted:
 
 | `metadata['provenance']` | confidence | meaning |
 |---|---:|---|
 | `computed` | 0.90 | a verified routine ran on parameters taken from your query |
-| `capability_available` | 0.40 | the routine exists but your query did not supply its parameters |
+| `capability_available` | 0.40 | the routine exists, your query did not supply its parameters |
 | `descriptive` | 0.20 | curated reference text; **no analysis was performed** |
 | `none` | 0.0 | the domain has no implementation |
 
+## Running existing analysis scripts
+
+Scripts written against the published V5.0 API work unmodified — the flat
+`astra_core.capabilities.v101_temporal_causal` … `v108_streaming_discovery`
+paths, `edge[0]` indexing, `result.get('temporal_edges')`, `max_lag=`,
+`Intervention(variable=, value=)` and the `'alerts'` result key are all
+supported again.
+
+You will still need to point any **hardcoded data paths** in your own scripts at
+their own folders.
+
+> **If you have results from `CounterfactualEngine` / V102 computed before
+> 21 Aug 2026, recompute them.** The DML estimator divided by the mean of a
+> residual (~0 by construction) and returned values with the wrong sign and a
+> divergent magnitude — a true ATE of +2.0 came back as −175.8. It is fixed and
+> pinned to known ground truth, and is now seeded so a result is reproducible.
+
 ## Before you rely on a number
 
-Read **`BASELINE_README.md` → Known limitations**. In short: 31 of the 75
-domains compute (121 capabilities, each pinned to a hand-computed reference
-value); 17 report `NO_IMPLEMENTATION` honestly; 27 return curated text.
+Read **`BASELINE_README.md` → Known limitations**. In short: of the 75 domains,
+31 compute (121 capabilities, each pinned to a hand-computed reference value),
+17 report `NO_IMPLEMENTATION` honestly, and 27 return curated reference text.
 Anything marked `# AUDIT-FLAG:` in the source is known-suspect and deliberately
-unfixed.
+left unfixed rather than papered over.
 
 ## Updating later
 
 ```bash
-cd ~/ASTRA
+cd ~/ASTRA_fresh
 source .venv/bin/activate
 git pull
 ```
 
-If `main` has been updated to include this work, switch with
-`git checkout main && git pull`.
-
 ## Troubleshooting
 
 **`ModuleNotFoundError: No module named 'astra_core'`** — the virtualenv is not
-active. Run `source .venv/bin/activate` (you should see `(.venv)` in your
-prompt).
+active. `source .venv/bin/activate` (you should see `(.venv)` in your prompt).
 
-**A test suite says `No module named 'astra_core'`** — some suites do not fix
-their own import path; run them from the repo root with `PYTHONPATH=.`.
+**`NameError: name 'np' is not defined` on import** — you are on `main`, not
+`audit-fixes-aug2026`. Check with `git rev-parse --abbrev-ref HEAD`.
+
+**A suite says `No module named 'astra_core'`** — some suites do not fix their
+own import path; run them from the repo root with `PYTHONPATH=.`.
 
 **`No module named pytest`** — `pip install -e ".[dev]"`.
 
-**Apple Silicon and PyTorch** — `[dl]` is only needed for the four
-`astro_physics.deep_learning` modules. Everything else, including all 333 tests,
+**Apple Silicon and PyTorch** — `[dl]` is needed only for the four
+`astro_physics.deep_learning` modules. Everything else, including all 364 tests,
 works without it.
