@@ -106,12 +106,28 @@ class CrossDomainConnection:
             raise ValueError("strength must be between 0 and 1")
 
 
+#: Inflections a keyword may carry and still be the same term. Deliberately a
+#: closed list rather than "any few trailing characters": allowing arbitrary
+#: suffixes would make "star" match "start".
+_PLURAL_SUFFIXES = r"(?:s|es|e|ae|i)?"
+
+
 def _keyword_in(keyword: str, text: str) -> bool:
-    """Word-boundary keyword test (case-insensitive, multi-word aware)."""
+    """
+    Word-boundary keyword test (case-insensitive, multi-word aware), tolerant
+    of simple plurals.
+
+    The boundary at the START is what stops the false positives that made
+    routing unusable ('rv' inside "cu-rv-e", 'hi' inside "t-hi-s", 'sn' inside
+    "doe-sn-'t"). But requiring a boundary at the END as well lost legitimate
+    matches: the keyword "supernova" did not match the query "What causes
+    supernovae?", so that question routed nowhere at all.
+    """
     kw = keyword.strip().lower()
     if not kw:
         return False
-    return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", text) is not None
+    pattern = r"(?<!\w)" + re.escape(kw) + _PLURAL_SUFFIXES + r"(?!\w)"
+    return re.search(pattern, text) is not None
 
 
 class BaseDomainModule(ABC):

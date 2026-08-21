@@ -152,25 +152,48 @@ print(detailed.used_capabilities)   # ['mce', 'crn', 'mmol', 'asc']
 ### Individual Capability Usage
 
 ```python
-# Meta-Context Engine
-from astra_core.metacognitive.meta_context_engine import create_meta_context_engine
+query = "What causes filament fragmentation?"
+
+# Meta-Context Engine -- `dimensions` takes ContextDimension enums, not strings
+from astra_core.metacognitive.meta_context_engine import (
+    create_meta_context_engine, ContextDimension,
+)
 mce = create_meta_context_engine()
-result = mce.layer_context(query, dimensions=["temporal", "perceptual"])
+layered = mce.layer_context(
+    query, dimensions=[ContextDimension.TEMPORAL, ContextDimension.PERCEPTUAL]
+)
+print(len(layered.layers), "context layers")
 
 # Domain modules
 from astra_core.domains import DomainRegistry
+import os
 registry = DomainRegistry()
-registry.auto_load_domains()   # NB: `load_all_domains()` does not exist
-result = registry.process_query("pulsar timing analysis")
+# `auto_load_domains` takes a {domain_name: config} mapping keyed on the
+# DIRECTORY name (e.g. "ism"), not the class name. `load_all_domains()`, as
+# previously documented here, does not exist.
+names = sorted(d for d in os.listdir("astra_core/domains")
+               if os.path.isdir(f"astra_core/domains/{d}") and d != "__pycache__")
+registry.auto_load_domains({n: {} for n in names})
+result = registry.process_query("What is the Jeans mass for n = 1e4 cm^-3 and T = 10 K?")
+print(result["domain"], result["confidence"])   # statistical_mechanics 0.9
 
 # Physics engine
 from astra_core.physics import UnifiedPhysicsEngine
 physics = UnifiedPhysicsEngine()
 result = physics.compute("blackbody", {"temperature": 5778, "wavelength": 500e-7})
 
-# MAML optimizer
+# MAML optimizer -- model_fn(params, x) and loss_fn(pred, y) are yours to supply
+import numpy as np
 from astra_core.reasoning.maml_optimizer import create_maml_optimizer
+
+def model_fn(params, x):
+    return params["w"] * x + params["b"]
+
+def loss_fn(pred, y):
+    return float(np.mean((pred - y) ** 2))
+
 optimizer = create_maml_optimizer(model_fn, loss_fn, n_inner_steps=5)
+print(type(optimizer).__name__)
 ```
 
 ---
@@ -217,7 +240,7 @@ python astra_core/tests/test_revolutionary/run_tests.py --integration # Integrat
 
 ### Test Individual Components
 
-```python
+```bash
 # Test physics modules
 python -c "from astra_core.physics.relativistic_physics import RelativisticPhysics; print(RelativisticPhysics.schwarzschild_radius(1.989e33))"
 
@@ -293,12 +316,12 @@ python -c "from astra_core.reasoning.maml_optimizer import MAMLOptimizer; print(
 
 The system automatically selects capabilities based on task analysis. Do not manually invoke capabilities unless specifically testing individual components.
 
-```python
-# WRONG: Manual capability selection
+```text
+# WRONG: reaching into internals (there is no `system.reasoning` attribute)
 result = system.reasoning.causal_discovery(query)
 
-# CORRECT: Let system auto-select
-result = system.answer(query)  # Auto-selects best capabilities
+# CORRECT: let the system route the query
+result = system.answer(query)
 ```
 
 ### 2. Module Registration Pattern
@@ -324,12 +347,15 @@ class MyDomain(BaseDomainModule):
 All major components use factory functions for creation, not direct constructors. This enables configuration injection and graceful fallback.
 
 ```python
-# Use factory functions
+# Use factory functions rather than constructing classes directly
+from astra_core import create_stan_system
+from astra_core.metacognitive.meta_context_engine import create_meta_context_engine
+
 system = create_stan_system()
 mce = create_meta_context_engine()
-optimizer = create_maml_optimizer(model_fn, loss_fn)
+print(type(system).__name__, type(mce).__name__)
 
-# NOT: system = UnifiedSTANSystem()  # Avoid direct constructors
+# NOT: system = UnifiedSTANSystem()   -- bypasses the factory's setup
 ```
 
 ### 4. Physics Curriculum Learning

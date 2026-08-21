@@ -458,28 +458,40 @@ class EnhancedUnifiedSTANSystem:
                 # Update performance stats
                 self.performance_stats['orchestrated_queries'] += 1
 
-                # Return orchestration result with enhanced metadata
-                return {
-                    'query': query,
-                    'mode': mode or 'orchestrated',
-                    'answer': orchestration_result.get('answer'),
-                    # FIX(audit): this put the orchestrator's boolean
-                    # `success` flag into the `confidence` field, so the
-                    # top-level API returned `confidence: True` rather than
-                    # a number. Prefer a real confidence if the orchestrator
-                    # supplies one, else map success -> 0.7 / failure -> 0.0.
-                    'confidence': _as_confidence(orchestration_result),
-                    'capabilities_used': ['orchestration_system'],
-                    'reasoning_trace': [{
-                        'step': 'orchestration',
-                        'decisions_made': orchestration_result.get('decisions_made', 0),
-                        'allocation': orchestration_result.get('allocation', {})
-                    }],
-                    'metadata': orchestration_result,
-                    'meta_cognitive': False,
-                    'data_sufficient': True,
-                    'orchestrated': True  # NEW flag
-                }
+                # FIX(audit): the orchestrator allocates resources; it does
+                # not answer questions. Returning here unconditionally meant
+                # EVERY query came back as "Query processed through
+                # orchestration system" and no domain, physics engine or
+                # capability was ever consulted. Only short-circuit if the
+                # orchestrator actually produced an answer.
+                orch_answer = (orchestration_result or {}).get('answer')
+                if not orch_answer or not str(orch_answer).strip() or \
+                        str(orch_answer).strip() == 'Query processed through orchestration system':
+                    logger.debug("orchestrator returned no answer; "
+                                 "continuing with normal processing")
+                    context.setdefault('_orchestration', orchestration_result)
+                else:
+                    return {
+                        'query': query,
+                        'mode': mode or 'orchestrated',
+                        'answer': orchestration_result.get('answer'),
+                        # FIX(audit): this put the orchestrator's boolean
+                        # `success` flag into the `confidence` field, so the
+                        # top-level API returned `confidence: True` rather than
+                        # a number. Prefer a real confidence if the orchestrator
+                        # supplies one, else map success -> 0.7 / failure -> 0.0.
+                        'confidence': _as_confidence(orchestration_result),
+                        'capabilities_used': ['orchestration_system'],
+                        'reasoning_trace': [{
+                            'step': 'orchestration',
+                            'decisions_made': orchestration_result.get('decisions_made', 0),
+                            'allocation': orchestration_result.get('allocation', {})
+                        }],
+                        'metadata': orchestration_result,
+                        'meta_cognitive': False,
+                        'data_sufficient': True,
+                        'orchestrated': True  # NEW flag
+                    }
 
             except Exception as e:
                 logger.warning(f"Orchestration failed, falling back to standard processing: {e}")
@@ -649,11 +661,12 @@ class EnhancedUnifiedSTANSystem:
             domain_result = relevant_domain.process_query(query, context)
             result['answer'] = domain_result.answer
 
-            # Ensure confidence is always set and > 0
-            if hasattr(domain_result, 'confidence') and domain_result.confidence > 0:
-                result['confidence'] = domain_result.confidence
-            else:
-                result['confidence'] = 0.75  # Default confidence for domain answers
+            # FIX(audit): this read "ensure confidence is always > 0" and
+            # replaced any zero with 0.75. A domain that honestly reports
+            # confidence 0.0 -- "this domain has no implementation, no analysis
+            # was performed" -- therefore surfaced to the user as 0.75. Take the
+            # domain's own value; it is derived from what actually happened.
+            result['confidence'] = getattr(domain_result, 'confidence', 0.0)
 
             result['reasoning_trace'] = domain_result.reasoning_trace if hasattr(domain_result, 'reasoning_trace') else []
 
@@ -818,24 +831,23 @@ class EnhancedUnifiedSTANSystem:
             return f"Computed result: {value}"
 
     def _find_relevant_domain(self, query: str) -> Optional[BaseDomainModule]:
-        """Find most relevant domain for query"""
+        """
+        Find the most relevant domain for a query.
+
+        FIX(audit): this was a SECOND, independent router that duplicated
+        `DomainRegistry.find_best_domain_for_query` and carried all of the
+        defects that method has since been repaired for -- bare substring
+        matching (so 'rv' matched inside "curve" and 'hi' inside "this"), no
+        preference for a domain that can actually compute an answer, and it
+        ignored `can_handle_query` entirely. Because `system.answer()` goes
+        through here rather than through the registry, the routing repair had
+        no effect on the main entry point.
+
+        It now delegates, so there is one router with one set of behaviour.
+        """
         if not self.domain_registry:
             return None
-
-        query_lower = query.lower()
-        best_domain = None
-        best_score = 0
-
-        for domain_name in self.domain_registry.list_domains():
-            domain = self.domain_registry.get_domain(domain_name)
-            if domain:
-                config = domain.get_config()
-                score = sum(1 for kw in config.keywords if kw in query_lower)
-                if score > best_score:
-                    best_score = score
-                    best_domain = domain
-
-        return best_domain if best_score > 0 else None
+        return self.domain_registry.find_best_domain_for_query(query)
 
     def adapt_to_domain(
         self,

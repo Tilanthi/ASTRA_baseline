@@ -93,6 +93,11 @@ jobs:
         run: PYTHONPATH=. python -m pytest astra_core/tests -q
       - name: Comprehensive system test (must exit non-zero on failure)
         run: PYTHONPATH=. python astra_core/comprehensive_system_test.py
+      - name: Documented examples must run
+        # 16 of 24 documented examples did not execute at all before this
+        # branch; the User Manual described 18 methods that never existed.
+        run: python astra_core/tests/check_doc_examples.py
+
       - name: Declared print-based suites
         run: |
           set -e

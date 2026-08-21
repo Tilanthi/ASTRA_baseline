@@ -365,3 +365,73 @@ def test_can_compute_does_not_run_the_computation(loaded):
     assert domain.can_compute("jeans mass for n = 1e4 cm^-3 and T = 10 K")
     assert not domain.can_compute("jeans mass")            # no parameters
     assert not domain.can_compute("what is a galaxy")      # no capability match
+
+
+# ---------------------------------------------------------------------------
+# 6. the top-level answer() path
+# ---------------------------------------------------------------------------
+
+def test_system_answer_reaches_the_computational_domains():
+    """
+    `system.answer()` went through `_find_relevant_domain`, a SECOND router
+    that duplicated the registry's and kept all the defects the registry's had
+    been repaired for. The routing fix therefore had no effect on the main
+    entry point.
+    """
+    import astra_core
+
+    system = astra_core.create_stan_system()
+    result = system.answer("What is the Jeans mass for n = 1e4 cm^-3 and T = 10 K?")
+    assert result["confidence"] == 0.90, result
+    assert "2.868" in str(result["answer"]), result["answer"]
+
+
+def test_orchestrator_does_not_swallow_every_query():
+    """
+    When the orchestrator was running it returned unconditionally, so EVERY
+    query came back as "Query processed through orchestration system" and no
+    domain, physics engine or capability was ever consulted.
+    """
+    import astra_core
+
+    system = astra_core.create_stan_system()
+    result = system.answer("free-fall time for n = 1e5 cm^-3")
+    assert "orchestration system" not in str(result["answer"]).lower()
+    assert result["confidence"] == 0.90
+
+
+def test_honest_zero_confidence_is_not_inflated():
+    """
+    `_process_with_domains` read "ensure confidence is always > 0" and replaced
+    any zero with 0.75 -- so a domain reporting "I have no implementation and
+    performed no analysis" surfaced to the user at 0.75.
+    """
+    import astra_core
+    from astra_core.domains._computational import Provenance
+
+    system = astra_core.create_stan_system()
+    domain = system.domain_registry.get_domain("solar_physics")
+    assert domain is not None
+    direct = domain.process_query("anything at all")
+    assert direct.confidence == 0.0
+    assert direct.metadata["provenance"] == Provenance.NONE.value
+
+    # and the value must survive the trip through the system wrapper
+    result = system._process_with_domains(
+        "anything at all", {}, {"answer": None, "confidence": None})
+    if result.get("answer") is not None:
+        assert result["confidence"] != 0.75
+
+
+def test_plural_queries_still_route():
+    """
+    Adding word boundaries fixed 'rv' matching inside "curve" but broke plurals:
+    the keyword "supernova" stopped matching "What causes supernovae?", which
+    routed nowhere at all.
+    """
+    import astra_core
+
+    system = astra_core.create_stan_system()
+    result = system.answer("What causes supernovae?")
+    assert result["answer"], "plural query routed nowhere"
+    assert result["confidence"] > 0.0
