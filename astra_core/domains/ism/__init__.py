@@ -46,6 +46,7 @@ except ImportError as e:
 
 # Import domain base
 from .. import BaseDomainModule, DomainConfig
+from .._computational import curated_result
 
 
 @dataclass
@@ -143,7 +144,7 @@ class ISMDomain(BaseDomainModule):
             self.shock_physics = None
             logger.info("ISM domain: Running in degraded mode")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Process ISM-specific query
 
@@ -161,110 +162,101 @@ class ISMDomain(BaseDomainModule):
             result = self._analyze_molecular_cloud(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['radiative transfer', 'line profile', 'optical depth']):
             result = self._analyze_radiative_transfer(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['shock', 'j-shock', 'c-shock']):
             result = self._analyze_shock(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['hii', 'stromgren', 'recombination']):
             result = self._analyze_hii_region(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['supernova', 'snr', 'blastwave']):
             result = self._analyze_snr(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['chemistry', 'abundance', 'molecule']):
             result = self._analyze_chemistry(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['turbulence', 'velocity', 'power spectrum']):
             result = self._analyze_turbulence(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['filament', 'dendrogram']):
             result = self._analyze_filaments(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         else:
             result = self._general_ism_analysis(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
 
     def get_capabilities(self) -> List[str]:
         """Return list of ISM capabilities"""

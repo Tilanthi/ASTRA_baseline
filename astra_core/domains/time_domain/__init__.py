@@ -14,6 +14,7 @@ from typing import Dict, List, Any
 import logging
 
 from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain, CrossDomainConnection
+from .._computational import curated_result
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class TimeDomainDomain(BaseDomainModule):
 
         logger.info("Time domain astronomy initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process time-domain query"""
         query_lower = query.lower()
 
@@ -95,13 +96,12 @@ class TimeDomainDomain(BaseDomainModule):
             "SN Ia cosmology led to discovery of dark energy."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["light_curve_analysis", "classification"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["light_curve_analysis", "classification"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_transient_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process transient query"""
@@ -115,13 +115,12 @@ class TimeDomainDomain(BaseDomainModule):
             "follow-up for multi-wavelength/multi-messenger observations."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["transient_detection", "alert_processing"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["transient_detection", "alert_processing"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_variable_star_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process variable star query"""
@@ -135,13 +134,12 @@ class TimeDomainDomain(BaseDomainModule):
             "Cepheids are crucial distance indicators calibrating the cosmic distance scale."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["periodicity_detection", "light_curve_analysis"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["periodicity_detection", "light_curve_analysis"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_grb_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process GRB query"""
@@ -156,13 +154,12 @@ class TimeDomainDomain(BaseDomainModule):
             "probes of the early universe."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["classification", "multi_band_modeling"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["classification", "multi_band_modeling"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_general_time_domain_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process general time-domain query"""
@@ -177,13 +174,12 @@ class TimeDomainDomain(BaseDomainModule):
             "(new classes of transients)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=self.config.capabilities[:3]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=self.config.capabilities[:3],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def discover_cross_domain_connections(self, other_domains: List['BaseDomainModule']) -> List['CrossDomainConnection']:
         """Discover connections to other domains"""

@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -91,7 +93,7 @@ class HIIRegionsDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("HII Regions domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['stromgren', 'ionization', 'front', 'if']):
@@ -123,14 +125,13 @@ class HIIRegionsDomain(BaseDomainModule):
             "τ~1 at Lyman limit (912 Å)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["stromgren_radius", "ionization_front_modeling"],
-            metadata={"query_type": "IONIZATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stromgren_radius", "ionization_front_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "IONIZATION"},
+               )
 
     def _process_expansion_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing expansion query"]
@@ -147,14 +148,13 @@ class HIIRegionsDomain(BaseDomainModule):
             "Expansion age: t ≈ R_exp / v_exp ~ 1-5 Myr."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["expansion_timescale"],
-            metadata={"query_type": "EXPANSION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["expansion_timescale"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "EXPANSION"},
+               )
 
     def _process_compact_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing compact HII query"]
@@ -170,14 +170,13 @@ class HIIRegionsDomain(BaseDomainModule):
             "IR emission (dust)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["stromgren_radius", "expansion_timescale"],
-            metadata={"query_type": "COMPACT"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stromgren_radius", "expansion_timescale"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "COMPACT"},
+               )
 
     def _process_triggered_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing triggered SF query"]
@@ -195,14 +194,13 @@ class HIIRegionsDomain(BaseDomainModule):
             "SFE_trigger ~ 10-30% of shell mass."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["triggered_sf_efficiency", "expansion_timescale"],
-            metadata={"query_type": "TRIGGERED_SF"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["triggered_sf_efficiency", "expansion_timescale"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "TRIGGERED_SF"},
+               )
 
     def _process_general_hii_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general HII query"]
@@ -219,14 +217,13 @@ class HIIRegionsDomain(BaseDomainModule):
             "chemical enrichment, feedback quantification."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["stromgren_radius", "morphology_classification"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stromgren_radius", "morphology_classification"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_hii_regions_domain() -> HIIRegionsDomain:

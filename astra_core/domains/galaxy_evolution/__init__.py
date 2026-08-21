@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -93,7 +95,7 @@ class GalaxyEvolutionDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Galaxy Evolution domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['sfh', 'star formation history', 'stellar population']):
@@ -127,14 +129,13 @@ class GalaxyEvolutionDomain(BaseDomainModule):
             "Specific SFR: sSFR = SFR/M_★ ∝ M_★^{-0.3} (main sequence)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["stellar_population_modeling", "sfr_measurement"],
-            metadata={"query_type": "SFH"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stellar_population_modeling", "sfr_measurement"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SFH"},
+               )
 
     def _process_quenching_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing quenching query"]
@@ -150,14 +151,13 @@ class GalaxyEvolutionDomain(BaseDomainModule):
             "Quenched fraction: f_Q ∝ M_★ (massive quenched first), f_Q ∝ density (clusters)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["quenching_timescale", "stellar_population_modeling"],
-            metadata={"query_type": "QUENCHING"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["quenching_timescale", "stellar_population_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "QUENCHING"},
+               )
 
     def _process_merger_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing merger query"]
@@ -174,14 +174,13 @@ class GalaxyEvolutionDomain(BaseDomainModule):
             "Simulations: Illustris, EAGLE, TNG for hierarchical assembly."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["merger_timescale"],
-            metadata={"query_type": "MERGER"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["merger_timescale"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "MERGER"},
+               )
 
     def _process_chemical_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing chemical evolution query"]
@@ -197,14 +196,13 @@ class GalaxyEvolutionDomain(BaseDomainModule):
             "Radial gradients: dZ/dR ~ -0.05 dex/kpc (negative gradients)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["chemical_enrichment", "stellar_population_modeling"],
-            metadata={"query_type": "CHEMICAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["chemical_enrichment", "stellar_population_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "CHEMICAL"},
+               )
 
     def _process_size_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing size evolution query"]
@@ -220,14 +218,13 @@ class GalaxyEvolutionDomain(BaseDomainModule):
             "for M_★ ~ 10¹¹ M☉. Compact cores: via dissipational (wet) mergers."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["size_growth"],
-            metadata={"query_type": "SIZE"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["size_growth"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SIZE"},
+               )
 
     def _process_general_evolution_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general galaxy evolution query"]
@@ -244,14 +241,13 @@ class GalaxyEvolutionDomain(BaseDomainModule):
             "Observations: HST (high-z), SDSS (low-z), surveys (DESI, Euclid, LSST)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["stellar_population_modeling", "sfr_measurement"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stellar_population_modeling", "sfr_measurement"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_galaxy_evolution_domain() -> GalaxyEvolutionDomain:

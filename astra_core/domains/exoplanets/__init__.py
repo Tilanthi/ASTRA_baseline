@@ -14,6 +14,7 @@ from typing import Dict, List, Any, Optional
 import logging
 
 from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain, CrossDomainConnection
+from .._computational import curated_result
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ class ExoplanetDomain(BaseDomainModule):
 
         logger.info(f"Exoplanet domain initialized with {len(self._physical_constants)} constants")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """
         Process exoplanet-related query
 
@@ -143,19 +144,18 @@ class ExoplanetDomain(BaseDomainModule):
                 f"Transit depth calculation: (Rp/Rs)² = {depth:.6f}"
             ])
 
-            return DomainQueryResult(
-                domain_name=self.config.domain_name,
-                answer=answer,
-                confidence=0.95,
-                reasoning_trace=reasoning_trace,
-                capabilities_used=["transit_analysis", "light_curve_modeling"],
-                metadata={
+            return curated_result(
+                       domain_name=self.config.domain_name,
+                       answer=answer,
+                       topics=["transit_analysis", "light_curve_modeling"],
+                       reasoning_trace=reasoning_trace,
+                       metadata={
                     'calculation': 'transit_depth',
                     'r_planet': r_planet,
                     'r_star': r_star,
                     'depth': depth
-                }
-            )
+                },
+                   )
 
         # General transit information
         answer = (
@@ -168,14 +168,13 @@ class ExoplanetDomain(BaseDomainModule):
             "additional planets in the system."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["transit_analysis"],
-            metadata={'query_type': 'general_transit'}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["transit_analysis"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={'query_type': 'general_transit'},
+               )
 
     def _process_rv_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process radial velocity related query"""
@@ -223,18 +222,17 @@ class ExoplanetDomain(BaseDomainModule):
                 f"RV amplitude: K = {K_m_s:.2f} m/s"
             ])
 
-            return DomainQueryResult(
-                domain_name=self.config.domain_name,
-                answer=answer,
-                confidence=0.93,
-                reasoning_trace=reasoning_trace,
-                capabilities_used=["rv_analysis"],
-                metadata={
+            return curated_result(
+                       domain_name=self.config.domain_name,
+                       answer=answer,
+                       topics=["rv_analysis"],
+                       reasoning_trace=reasoning_trace,
+                       metadata={
                     'calculation': 'rv_amplitude',
                     'K_cgs': K_cgs,
                     'K_m_s': K_m_s
-                }
-            )
+                },
+                   )
 
         # General RV information
         answer = (
@@ -246,14 +244,13 @@ class ExoplanetDomain(BaseDomainModule):
             "can also detect smaller planets with sufficient precision."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["rv_analysis"],
-            metadata={'query_type': 'general_rv'}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["rv_analysis"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={'query_type': 'general_rv'},
+               )
 
     def _process_atmosphere_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process atmospheric characterization query"""
@@ -283,14 +280,13 @@ class ExoplanetDomain(BaseDomainModule):
                 "small stars."
             )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["atmospheric_retrieval", "spectroscopy"],
-            metadata={'query_type': 'atmosphere'}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["atmospheric_retrieval", "spectroscopy"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={'query_type': 'atmosphere'},
+               )
 
     def _process_habitability_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process habitability assessment query"""
@@ -325,20 +321,19 @@ class ExoplanetDomain(BaseDomainModule):
                 f"HZ outer boundary: {hz_outer:.3f} AU"
             ])
 
-            return DomainQueryResult(
-                domain_name=self.config.domain_name,
-                answer=answer,
-                confidence=0.89,
-                reasoning_trace=reasoning_trace,
-                capabilities_used=["habitable_zone_assessment"],
-                metadata={
+            return curated_result(
+                       domain_name=self.config.domain_name,
+                       answer=answer,
+                       topics=["habitable_zone_assessment"],
+                       reasoning_trace=reasoning_trace,
+                       metadata={
                     'calculation': 'habitable_zone',
                     't_eff': t_eff,
                     'luminosity': luminosity,
                     'hz_inner': hz_inner,
                     'hz_outer': hz_outer
-                }
-            )
+                },
+                   )
 
         # General habitability information
         answer = (
@@ -351,14 +346,13 @@ class ExoplanetDomain(BaseDomainModule):
             "N₂O, and surface reflectance glints indicating liquid water oceans."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["habitable_zone_assessment"],
-            metadata={'query_type': 'general_habitability'}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["habitable_zone_assessment"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={'query_type': 'general_habitability'},
+               )
 
     def _process_detection_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process detection sensitivity query"""
@@ -393,14 +387,13 @@ class ExoplanetDomain(BaseDomainModule):
                 "atmospheric characterization with JWST and other facilities."
             )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["detection_sensitivity"],
-            metadata={'query_type': 'detection'}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["detection_sensitivity"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={'query_type': 'detection'},
+               )
 
     def _process_general_exoplanet_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process general exoplanet query"""
@@ -420,14 +413,13 @@ class ExoplanetDomain(BaseDomainModule):
             "biosignatures."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.85,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=self.config.capabilities[:3],  # Use top 3 capabilities
-            metadata={'query_type': 'general'}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=self.config.capabilities[:3],
+                   reasoning_trace=reasoning_trace,
+                   metadata={'query_type': 'general'},
+               )
 
     # Habitable zone models
 

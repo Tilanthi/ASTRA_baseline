@@ -23,6 +23,8 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
+from .._computational import curated_result
+
 # Import base domain module
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult
@@ -156,7 +158,7 @@ class ExtragalacticDomain(BaseDomainModule):
         self._initialized = True
         logger.info(f"Extragalactic domain initialized: {self.config.domain_name}")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process extragalactic astrophysics query"""
         query_lower = query.lower()
 
@@ -212,16 +214,15 @@ class ExtragalacticDomain(BaseDomainModule):
             "Key facilities: HST, JWST, ALMA, VLT, Keck, Subaru."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["galaxy_population_modeling", "scaling_relation_analysis"],
+                   reasoning_trace=[
                 "Identified galaxy evolution query",
                 "Covered internal/external processes and scaling relations"
             ],
-            capabilities_used=["galaxy_population_modeling", "scaling_relation_analysis"]
-        )
+               )
 
     def _analyze_cosmology(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze cosmological parameters and models"""
@@ -257,16 +258,15 @@ class ExtragalacticDomain(BaseDomainModule):
             "Key experiments: Planck, WMAP, ACTPol, SPT, DES."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["expansion_history_modeling", "cosmological_parameter_estimation"],
+                   reasoning_trace=[
                 "Identified cosmology query",
                 "Provided ΛCDM parameters and expansion history"
             ],
-            capabilities_used=["expansion_history_modeling", "cosmological_parameter_estimation"]
-        )
+               )
 
     def _analyze_large_scale_structure(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze large-scale structure of the universe"""
@@ -299,16 +299,15 @@ class ExtragalacticDomain(BaseDomainModule):
             "Key surveys: SDSS BOSS, DES, LSST, Euclid, SPHEREx."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["correlation_function_analysis", "power_spectrum_estimation"],
+                   reasoning_trace=[
                 "Identified large-scale structure query",
                 "Covered cosmic web and clustering statistics"
             ],
-            capabilities_used=["correlation_function_analysis", "power_spectrum_estimation"]
-        )
+               )
 
     def _analyze_high_redshift(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze high-redshift universe and reionization"""
@@ -341,16 +340,15 @@ class ExtragalacticDomain(BaseDomainModule):
             "Key facilities: JWST (NIRCam, NIRSpec), ALMA, VLT/MUSE, Keck/DEIMOS."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["reionization_history", "high_z_galaxy_detection"],
+                   reasoning_trace=[
                 "Identified high-redshift query",
                 "Covered reionization and first galaxies"
             ],
-            capabilities_used=["reionization_history", "high_z_galaxy_detection"]
-        )
+               )
 
     def _analyze_dark_matter(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze dark matter and gravitational lensing"""
@@ -385,16 +383,15 @@ class ExtragalacticDomain(BaseDomainModule):
             "Key experiments: DES, HSC, KiDS, LSST (upcoming)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["cluster_mass_estimation", "lensing_mass_mapping"],
+                   reasoning_trace=[
                 "Identified dark matter query",
                 "Covered evidence, halos, and detection efforts"
             ],
-            capabilities_used=["cluster_mass_estimation", "lensing_mass_mapping"]
-        )
+               )
 
     def _analyze_igm(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze intergalactic medium"""
@@ -424,16 +421,15 @@ class ExtragalacticDomain(BaseDomainModule):
             "Key facilities: VLT/UVES, Keck/HIRES, HST/COS."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.84,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["lyman_alpha_forest_analysis"],
+                   reasoning_trace=[
                 "Identified IGM query",
                 "Covered IGM phases and Lyman alpha forest"
             ],
-            capabilities_used=["lyman_alpha_forest_analysis"]
-        )
+               )
 
     def _general_extragalactic(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """General extragalactic astrophysics analysis"""
@@ -460,13 +456,12 @@ class ExtragalacticDomain(BaseDomainModule):
             "- Facilities: ALMA, VLA, SKA (upcoming)"
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.83,
-            reasoning_trace=["General extragalactic overview"],
-            capabilities_used=[]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=[],
+                   reasoning_trace=["General extragalactic overview"],
+               )
 
 
 def create_extragalactic_domain() -> ExtragalacticDomain:

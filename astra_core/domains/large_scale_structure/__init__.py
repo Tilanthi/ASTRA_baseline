@@ -20,6 +20,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -92,7 +94,7 @@ class LargeScaleStructureDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Large Scale Structure domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['cosmic web', 'filament', 'void', 'cluster']):
@@ -124,14 +126,13 @@ class LargeScaleStructureDomain(BaseDomainModule):
             "Observations: galaxy redshift surveys (SDSS, 2dF, DESI), "
             "simulation identification (Voronoi, SPINE)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["power_spectrum"],
-            metadata={"query_type": "COSMIC_WEB"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["power_spectrum"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "COSMIC_WEB"},
+               )
 
     def _process_bao_query(self, str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing BAO query"]
@@ -145,14 +146,13 @@ class LargeScaleStructureDomain(BaseDomainModule):
             "Surveys: BOSS/eBOSS (SDSS-III), DESI, WISE, future: Roman, Euclid, "
             "SPHEREx. BAO measured in galaxies (optical, IR), Lyα forest (high-z)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["bao_measuring", "correlation_function"],
-            metadata={"query_type": "BAO"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["bao_measuring", "correlation_function"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "BAO"},
+               )
 
     def _process_statistics_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing statistics query"]
@@ -166,14 +166,13 @@ class LargeScaleStructureDomain(BaseDomainModule):
             "Measurement: galaxy surveys (positions + redshifts). "
             "Covariance: cosmic variance, shot noise."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["power_spectrum", "correlation_function"],
-            metadata={"query_type": "STATISTICS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["power_spectrum", "correlation_function"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "STATISTICS"},
+               )
 
     def _process_halo_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing halo query"]
@@ -188,14 +187,13 @@ class LargeScaleStructureDomain(BaseDomainModule):
             "Applications: galaxy formation, clustering (halo model), "
             "satellite quenching."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["halo_mass_function", "hod_modeling"],
-            metadata={"query_type": "HALO"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["halo_mass_function", "hod_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "HALO"},
+               )
 
     def _process_lya_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing Lyα query"]
@@ -208,14 +206,13 @@ class LargeScaleStructureDomain(BaseDomainModule):
             "warm dark matter (suppresses small-scale power). "
             "Measurements: BOSS/eBOSS Lyα forest, future: DESI, WEAVE."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["power_spectrum"],
-            metadata={"query_type": "LYA"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["power_spectrum"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "LYA"},
+               )
 
     def _process_general_lss_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general LSS query"]
@@ -229,14 +226,13 @@ class LargeScaleStructureDomain(BaseDomainModule):
             "MegaMapper), imaging surveys (LSST, Euclid, Roman). "
             "Science: dark energy, gravity, neutrinos, inflation."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["power_spectrum", "correlation_function"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["power_spectrum", "correlation_function"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_large_scale_structure_domain() -> LargeScaleStructureDomain:

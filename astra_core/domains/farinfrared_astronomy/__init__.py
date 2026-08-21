@@ -16,6 +16,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -85,7 +87,7 @@ class FarInfraredAstronomyDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Far-Infrared Astronomy domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['dust', 'temperature', 'mbb']):
@@ -111,14 +113,13 @@ class FarInfraredAstronomyDomain(BaseDomainModule):
             "β~1.5 (amorphous, fluffy). "
             "Gas-to-dust ratio: δ_GDR ~ 100 (Milky Way), higher in metal-poor galaxies."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["dust_temperature_fir", "gas_mass_fir"],
-            metadata={"query_type": "DUST"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["dust_temperature_fir", "gas_mass_fir"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "DUST"},
+               )
 
     def _process_sfr_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing FIR SFR query"]
@@ -131,14 +132,13 @@ class FarInfraredAstronomyDomain(BaseDomainModule):
             "old stars cirrus. Calibrations: galaxy-integrated, resolved "
             "star-forming regions. Used for high-z galaxies (rest-frame FIR)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["sfr_calibration", "fir_sed_modeling"],
-            metadata={"query_type": "SFR"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["sfr_calibration", "fir_sed_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SFR"},
+               )
 
     def _process_cirrus_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing cirrus query"]
@@ -152,14 +152,13 @@ class FarInfraredAstronomyDomain(BaseDomainModule):
             "studies of diffuse ISM structure. "
             "Tracers: IRAS 100 μm, Herschel 100/160 μm, Planck HFI."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["cirrus_modeling"],
-            metadata={"query_type": "CIRRUS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["cirrus_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "CIRRUS"},
+               )
 
     def _process_general_fir_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general FIR query"]
@@ -172,14 +171,13 @@ class FarInfraredAstronomyDomain(BaseDomainModule):
             "Advantages: dust optically thin, sensitive to cold dust, "
             "spatial resolution (20″ at 250 μm for Herschel)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["fir_sed_modeling"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["fir_sed_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_farinfrared_astronomy_domain() -> FarInfraredAstronomyDomain:

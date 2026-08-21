@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -92,7 +94,7 @@ class AstrochemicalSurveysDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Astrochemical Surveys domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['molecule', 'inventory', 'line survey']):
@@ -126,14 +128,13 @@ class AstrochemicalSurveysDomain(BaseDomainModule):
             "rotational diagrams: N/Q ∝ ∫ T_B dv / A_μ S_μ."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["line_identification", "column_density"],
-            metadata={"query_type": "INVENTORY"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["line_identification", "column_density"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "INVENTORY"},
+               )
 
     def _process_fractionation_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing fractionation query"]
@@ -149,14 +150,13 @@ class AstrochemicalSurveysDomain(BaseDomainModule):
             "chemical age, initial conditions (pre-stellar enrichment)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["abundance_ratio", "fractionation_modeling"],
-            metadata={"query_type": "FRACTIONATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["abundance_ratio", "fractionation_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "FRACTIONATION"},
+               )
 
     def _process_ice_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing ice chemistry query"]
@@ -172,14 +172,13 @@ class AstrochemicalSurveysDomain(BaseDomainModule):
             "relative to H₂O: CO ~ 10-30%, CH₃OH ~ 5-30%, CO₂ ~ 10-40%."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["ice_spectroscopy", "chemical_modeling"],
-            metadata={"query_type": "ICE"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["ice_spectroscopy", "chemical_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "ICE"},
+               )
 
     def _process_prebiotic_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing prebiotic chemistry query"]
@@ -196,14 +195,13 @@ class AstrochemicalSurveysDomain(BaseDomainModule):
             "Prebiotic reservoirs: comets, meteorites, protoplanetary disks."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["line_identification", "chemical_modeling"],
-            metadata={"query_type": "PREBIOTIC"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["line_identification", "chemical_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "PREBIOTIC"},
+               )
 
     def _process_survey_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing survey query"]
@@ -220,14 +218,13 @@ class AstrochemicalSurveysDomain(BaseDomainModule):
             "line confusion, spectral resolution, calibration."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["line_identification", "column_density"],
-            metadata={"query_type": "SURVEY"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["line_identification", "column_density"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SURVEY"},
+               )
 
     def _process_general_astrochem_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general astrochemistry query"]
@@ -245,14 +242,13 @@ class AstrochemicalSurveysDomain(BaseDomainModule):
             "IRAM 30m, GBT, VLA, JCMT, Sofia (past), JWST (ice)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.85,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["chemical_modeling", "line_identification"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["chemical_modeling", "line_identification"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_astrochemical_surveys_domain() -> AstrochemicalSurveysDomain:

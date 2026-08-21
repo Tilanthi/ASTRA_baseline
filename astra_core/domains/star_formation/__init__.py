@@ -44,6 +44,7 @@ except ImportError as e:
 
 # Import domain base
 from .. import BaseDomainModule, DomainConfig
+from .._computational import curated_result
 
 
 @dataclass
@@ -138,7 +139,7 @@ class StarFormationDomain(BaseDomainModule):
             self.sf_law = None
             logger.info("Star formation domain: Running in degraded mode")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Process star formation query"""
         query_lower = query.lower()
 
@@ -147,110 +148,101 @@ class StarFormationDomain(BaseDomainModule):
             result = self._analyze_imf(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['sfr', 'star formation rate', 'kennicutt', 'schmidt']):
             result = self._analyze_sfr(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['h-alpha', 'halpha', 'uv', 'fuv', 'tracer']):
             result = self._analyze_sfr_tracers(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['stellar evolution', 'main sequence', 'supergiant']):
             result = self._analyze_stellar_evolution(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['supernova', 'feedback', 'sn', 'remnant']):
             result = self._analyze_feedback(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['collapse', 'freefall', 'accretion', 'jeans']):
             result = self._analyze_collapse(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['sph', 'smoothed particle', 'hydrodynamics']):
             result = self._analyze_sph(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         elif any(kw in query_lower for kw in ['protostar', 'pre-main', 'pms']):
             result = self._analyze_protostar(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
         else:
             result = self._general_sf_analysis(query, context)
             # Convert dict to DomainQueryResult
             from .. import DomainQueryResult
-            return DomainQueryResult(
-                domain_name=self.get_config().domain_name,
-                answer=result["answer"],
-                confidence=result["confidence"],
-                reasoning_trace=[],
-                capabilities_used=result.get("capabilities_used", []),
-                metadata=result.get("metadata", {})
-            )
+            return curated_result(
+                       domain_name=self.get_config().domain_name,
+                       answer=result["answer"],
+                       topics=result.get("capabilities_used", []),
+                       reasoning_trace=[],
+                       metadata=result.get("metadata", {}),
+                   )
 
     def get_capabilities(self) -> List[str]:
         """Return list of star formation capabilities"""

@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -104,7 +106,7 @@ class GalacticStructureDomain(BaseDomainModule):
 
         logger.info("Galactic Structure domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['disk', 'thin', 'thick', 'scale height']):
@@ -135,14 +137,13 @@ class GalacticStructureDomain(BaseDomainModule):
             "Mass: thin ~ 4×10¹⁰ M☉, thick ~ 2×10¹⁰ M☉, gas ~ 1×10⁹ M☉. "
             "Tracers: star counts, kinematics, chemical abundances."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["scale_height", "stellar_density"],
-            metadata={"query_type": "DISK"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["scale_height", "stellar_density"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "DISK"},
+               )
 
     def _process_bulge_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing bulge/bar query"]
@@ -157,14 +158,13 @@ class GalacticStructureDomain(BaseDomainModule):
             "Observations: COBE/DIRBE, Spitzer, VVV (IR), Gaia (kinematics), "
             "APOGEE (chemistry)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["kinematics", "stellar_density"],
-            metadata={"query_type": "BULGE_BAR"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["kinematics", "stellar_density"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "BULGE_BAR"},
+               )
 
     def _process_rotation_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing rotation curve query"]
@@ -178,14 +178,13 @@ class GalacticStructureDomain(BaseDomainModule):
             "Rotation laws: v(R) = v_0 (flat), Brand curve (epicyclic). "
             "Oort constants: A ≈ 15 km/s/kpc, B ≈ -12 km/s/kpc."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["rotation_curve", "kinematics"],
-            metadata={"query_type": "ROTATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["rotation_curve", "kinematics"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "ROTATION"},
+               )
 
     def _process_spiral_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing spiral arm query"]
@@ -200,14 +199,13 @@ class GalacticStructureDomain(BaseDomainModule):
             "Observations: VLBI masers (parallax + proper motion), "
             "GAIA (3D positions), surveys (WISE Spitzer)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["stellar_density"],
-            metadata={"query_type": "SPIRAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stellar_density"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SPIRAL"},
+               )
 
     def _process_halo_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing halo query"]
@@ -222,14 +220,13 @@ class GalacticStructureDomain(BaseDomainModule):
             "Tracers: RR Lyrae, BHB stars, globular clusters, satellite galaxies, "
             "stellar streams (Gaia)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["stellar_density", "kinematics"],
-            metadata={"query_type": "HALO"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stellar_density", "kinematics"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "HALO"},
+               )
 
     def _process_general_structure_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general structure query"]
@@ -244,14 +241,13 @@ class GalacticStructureDomain(BaseDomainModule):
             "Observational tools: Gaia (positions, kinematics), "
             "APOGEE/GALAH (chemistry), 2MASS/WISE (IR)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["scale_height", "rotation_curve"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["scale_height", "rotation_curve"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_galactic_structure_domain() -> GalacticStructureDomain:

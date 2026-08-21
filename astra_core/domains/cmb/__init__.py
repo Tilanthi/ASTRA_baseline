@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -106,7 +108,7 @@ class CMBDomain(BaseDomainModule):
 
         logger.info("CMB domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['power spectrum', 'acoustic peak', 'anistropy']):
@@ -140,14 +142,13 @@ class CMBDomain(BaseDomainModule):
             "Data: Planck 2018 precision ~1 μK-arcmin."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.93,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["cmb_power_spectrum", "parameter_estimation"],
-            metadata={"query_type": "POWER_SPECTRUM"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["cmb_power_spectrum", "parameter_estimation"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "POWER_SPECTRUM"},
+               )
 
     def _process_polarization_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing CMB polarization query"]
@@ -163,14 +164,13 @@ class CMBDomain(BaseDomainModule):
             "Experiments: BICEP3, Keck, SPT-3G, Simons Observatory, CMB-S4."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["bmode_detection", "cmb_power_spectrum"],
-            metadata={"query_type": "POLARIZATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["bmode_detection", "cmb_power_spectrum"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "POLARIZATION"},
+               )
 
     def _process_lensing_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing CMB lensing query"]
@@ -186,14 +186,13 @@ class CMBDomain(BaseDomainModule):
             "Cross-correlations: CMB lensing × DES, HSC, KiDS galaxy lensing."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["lensing_reconstruction"],
-            metadata={"query_type": "LENSING"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["lensing_reconstruction"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "LENSING"},
+               )
 
     def _process_secondary_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing secondary anisotropy query"]
@@ -209,14 +208,13 @@ class CMBDomain(BaseDomainModule):
             "of recombination. SZ used for cluster surveys (SPT, ACT, Planck)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["cmb_power_spectrum"],
-            metadata={"query_type": "SECONDARY"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["cmb_power_spectrum"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SECONDARY"},
+               )
 
     def _process_inflation_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing inflation constraints query"]
@@ -232,14 +230,13 @@ class CMBDomain(BaseDomainModule):
             "parity asymmetry (statistical significance debated)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["parameter_estimation", "cmb_power_spectrum"],
-            metadata={"query_type": "INFLATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["parameter_estimation", "cmb_power_spectrum"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "INFLATION"},
+               )
 
     def _process_general_cmb_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general CMB query"]
@@ -255,14 +252,13 @@ class CMBDomain(BaseDomainModule):
             "Simons Observatory, CMB-S4 (upcoming). PIXIE for spectral distortions."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["cmb_power_spectrum", "parameter_estimation"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["cmb_power_spectrum", "parameter_estimation"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_cmb_domain() -> CMBDomain:

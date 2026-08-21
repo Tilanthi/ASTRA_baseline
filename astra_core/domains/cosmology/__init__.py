@@ -14,6 +14,7 @@ from typing import Dict, List, Any
 import logging
 
 from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain, CrossDomainConnection
+from .._computational import curated_result
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class CosmologyDomain(BaseDomainModule):
 
         logger.info("Cosmology domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process cosmology query"""
         query_lower = query.lower()
 
@@ -93,13 +94,12 @@ class CosmologyDomain(BaseDomainModule):
             "where Ω_m is matter density and Ω_Λ is dark energy density."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["expansion_history"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["expansion_history"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_cmb_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process CMB query"""
@@ -114,13 +114,12 @@ class CosmologyDomain(BaseDomainModule):
             "from baryon-photon acoustic oscillations."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.93,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["cmb_analysis"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["cmb_analysis"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_dark_energy_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process dark energy/dark matter query"""
@@ -135,13 +134,12 @@ class CosmologyDomain(BaseDomainModule):
             "quintessence, modified gravity (f(R), DGP)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["dark_matter_modeling", "parameter_estimation"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["dark_matter_modeling", "parameter_estimation"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_inflation_query(self, str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process inflation query"""
@@ -155,13 +153,12 @@ class CosmologyDomain(BaseDomainModule):
             "is ~10^16 GeV, potentially accessible through primordial B-mode polarization."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["inflation_modeling"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["inflation_modeling"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_general_cosmology_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process general cosmology query"""
@@ -175,13 +172,12 @@ class CosmologyDomain(BaseDomainModule):
             "Ω_m≈0.31, Ω_Λ≈0.69, H₀≈67 km/s/Mpc."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=self.config.capabilities[:3]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=self.config.capabilities[:3],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def discover_cross_domain_connections(
         self,

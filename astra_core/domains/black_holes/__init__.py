@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional, Tuple
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -98,7 +100,7 @@ class BlackHolesDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Black Holes domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['mass', 'radius', 'horizon']):
@@ -129,14 +131,13 @@ class BlackHolesDomain(BaseDomainModule):
             "Event horizon surface area: A = 4πR_s². Spin: a* = Jc/GM², 0 ≤ a* ≤ 1."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.93,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["schwarzschild_radius", "spin_measurement"],
-            metadata={"query_type": "BH_PROPERTIES"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["schwarzschild_radius", "spin_measurement"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "BH_PROPERTIES"},
+               )
 
     def _process_accretion_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing accretion query"]
@@ -152,14 +153,13 @@ class BlackHolesDomain(BaseDomainModule):
             "high/soft, intermediate."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["accretion_modeling"],
-            metadata={"query_type": "ACCRETION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["accretion_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "ACCRETION"},
+               )
 
     def _process_jet_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing jet query"]
@@ -174,14 +174,13 @@ class BlackHolesDomain(BaseDomainModule):
             "P_kinetic ≈ 10⁴⁵-10⁴⁶ erg/s for powerful FRIIs."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["jet_power"],
-            metadata={"query_type": "JETS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["jet_power"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "JETS"},
+               )
 
     def _process_gw_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing GW query"]
@@ -197,14 +196,13 @@ class BlackHolesDomain(BaseDomainModule):
             "(BNS merger) + kilonova."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["gw_waveform"],
-            metadata={"query_type": "GRAVITATIONAL_WAVES"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["gw_waveform"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GRAVITATIONAL_WAVES"},
+               )
 
     def _process_quantum_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing quantum BH query"]
@@ -219,14 +217,13 @@ class BlackHolesDomain(BaseDomainModule):
             "t_evap ~ 5120π(G²M³)/(ℏc⁴) ~ 10⁶⁷ (M/M☉) years."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["bh_thermodynamics"],
-            metadata={"query_type": "QUANTUM"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["bh_thermodynamics"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "QUANTUM"},
+               )
 
     def _process_general_bh_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general BH query"]
@@ -243,14 +240,13 @@ class BlackHolesDomain(BaseDomainModule):
             "X-ray spectroscopy (Fe Kα), timing, VLBI imaging."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["schwarzschild_radius", "accretion_modeling"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["schwarzschild_radius", "accretion_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_black_holes_domain() -> BlackHolesDomain:

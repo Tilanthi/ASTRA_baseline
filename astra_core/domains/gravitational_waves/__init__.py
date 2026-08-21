@@ -14,6 +14,7 @@ from typing import Dict, List, Any, Optional
 import logging
 
 from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain, CrossDomainConnection
+from .._computational import curated_result
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ class GravitationalWavesDomain(BaseDomainModule):
 
         logger.info("Gravitational waves domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process gravitational wave query"""
         query_lower = query.lower()
 
@@ -110,13 +111,12 @@ class GravitationalWavesDomain(BaseDomainModule):
             "binaries, and possibly cosmological sources."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["gw_detection", "signal_processing"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["gw_detection", "signal_processing"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_waveform_query(self, str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process waveform modeling query"""
@@ -130,13 +130,12 @@ class GravitationalWavesDomain(BaseDomainModule):
             "tidal effects that probe the neutron star equation of state."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["waveform_modeling"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["waveform_modeling"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_parameter_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process parameter estimation query"""
@@ -158,13 +157,12 @@ class GravitationalWavesDomain(BaseDomainModule):
                 f"determining the inspiral rate."
             )
 
-            return DomainQueryResult(
-                domain_name=self.config.domain_name,
-                answer=answer,
-                confidence=0.94,
-                reasoning_trace=reasoning_trace + [f"M1={m1}, M2={m2}, Mc={M_c:.2f}"],
-                capabilities_used=["parameter_estimation"]
-            )
+            return curated_result(
+                       domain_name=self.config.domain_name,
+                       answer=answer,
+                       topics=["parameter_estimation"],
+                       reasoning_trace=reasoning_trace + [f"M1={m1}, M2={m2}, Mc={M_c:.2f}"],
+                   )
 
         answer = (
             "GW parameter estimation uses Bayesian inference to extract source "
@@ -175,13 +173,12 @@ class GravitationalWavesDomain(BaseDomainModule):
             "precession are present."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["parameter_estimation"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["parameter_estimation"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_multi_messenger_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process multi-messenger query"""
@@ -195,13 +192,12 @@ class GravitationalWavesDomain(BaseDomainModule):
             "via r-process nucleosynthesis and serve as the engines of short GRBs."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.93,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["multi_messenger_coordination"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["multi_messenger_coordination"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_general_gw_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process general GW query"""
@@ -216,13 +212,12 @@ class GravitationalWavesDomain(BaseDomainModule):
             "compact object populations, nuclear physics, and cosmology."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=self.config.capabilities[:3]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=self.config.capabilities[:3],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def discover_cross_domain_connections(
         self,

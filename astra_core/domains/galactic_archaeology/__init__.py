@@ -23,6 +23,8 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
+from .._computational import curated_result
+
 # Import base domain module
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult
@@ -161,7 +163,7 @@ class GalacticArchaeologyDomain(BaseDomainModule):
         self._initialized = True
         logger.info(f"Galactic archaeology domain initialized: {self.config.domain_name}")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process galactic archaeology query"""
         query_lower = query.lower()
 
@@ -216,16 +218,15 @@ class GalacticArchaeologyDomain(BaseDomainModule):
             "Kepler/TESS (seismology)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["isochrone_fitting", "stellar_age_dating"],
+                   reasoning_trace=[
                 "Identified stellar age analysis query",
                 "Synthesized multiple dating methods"
             ],
-            capabilities_used=["isochrone_fitting", "stellar_age_dating"]
-        )
+               )
 
     def _analyze_chemical_evolution(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze chemical evolution of galaxies"""
@@ -257,16 +258,15 @@ class GalacticArchaeologyDomain(BaseDomainModule):
             "Key surveys: APOGEE, GALAH, LAMOST, SDSS, Gaia-ESO."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["chemical_evolution_modeling", "abundance_analysis"],
+                   reasoning_trace=[
                 "Identified chemical evolution query",
                 "Covered metallicity, α-elements, and evolution models"
             ],
-            capabilities_used=["chemical_evolution_modeling", "abundance_analysis"]
-        )
+               )
 
     def _analyze_kinematics(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze stellar kinematics and dynamics"""
@@ -299,16 +299,15 @@ class GalacticArchaeologyDomain(BaseDomainModule):
             "Key data: Gaia DR3 (astrometry), spectroscopic radial velocities."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["orbital_parameter_calculation", "action_angle_computation"],
+                   reasoning_trace=[
                 "Identified kinematics analysis query",
                 "Covered velocity components and orbital parameters"
             ],
-            capabilities_used=["orbital_parameter_calculation", "action_angle_computation"]
-        )
+               )
 
     def _analyze_stellar_streams(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze stellar streams and tidal debris"""
@@ -342,16 +341,15 @@ class GalacticArchaeologyDomain(BaseDomainModule):
             "Key data: Gaia DR3, SDSS, DES, Pan-STARRS."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["stream_identification", "tidal_debris_modeling"],
+                   reasoning_trace=[
                 "Identified stellar stream analysis query",
                 "Covered stream formation and detection"
             ],
-            capabilities_used=["stream_identification", "tidal_debris_modeling"]
-        )
+               )
 
     def _analyze_milky_way_structure(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze Milky Way structure"""
@@ -383,16 +381,15 @@ class GalacticArchaeologyDomain(BaseDomainModule):
             "Key data: Gaia (positions), 2MASS (near-IR structure), HI surveys."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["disk_structure_analysis", "halo_characterization"],
+                   reasoning_trace=[
                 "Identified Milky Way structure query",
                 "Covered all major components"
             ],
-            capabilities_used=["disk_structure_analysis", "halo_characterization"]
-        )
+               )
 
     def _analyze_chemical_tagging(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze chemical tagging techniques"""
@@ -424,16 +421,15 @@ class GalacticArchaeologyDomain(BaseDomainModule):
             "Future: WEAVE, 4MOST, MSE will expand chemical tagging."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.85,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["chemical_tagging", "stellar_groups"],
+                   reasoning_trace=[
                 "Identified chemical tagging query",
                 "Covered principles and techniques"
             ],
-            capabilities_used=["chemical_tagging", "stellar_groups"]
-        )
+               )
 
     def _general_galactic_archaeology(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """General galactic archaeology analysis"""
@@ -462,13 +458,12 @@ class GalacticArchaeologyDomain(BaseDomainModule):
             "- Initial mass function variations"
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.82,
-            reasoning_trace=["General galactic archaeology overview"],
-            capabilities_used=[]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=[],
+                   reasoning_trace=["General galactic archaeology overview"],
+               )
 
 
 def create_galactic_archaeology_domain() -> GalacticArchaeologyDomain:

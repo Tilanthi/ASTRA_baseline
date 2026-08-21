@@ -20,6 +20,8 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
+from .._computational import curated_result
+
 # Import base domain module
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
@@ -134,7 +136,7 @@ class RadioGalacticDomain(BaseDomainModule):
 
         logger.info("Radio Galactic domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process radio galactic query"""
         query_lower = query.lower()
 
@@ -170,14 +172,13 @@ class RadioGalacticDomain(BaseDomainModule):
             "Galactic SNR rate ~ 2-3 per century. ~380 known Galactic SNRs."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["snr_classification", "radio_morphology"],
-            metadata={"query_type": "SNR_ANALYSIS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["snr_classification", "radio_morphology"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SNR_ANALYSIS"},
+               )
 
     def _process_pulsar_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process pulsar query"""
@@ -193,14 +194,13 @@ class RadioGalacticDomain(BaseDomainModule):
             "nanohertz gravitational waves via PTAs (NANOGrav, EPTA, PPTA)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["pulsar_timing"],
-            metadata={"query_type": "PULSAR_ANALYSIS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["pulsar_timing"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "PULSAR_ANALYSIS"},
+               )
 
     def _process_maser_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process maser query"""
@@ -217,14 +217,13 @@ class RadioGalacticDomain(BaseDomainModule):
             "and excitation conditions (T, n)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["maser_magnitude"],
-            metadata={"query_type": "MASER_ANALYSIS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["maser_magnitude"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "MASER_ANALYSIS"},
+               )
 
     def _process_galactic_hi_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process Galactic HI query"""
@@ -240,14 +239,13 @@ class RadioGalacticDomain(BaseDomainModule):
             "and upcoming SKA-GAL."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["hi_kinematics"],
-            metadata={"query_type": "GALACTIC_HI"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["hi_kinematics"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GALACTIC_HI"},
+               )
 
     def _process_rrl_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process radio recombination line query"""
@@ -263,14 +261,13 @@ class RadioGalacticDomain(BaseDomainModule):
             "EM, kinematics, abundance gradients. Major surveys: GLOSTAR, WISH."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["rrl_temperature"],
-            metadata={"query_type": "RRL_ANALYSIS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["rrl_temperature"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "RRL_ANALYSIS"},
+               )
 
     def _process_gc_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process Galactic Center query"""
@@ -286,14 +283,13 @@ class RadioGalacticDomain(BaseDomainModule):
             "ordered near Sgr A*."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["gc_imaging"],
-            metadata={"query_type": "GC_RADIO"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["gc_imaging"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GC_RADIO"},
+               )
 
     def _process_general_radio_galactic_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process general radio galactic query"""
@@ -310,14 +306,13 @@ class RadioGalacticDomain(BaseDomainModule):
             "and time domain (transients)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["radio_morphology"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["radio_morphology"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_radio_galactic_domain() -> RadioGalacticDomain:

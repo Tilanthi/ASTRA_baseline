@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -93,7 +95,7 @@ class MolecularCloudDynamicsDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Molecular Cloud Dynamics domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['turbulence', 'mach', 'cascade', 'power spectrum']):
@@ -126,14 +128,13 @@ class MolecularCloudDynamicsDomain(BaseDomainModule):
             "t_decay ~ t_cross (turbulence decays in ~1 crossing time)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["turbulent_spectrum", "velocity_decomposition"],
-            metadata={"query_type": "TURBULENCE"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["turbulent_spectrum", "velocity_decomposition"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "TURBULENCE"},
+               )
 
     def _process_shock_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing shock query"]
@@ -149,14 +150,13 @@ class MolecularCloudDynamicsDomain(BaseDomainModule):
             "Outflow shocks: v_sh ~ 10-100 km/s, driving turbulence and chemistry."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["shock_modeling"],
-            metadata={"query_type": "SHOCK"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["shock_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SHOCK"},
+               )
 
     def _process_collision_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing collision query"]
@@ -174,14 +174,13 @@ class MolecularCloudDynamicsDomain(BaseDomainModule):
             "filamentary networks."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["collision_timescale"],
-            metadata={"query_type": "COLLISION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["collision_timescale"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "COLLISION"},
+               )
 
     def _process_outflow_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing outflow query"]
@@ -198,14 +197,13 @@ class MolecularCloudDynamicsDomain(BaseDomainModule):
             "triggers secondary SF (collect-and-collapse)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["outflow_modeling"],
-            metadata={"query_type": "OUTFLOW"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["outflow_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "OUTFLOW"},
+               )
 
     def _process_general_dynamics_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general dynamics query"]
@@ -225,14 +223,13 @@ class MolecularCloudDynamicsDomain(BaseDomainModule):
             "MHD including ambipolar diffusion."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["turbulent_spectrum", "velocity_decomposition"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["turbulent_spectrum", "velocity_decomposition"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_molecular_cloud_dynamics_domain() -> MolecularCloudDynamicsDomain:

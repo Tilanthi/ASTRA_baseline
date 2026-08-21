@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -93,7 +95,7 @@ class InfraredAstronomyDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Infrared Astronomy domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['dust', 'temperature', 'modified blackbody']):
@@ -127,14 +129,13 @@ class InfraredAstronomyDomain(BaseDomainModule):
             "SPIRE 250/350/500 μm), SOFIA, JWST MIRI."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["dust_temperature", "sed_modeling"],
-            metadata={"query_type": "DUST"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["dust_temperature", "sed_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "DUST"},
+               )
 
     def _process_pah_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing PAH query"]
@@ -151,14 +152,13 @@ class InfraredAstronomyDomain(BaseDomainModule):
             "Space-based: Spitzer IRS, JWST MIRI provide PAH spectra."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["pah_modeling"],
-            metadata={"query_type": "PAH"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["pah_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "PAH"},
+               )
 
     def _process_extinction_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing extinction query"]
@@ -175,14 +175,13 @@ class InfraredAstronomyDomain(BaseDomainModule):
             "Relation: A_V ≈ 8-10 × A_K for diffuse ISM."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["extinction_correction"],
-            metadata={"query_type": "EXTINCTION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["extinction_correction"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "EXTINCTION"},
+               )
 
     def _process_yso_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing YSO IR query"]
@@ -199,14 +198,13 @@ class InfraredAstronomyDomain(BaseDomainModule):
             "IR excess (accretion luminosity L_acc ∝ L_disk)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["sed_modeling", "disk_detection"],
-            metadata={"query_type": "YSO"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["sed_modeling", "disk_detection"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "YSO"},
+               )
 
     def _process_ir_galaxy_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing IR galaxy query"]
@@ -223,14 +221,13 @@ class InfraredAstronomyDomain(BaseDomainModule):
             "Observations: Spitzer, WISE, Herschel, JWST."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["ir_luminosity", "sed_modeling"],
-            metadata={"query_type": "IR_GALAXY"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["ir_luminosity", "sed_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "IR_GALAXY"},
+               )
 
     def _process_general_ir_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general IR query"]
@@ -246,14 +243,13 @@ class InfraredAstronomyDomain(BaseDomainModule):
             "high-z universe (rest-frame optical/IR)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["sed_modeling"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["sed_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_infrared_astronomy_domain() -> InfraredAstronomyDomain:

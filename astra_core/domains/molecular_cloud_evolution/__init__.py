@@ -20,6 +20,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -89,7 +91,7 @@ class MolecularCloudEvolutionDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Molecular Cloud Evolution domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['lifetime', 'lifecycle', 'formation', 'dissolution']):
@@ -121,14 +123,13 @@ class MolecularCloudEvolutionDomain(BaseDomainModule):
             "(OB winds, SNe, HII expansion), shear, tidal forces."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["lifetime_estimation"],
-            metadata={"query_type": "LIFETIME"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["lifetime_estimation"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "LIFETIME"},
+               )
 
     def _process_feedback_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing feedback query"]
@@ -145,14 +146,13 @@ class MolecularCloudEvolutionDomain(BaseDomainModule):
             "p_mom/m_★ ~ 10³-10⁵ km/s (Murray et al.)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["feedback_impact", "dispersal_modeling"],
-            metadata={"query_type": "FEEDBACK"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["feedback_impact", "dispersal_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "FEEDBACK"},
+               )
 
     def _process_sfe_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing SFE query"]
@@ -168,14 +168,13 @@ class MolecularCloudEvolutionDomain(BaseDomainModule):
             "Low efficiency: feedback regulated, magnetic support, turbulent support."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["sfe_measurement"],
-            metadata={"query_type": "SFE"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["sfe_measurement"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SFE"},
+               )
 
     def _process_scaling_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing scaling relations query"]
@@ -191,14 +190,13 @@ class MolecularCloudEvolutionDomain(BaseDomainModule):
             "turbulent cascade from large scales."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["scaling_relations"],
-            metadata={"query_type": "SCALING"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["scaling_relations"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SCALING"},
+               )
 
     def _process_general_evolution_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general cloud evolution query"]
@@ -215,14 +213,13 @@ class MolecularCloudEvolutionDomain(BaseDomainModule):
             "center (high pressure), outskirts (quiescent)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["lifetime_estimation", "dispersal_modeling"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["lifetime_estimation", "dispersal_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_molecular_cloud_evolution_domain() -> MolecularCloudEvolutionDomain:

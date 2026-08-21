@@ -13,6 +13,7 @@ from typing import Dict, List, Any
 import logging
 
 from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain, CrossDomainConnection
+from .._computational import curated_result
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class SolarSystemDomain(BaseDomainModule):
 
         logger.info("Solar system domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process solar system query"""
         query_lower = query.lower()
 
@@ -91,13 +92,12 @@ class SolarSystemDomain(BaseDomainModule):
             "observations, and laboratory analysis of meteorites."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["planetary_science", "atmospheric_modeling"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["planetary_science", "atmospheric_modeling"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_small_body_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process small body (asteroid/comet) query"""
@@ -112,13 +112,12 @@ class SolarSystemDomain(BaseDomainModule):
             "water/organics to Earth."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["small_body_dynamics", "cometary_activity"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["small_body_dynamics", "cometary_activity"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_mission_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process space mission query"""
@@ -133,13 +132,12 @@ class SolarSystemDomain(BaseDomainModule):
             "and interior structure."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["mission_data_analysis"]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["mission_data_analysis"],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def _process_general_solar_system_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process general solar system query"""
@@ -154,13 +152,12 @@ class SolarSystemDomain(BaseDomainModule):
             "to ~100,000 AU."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.85,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=self.config.capabilities[:3]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=self.config.capabilities[:3],
+                   reasoning_trace=reasoning_trace,
+               )
 
     def discover_cross_domain_connections(self, other_domains: List['BaseDomainModule']) -> List['CrossDomainConnection']:
         """Discover connections to other domains"""

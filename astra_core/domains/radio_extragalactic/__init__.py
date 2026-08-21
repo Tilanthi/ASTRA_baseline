@@ -20,6 +20,8 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
+from .._computational import curated_result
+
 # Import base domain module
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
@@ -143,7 +145,7 @@ class RadioExtragalacticDomain(BaseDomainModule):
 
         logger.info("Radio Extragalactic domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """Process radio extragalactic query"""
         query_lower = query.lower()
 
@@ -178,14 +180,13 @@ class RadioExtragalacticDomain(BaseDomainModule):
             "ram pressure stripping, and cosmic HI mass function evolution."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["hi_mass_measurement"],
-            metadata={"query_type": "HI_IMAGING"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["hi_mass_measurement"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "HI_IMAGING"},
+               )
 
     def _process_sz_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process Sunyaev-Zeldovich effect query"""
@@ -200,14 +201,13 @@ class RadioExtragalacticDomain(BaseDomainModule):
             "Surveys: SPT, ACT, Planck, and upcoming SPT-3G, Simons Observatory."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.93,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["sz_effect_analysis"],
-            metadata={"query_type": "SZ_MEASUREMENT"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["sz_effect_analysis"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "SZ_MEASUREMENT"},
+               )
 
     def _process_vlbi_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process VLBI-related query"""
@@ -222,14 +222,13 @@ class RadioExtragalacticDomain(BaseDomainModule):
             "Applications: jet collimation, superluminal motion, BH shadow imaging (EHT)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["vlbi_imaging"],
-            metadata={"query_type": "VLBI_ANALYSIS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["vlbi_imaging"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "VLBI_ANALYSIS"},
+               )
 
     def _process_eor_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process Epoch of Reionization query"""
@@ -244,14 +243,13 @@ class RadioExtragalacticDomain(BaseDomainModule):
             "astrophysics of first sources, x-ray heating, spin temperature coupling."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["eor_power_spectrum"],
-            metadata={"query_type": "EOR_STUDIES"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["eor_power_spectrum"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "EOR_STUDIES"},
+               )
 
     def _process_magnetism_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process cosmic magnetism query"""
@@ -289,14 +287,13 @@ class RadioExtragalacticDomain(BaseDomainModule):
             "Blandford-Znajek mechanism extracts BH spin energy."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["radio_source_classification", "synchrotron_modeling"],
-            metadata={"query_type": "RADIO_SOURCE_ANALYSIS"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["radio_source_classification", "synchrotron_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "RADIO_SOURCE_ANALYSIS"},
+               )
 
     def _process_general_radio_extragalactic_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Process general radio extragalactic query"""
@@ -312,14 +309,13 @@ class RadioExtragalacticDomain(BaseDomainModule):
             "redshift-independent, high angular resolution (VLBI), and time domain capabilities."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.85,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["radio_luminosity_calculation"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["radio_luminosity_calculation"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 # Factory function

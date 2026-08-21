@@ -264,6 +264,46 @@ def _unit_factor(target_unit: str, given_unit: str) -> Optional[float]:
     return table.get(token)
 
 
+
+def curated_result(domain_name: str, answer: str, topics: Sequence[str],
+                   reasoning_trace: Optional[List[str]] = None,
+                   metadata: Optional[Dict[str, Any]] = None) -> DomainQueryResult:
+    """
+    Build a result for an answer that is *curated reference text*, not analysis.
+
+    27 of the 75 domains answer from hand-written domain knowledge. That text is
+    accurate and worth keeping, but the stubs presented it as though a pipeline
+    had run: a literal ``confidence=0.91`` alongside
+    ``capabilities_used=["light_curve_analysis", "classification"]`` when no
+    light curve had been analysed and nothing had been classified.
+
+    This helper keeps the text and fixes the claim:
+
+    * ``confidence`` is the DESCRIPTIVE constant -- the same for every curated
+      answer, because none of them is better evidenced than any other;
+    * ``capabilities_used`` is empty, because nothing was executed;
+    * the topics the text covers are recorded in
+      ``metadata['curated_topics']`` so the information is not lost;
+    * ``metadata['provenance'] = 'descriptive'`` marks it as reference text.
+    """
+    meta: Dict[str, Any] = dict(metadata or {})
+    meta.update({
+        "provenance": Provenance.DESCRIPTIVE.value,
+        "curated_topics": list(topics),
+        "computed": False,
+        "note": ("Curated reference text for this domain; no numerical "
+                 "analysis was performed for this query."),
+    })
+    return DomainQueryResult(
+        domain_name=domain_name,
+        answer=answer,
+        confidence=_CONFIDENCE[Provenance.DESCRIPTIVE],
+        reasoning_trace=list(reasoning_trace or []),
+        capabilities_used=[],
+        metadata=meta,
+    )
+
+
 # --------------------------------------------------------------------------
 # Base class
 # --------------------------------------------------------------------------
@@ -472,4 +512,5 @@ __all__ = [
     "ImplementationStatus",
     "Provenance",
     "extract_parameters",
+    "curated_result",
 ]

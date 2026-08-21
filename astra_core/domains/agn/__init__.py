@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -92,7 +94,7 @@ class AGNDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("AGN domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['classification', 'unification', 'seyfert', 'quasar']):
@@ -125,14 +127,13 @@ class AGNDomain(BaseDomainModule):
             "traces Eddington ratio."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.92,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["agn_classification", "obscuration_geometry"],
-            metadata={"query_type": "CLASSIFICATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["agn_classification", "obscuration_geometry"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "CLASSIFICATION"},
+               )
 
     def _process_blazar_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing blazar query"]
@@ -148,14 +149,13 @@ class AGNDomain(BaseDomainModule):
             "Doppler factor: δ = [Γ(1-βcosθ)]^{-1} ~ 10-50."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["blazar_sed", "agn_classification"],
-            metadata={"query_type": "BLAZAR"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["blazar_sed", "agn_classification"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "BLAZAR"},
+               )
 
     def _process_blr_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing BLR/reverberation query"]
@@ -171,14 +171,13 @@ class AGNDomain(BaseDomainModule):
             "Baldwin effect: EW ∝ L^{-0.2 to -0.3} (ionizing continuum harder in luminous AGN)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["reverberation_mapping"],
-            metadata={"query_type": "REVERBERATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["reverberation_mapping"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "REVERBERATION"},
+               )
 
     def _process_feedback_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing AGN feedback query"]
@@ -195,14 +194,13 @@ class AGNDomain(BaseDomainModule):
             "Impact: quenching star formation, M-sigma relation."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["feedback_power"],
-            metadata={"query_type": "FEEDBACK"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["feedback_power"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "FEEDBACK"},
+               )
 
     def _process_obscured_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing obscured AGN query"]
@@ -219,14 +217,13 @@ class AGNDomain(BaseDomainModule):
             "Reflectron: scattered AGN light in polarized light."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["obscuration_geometry", "agn_classification"],
-            metadata={"query_type": "OBSCURED"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["obscuration_geometry", "agn_classification"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "OBSCURED"},
+               )
 
     def _process_general_agn_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general AGN query"]
@@ -243,14 +240,13 @@ class AGNDomain(BaseDomainModule):
             "Host galaxies: massive, bulge-dominated, M_BH ∝ M_bulge (M-sigma relation)."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["agn_luminosity_function", "agn_classification"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["agn_luminosity_function", "agn_classification"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_agn_domain() -> AGNDomain:

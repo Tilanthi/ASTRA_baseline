@@ -17,6 +17,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -85,7 +87,7 @@ class MillimetreAstronomyDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Millimetre Astronomy domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if 'co' in query_lower or 'line' in query_lower:
@@ -111,14 +113,13 @@ class MillimetreAstronomyDomain(BaseDomainModule):
             "Facilities: ALMA Band 3 (84-116 GHz), NOEMA (3 mm), "
             "IRAM 30m (3 mm), GBT (3 mm receiver)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["line_survey", "gas_mass_measurement"],
-            metadata={"query_type": "LINE"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["line_survey", "gas_mass_measurement"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "LINE"},
+               )
 
     def _process_continuum_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing mm continuum query"]
@@ -131,14 +132,13 @@ class MillimetreAstronomyDomain(BaseDomainModule):
             "Uses: SED decomposition, radio spectral index, dust mass "
             "(low-frequency), CMB foreground removal."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["continuum_modeling"],
-            metadata={"query_type": "CONTINUUM"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["continuum_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "CONTINUUM"},
+               )
 
     def _process_polarization_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing polarization query"]
@@ -152,14 +152,13 @@ class MillimetreAstronomyDomain(BaseDomainModule):
             "CMB E/B modes. Facilities: ALMA Band 3 polarization, "
             "JVLA (Ka, Q bands)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["polarization_analysis"],
-            metadata={"query_type": "POLARIZATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["polarization_analysis"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "POLARIZATION"},
+               )
 
     def _process_general_mm_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general mm query"]
@@ -172,14 +171,13 @@ class MillimetreAstronomyDomain(BaseDomainModule):
             "Science: molecular gas surveys, ISM structure, galaxy gas content, "
             "star formation laws, magnetic fields, CMB polarization."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["line_survey", "continuum_modeling"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["line_survey", "continuum_modeling"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_millimetre_astronomy_domain() -> MillimetreAstronomyDomain:

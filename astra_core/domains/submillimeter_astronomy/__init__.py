@@ -17,6 +17,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -86,7 +88,7 @@ class SubmillimeterAstronomyDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Submillimeter Astronomy domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['dust', 'continuum', '850', '450']):
@@ -114,14 +116,13 @@ class SubmillimeterAstronomyDomain(BaseDomainModule):
             "Uses: prestellar cores, protostellar envelopes, galaxy dust mass, "
             "high-z SF."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["dust_mass", "sfr_submm"],
-            metadata={"query_type": "CONTINUUM"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["dust_mass", "sfr_submm"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "CONTINUUM"},
+               )
 
     def _process_excitation_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing excitation query"]
@@ -135,14 +136,13 @@ class SubmillimeterAstronomyDomain(BaseDomainModule):
             "[CII] major coolant of ISM, traces PDRs, CO-dark H₂. "
             "Observations: ALMA Bands 8-10 (400-950 GHz), APEX, SOFIA (upgraded)."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["excitation_analysis"],
-            metadata={"query_type": "EXCITATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["excitation_analysis"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "EXCITATION"},
+               )
 
     def _process_highz_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing high-z query"]
@@ -156,14 +156,13 @@ class SubmillimeterAstronomyDomain(BaseDomainModule):
             "Science: cosmic SF history, massive galaxy formation, "
             "AGN-starburst connection."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["high-z_detection", "sfr_submm"],
-            metadata={"query_type": "HIGH-Z"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["high-z_detection", "sfr_submm"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "HIGH-Z"},
+               )
 
     def _process_general_submm_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general submm query"]
@@ -178,14 +177,13 @@ class SubmillimeterAstronomyDomain(BaseDomainModule):
             "Advantages: dust optically thin, high spatial resolution (ALMA), "
             "redshift-independent selection."
         )
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["dust_mass", "high-z_detection"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["dust_mass", "high-z_detection"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_submillimeter_astronomy_domain() -> SubmillimeterAstronomyDomain:

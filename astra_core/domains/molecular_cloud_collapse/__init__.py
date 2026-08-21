@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
+from .._computational import curated_result
+
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult, register_domain
 except ImportError:
@@ -92,7 +94,7 @@ class MolecularCloudCollapseDomain(BaseDomainModule):
         super().initialize(global_config)
         logger.info("Molecular Cloud Collapse domain initialized")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         query_lower = query.lower()
 
         if any(kw in query_lower for kw in ['jeans', 'instability', 'bonnor', 'ebert']):
@@ -124,14 +126,13 @@ class MolecularCloudCollapseDomain(BaseDomainModule):
             "Non-thermal support: turbulence increases effective Jeans mass."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["jeans_analysis", "bonnor_ebert_mass"],
-            metadata={"query_type": "INSTABILITY"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["jeans_analysis", "bonnor_ebert_mass"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "INSTABILITY"},
+               )
 
     def _process_magnetic_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing magnetic support query"]
@@ -148,14 +149,13 @@ class MolecularCloudCollapseDomain(BaseDomainModule):
             "M_Φ ≈ 2 M☉."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["magnetic_criticality"],
-            metadata={"query_type": "MAGNETIC"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["magnetic_criticality"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "MAGNETIC"},
+               )
 
     def _process_timescale_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing timescale query"]
@@ -171,14 +171,13 @@ class MolecularCloudCollapseDomain(BaseDomainModule):
             "blue asymmetry (infall), line width increase."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["collapse_timescale"],
-            metadata={"query_type": "TIMESCALE"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["collapse_timescale"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "TIMESCALE"},
+               )
 
     def _process_fragmentation_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing fragmentation query"]
@@ -196,14 +195,13 @@ class MolecularCloudCollapseDomain(BaseDomainModule):
             "(thermal Jeans), turbulence (non-thermal), magnetic fields."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["fragmentation_modeling", "imf_prediction"],
-            metadata={"query_type": "FRAGMENTATION"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["fragmentation_modeling", "imf_prediction"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "FRAGMENTATION"},
+               )
 
     def _process_general_collapse_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         reasoning_trace = ["Processing general collapse query"]
@@ -220,14 +218,13 @@ class MolecularCloudCollapseDomain(BaseDomainModule):
             "ALMA and VLA observe collapse in Class 0 protostars."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=reasoning_trace,
-            capabilities_used=["jeans_analysis", "collapse_timescale"],
-            metadata={"query_type": "GENERAL"}
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["jeans_analysis", "collapse_timescale"],
+                   reasoning_trace=reasoning_trace,
+                   metadata={"query_type": "GENERAL"},
+               )
 
 
 def create_molecular_cloud_collapse_domain() -> MolecularCloudCollapseDomain:

@@ -24,6 +24,8 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
+from .._computational import curated_result
+
 # Import base domain module
 try:
     from .. import BaseDomainModule, DomainConfig, DomainQueryResult
@@ -154,7 +156,7 @@ class HighEnergyDomain(BaseDomainModule):
         self._initialized = True
         logger.info(f"High-energy domain initialized: {self.config.domain_name}")
 
-    def process_query(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
+    def process_query(self, query: str, context: Dict[str, Any] = None) -> DomainQueryResult:
         """
         Process high-energy astrophysics query
 
@@ -212,17 +214,16 @@ class HighEnergyDomain(BaseDomainModule):
             "Key observatories: Chandra, XMM-Newton, NuSTAR, NICER."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.88,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["xray_spectral_fitting", "accretion_disk_modeling"],
+                   reasoning_trace=[
                 "Identified X-ray spectral analysis query",
                 "Applied high-energy domain knowledge",
                 "Synthesized continuum models, absorption features, emission lines"
             ],
-            capabilities_used=["xray_spectral_fitting", "accretion_disk_modeling"]
-        )
+               )
 
     def _analyze_pulsar(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze pulsar timing and properties"""
@@ -247,17 +248,16 @@ class HighEnergyDomain(BaseDomainModule):
             "Key observatories: Parkes, GBT, FAST, NANOGrav, CHIME."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.90,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["pulsar_timing_analysis"],
+                   reasoning_trace=[
                 "Identified pulsar analysis query",
                 "Applied pulsar timing models",
                 "Covered timing, glitches, and binary parameters"
             ],
-            capabilities_used=["pulsar_timing_analysis"]
-        )
+               )
 
     def _analyze_black_hole(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze black hole accretion and properties"""
@@ -283,17 +283,16 @@ class HighEnergyDomain(BaseDomainModule):
             "iron line profiles, continuum fitting."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.91,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["black_hole_accretion_modeling"],
+                   reasoning_trace=[
                 "Identified black hole analysis query",
                 "Applied relativistic physics",
                 "Covered Schwarzschild/Kerr metrics and accretion"
             ],
-            capabilities_used=["black_hole_accretion_modeling"]
-        )
+               )
 
     def _analyze_grb(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze gamma-ray burst properties"""
@@ -320,17 +319,16 @@ class HighEnergyDomain(BaseDomainModule):
             "Key observatories: Fermi-GBM/LAT, Swift, Neil Gehrels Swift, H.E.S.S."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.87,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["grb_afterglow_modeling", "grb_prompt_emission_analysis"],
+                   reasoning_trace=[
                 "Identified GRB analysis query",
                 "Applied high-energy transient models",
                 "Covered prompt, afterglow, and progenitors"
             ],
-            capabilities_used=["grb_afterglow_modeling", "grb_prompt_emission_analysis"]
-        )
+               )
 
     def _analyze_agn(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze active galactic nuclei"""
@@ -360,17 +358,16 @@ class HighEnergyDomain(BaseDomainModule):
             "Key science: Black hole mass scaling relations, co-evolution with hosts."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.89,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["agn_jet_modeling", "accretion_disk_modeling"],
+                   reasoning_trace=[
                 "Identified AGN analysis query",
                 "Applied unified AGN model",
                 "Covered structure, classification, and variability"
             ],
-            capabilities_used=["agn_jet_modeling", "accretion_disk_modeling"]
-        )
+               )
 
     def _analyze_magnetar(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze magnetar properties"""
@@ -397,16 +394,15 @@ class HighEnergyDomain(BaseDomainModule):
             "Key observatories: RXTE, Swift, NuSTAR, Chandra, XMM-Newton."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.85,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["magnetar_field_estimation"],
+                   reasoning_trace=[
                 "Identified magnetar analysis query",
                 "Applied magnetar physics models"
             ],
-            capabilities_used=["magnetar_field_estimation"]
-        )
+               )
 
     def _analyze_cosmic_rays(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze cosmic ray acceleration and propagation"""
@@ -432,16 +428,15 @@ class HighEnergyDomain(BaseDomainModule):
             "Key observatories: AMS-02, Fermi-LAT, IceCube, Pierre Auger, Telescope Array."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.86,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["particle_acceleration", "cosmic_ray_acceleration"],
+                   reasoning_trace=[
                 "Identified cosmic ray analysis query",
                 "Applied particle acceleration models"
             ],
-            capabilities_used=["particle_acceleration", "cosmic_ray_acceleration"]
-        )
+               )
 
     def _analyze_snr(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """Analyze supernova remnants"""
@@ -467,16 +462,15 @@ class HighEnergyDomain(BaseDomainModule):
             "Key observatories: Chandra, XMM-Newton, Suzaku, NuSTAR."
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.84,
-            reasoning_trace=[
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=["snr_evolution_modeling", "snr_xray_emission"],
+                   reasoning_trace=[
                 "Identified SNR analysis query",
                 "Applied shock evolution models"
             ],
-            capabilities_used=["snr_evolution_modeling", "snr_xray_emission"]
-        )
+               )
 
     def _general_high_energy_analysis(self, query: str, context: Dict[str, Any]) -> DomainQueryResult:
         """General high-energy astrophysics analysis"""
@@ -499,13 +493,12 @@ class HighEnergyDomain(BaseDomainModule):
             "- Cosmic rays: AMS-02, Auger, Telescope Array, IceCube"
         )
 
-        return DomainQueryResult(
-            domain_name=self.config.domain_name,
-            answer=answer,
-            confidence=0.80,
-            reasoning_trace=["General high-energy domain overview"],
-            capabilities_used=[]
-        )
+        return curated_result(
+                   domain_name=self.config.domain_name,
+                   answer=answer,
+                   topics=[],
+                   reasoning_trace=["General high-energy domain overview"],
+               )
 
 
 def create_high_energy_domain() -> HighEnergyDomain:
