@@ -13,17 +13,12 @@ actual output of that run.
 
 ## Install
 
-> **The `--branch` argument matters.** The fixes live on
-> `audit-fixes-aug2026`. A plain `git clone` gives you `main`, which does not
-> import at all.
-
 ```bash
 # 1. a genuinely fresh folder
 mkdir -p ~/ASTRA_fresh && cd ~/ASTRA_fresh
 
-# 2. clone the corrected branch
-git clone --branch audit-fixes-aug2026 \
-    https://github.com/Tilanthi/ASTRA_baseline.git .
+# 2. clone
+git clone https://github.com/Tilanthi/ASTRA_baseline.git .
 
 # 3. an isolated environment
 python3 -m venv .venv
@@ -209,8 +204,9 @@ git pull
 **`ModuleNotFoundError: No module named 'astra_core'`** — the virtualenv is not
 active. `source .venv/bin/activate` (you should see `(.venv)` in your prompt).
 
-**`NameError: name 'np' is not defined` on import** — you are on `main`, not
-`audit-fixes-aug2026`. Check with `git rev-parse --abbrev-ref HEAD`.
+**`NameError: name 'np' is not defined` on import** — you are on a pre-August-2026
+checkout. `git pull`, or check with `git log --oneline -1`. The tag
+`pre-audit-baseline-2026-08` marks the last commit with that defect.
 
 **A suite says `No module named 'astra_core'`** — some suites do not fix their
 own import path; run them from the repo root with `PYTHONPATH=.`.
