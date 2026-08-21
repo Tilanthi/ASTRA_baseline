@@ -49,21 +49,16 @@ print(result['answer'])
 ### Discovery System
 
 ```python
-# NOTE: the module is `astra_core.scientific_discovery.discovery_orchestrator`.
-# `astra_core.discovery_orchestrator` (as previously documented here) does not exist.
+# NOTE: the factory is `create_discovery_system` in
+# `astra_core.scientific_discovery.discovery_orchestrator`.
+# `astra_core.discovery_orchestrator.create_discovery_orchestrator`, as
+# previously documented here, does not exist.
 from astra_core.scientific_discovery.discovery_orchestrator import (
-    create_discovery_orchestrator,
+    create_discovery_system,
 )
 
-# Create discovery system
-orchestrator = create_discovery_orchestrator()
-
-# Run autonomous discovery pipeline
-results = orchestrator.discover(
-    query="Investigate correlations between galaxy properties",
-    data=your_data,
-    capabilities=["temporal", "counterfactual", "triangulation"]
-)
+orchestrator = create_discovery_system()
+print(type(orchestrator).__name__)   # ScientificDiscoveryOrchestrator
 ```
 
 ## System Architecture

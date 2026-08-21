@@ -133,13 +133,20 @@ print(result['answer'])
 ### V4.0 Revolutionary Capabilities
 
 ```python
-from astra_core.revolutionary import create_v4_system, IntegrationMode
+# `create_v4_system()` returns a V4RevolutionarySystem, whose entry point is
+# `process_with_v4()`. For the mode-driven coordinator (MCE/ASC/CRN/MMOL), use
+# `create_v4_coordinator()` with `IntegrationMode`.
+from astra_core.revolutionary import create_v4_system, create_v4_coordinator
+from astra_core.revolutionary.integration import IntegrationMode
 
-# Create V4.0 system with MCE, ASC, CRN, MMOL capabilities
 system = create_v4_system()
+result = system.process_with_v4("What causes filament fragmentation?")
 
-# Process with different integration modes
-result = system.process_query("Anze query", mode=IntegrationMode.FULL)
+coordinator = create_v4_coordinator()
+detailed = coordinator.process_query(
+    "What causes filament fragmentation?", mode=IntegrationMode.FULL
+)
+print(detailed.used_capabilities)   # ['mce', 'crn', 'mmol', 'asc']
 ```
 
 ### Individual Capability Usage
