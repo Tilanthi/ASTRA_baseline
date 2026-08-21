@@ -327,19 +327,39 @@ class DomainRegistry:
         # 0.05 and two score exactly 0.10 -- i.e. the default threshold sat
         # precisely on the most common score and `process_query` answered
         # "No suitable domain found for query" for essentially every query.
-        best_domain = None
-        best_score = -1.0
-
+        candidates = []
         for domain_name, domain in self._domains.items():
             if not domain.config.enabled:
                 continue
-
             score = domain.can_handle_query(query)
-            if score >= min_confidence and score > best_score:
-                best_score = score
-                best_domain = domain
+            if score >= min_confidence:
+                candidates.append((score, domain))
 
-        return best_domain
+        if not candidates:
+            return None
+
+        # FIX(audit): previously this returned the top keyword score alone, so
+        # a curated text domain could outrank one that would actually compute
+        # the answer -- "Jeans mass for n = 1e4 cm^-3 and T = 10 K" routed to
+        # molecular_cloud_collapse (reference text, confidence 0.20) instead of
+        # statistical_mechanics (which returns M_J = 2.868 Msun, confidence
+        # 0.90). Among domains within a small margin of the best keyword score,
+        # prefer one that can genuinely compute an answer to THIS query.
+        best_score = max(s for s, _ in candidates)
+        margin = 0.34          # one unit of keyword evidence, see can_handle_query
+        shortlist = [d for s, d in candidates if s >= best_score - margin]
+
+        for domain in shortlist:
+            can_compute = getattr(domain, "can_compute", None)
+            if callable(can_compute):
+                try:
+                    if can_compute(query):
+                        return domain
+                except Exception:                          # noqa: BLE001
+                    logger.debug("can_compute failed for %s",
+                                 domain.config.domain_name, exc_info=True)
+
+        return max(candidates, key=lambda sc: sc[0])[1]
 
     def discover_all_connections(self) -> Dict[str, List[CrossDomainConnection]]:
         """

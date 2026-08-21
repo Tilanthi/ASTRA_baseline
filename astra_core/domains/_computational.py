@@ -425,6 +425,25 @@ class ComputationalDomainModule(BaseDomainModule):
             },
         )
 
+    def can_compute(self, query: str) -> bool:
+        """
+        True if this domain can actually *compute* an answer to `query` --
+        i.e. a capability matches unambiguously and the query supplies all of
+        its parameters.
+
+        Used by the registry to prefer a domain that will return a number over
+        one that will return reference text. Cheap: it parses, it does not run
+        the computation.
+        """
+        caps = self.computations
+        if not caps:
+            return False
+        selected = self._select_capability(query, caps)
+        if selected is None:
+            return False
+        params = extract_parameters(query, selected.parameters)
+        return all(p in params for p in selected.required)
+
     # -- result builders ----------------------------------------------------
 
     def _select_capability(self, query: str,

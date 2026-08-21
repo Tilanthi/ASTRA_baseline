@@ -319,3 +319,49 @@ def test_process_query_context_is_optional(loaded):
         except Exception:                                  # noqa: BLE001
             pass          # other failures are not this test's business
     assert not failures, "\n  ".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# 5. routing prefers a domain that can actually compute
+# ---------------------------------------------------------------------------
+
+def test_routing_prefers_a_domain_that_can_compute(loaded):
+    """
+    A curated text domain used to outrank one that would return a number:
+    "Jeans mass for n = 1e4 cm^-3 and T = 10 K" routed to
+    molecular_cloud_collapse (reference text, confidence 0.20) rather than
+    statistical_mechanics (M_J = 2.868 Msun, confidence 0.90), because the
+    registry looked only at keyword scores.
+    """
+    from astra_core.domains._computational import Provenance
+
+    quantitative = [
+        "What is the Jeans mass for n = 1e4 cm^-3 and T = 10 K?",
+        "free-fall time for n = 1e5 cm^-3",
+        "sound speed at T = 20 K",
+    ]
+    for query in quantitative:
+        result = loaded.process_query(query)
+        assert result.get("confidence") == 0.90, (query, result.get("domain"))
+        assert result["metadata"]["provenance"] == Provenance.COMPUTED.value
+
+
+def test_conceptual_queries_still_reach_the_curated_text(loaded):
+    """
+    Preferring computation must not strand the reference text: a question with
+    no numbers in it should still be answered from curated knowledge.
+    """
+    from astra_core.domains._computational import Provenance
+
+    result = loaded.process_query("How do molecular clouds collapse?")
+    assert result["metadata"]["provenance"] == Provenance.DESCRIPTIVE.value
+    assert result.get("confidence") == 0.20
+    assert result.get("answer")
+
+
+def test_can_compute_does_not_run_the_computation(loaded):
+    """`can_compute` is a routing probe; it must be cheap and side-effect free."""
+    domain = loaded.get_domain("statistical_mechanics")
+    assert domain.can_compute("jeans mass for n = 1e4 cm^-3 and T = 10 K")
+    assert not domain.can_compute("jeans mass")            # no parameters
+    assert not domain.can_compute("what is a galaxy")      # no capability match
