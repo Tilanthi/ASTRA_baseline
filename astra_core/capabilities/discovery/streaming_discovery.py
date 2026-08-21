@@ -695,6 +695,10 @@ class StreamingDiscoveryEngine:
             'updated_pag': updated_pag is not None,
             'drift_events': drift_events,
             'new_alerts': new_alerts,
+            # The published V5.0 key was 'alerts'; it was renamed to
+            # 'new_alerts' without a deprecation path, silently returning
+            # nothing to every existing caller that asked for 'alerts'.
+            'alerts': new_alerts,
             'active_alerts': self.alert_system.get_active_alerts(),
             'confidence_scores': self.state.confidence_scores
         }

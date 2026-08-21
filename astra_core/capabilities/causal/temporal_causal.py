@@ -58,6 +58,9 @@ class EdgeEndpointType(Enum):
     TAIL = "tail"         # -  (definitely not cause: confounder/mediator)
 
 
+_MISSING = object()
+
+
 @dataclass
 class TimeLaggedPAGEdge:
     """
@@ -79,9 +82,24 @@ class TimeLaggedPAGEdge:
     fci_p_value: float = 1.0
 
     def __str__(self):
+        # FIX(audit): referenced `self.t_end`, which is not a field -- str(edge)
+        # raised AttributeError for every edge.
         s_end = self.source_end.value[0]
         t_end = self.target_end.value[0]
-        return f"{self.source} {s_end}-{self.t_end}({self.lag}) {self.target}"
+        return f"{self.source} {s_end}-{t_end}({self.lag}) {self.target}"
+
+    # Backwards compatibility: the published V5.0 API was a plain
+    # (source, target, lag) tuple and existing analysis scripts index these
+    # edges positionally. Supporting both costs nothing and stops every caller
+    # having to be rewritten for a change that was never announced.
+    def __getitem__(self, index: int):
+        return (self.source, self.target, self.lag)[index]
+
+    def __iter__(self):
+        return iter((self.source, self.target, self.lag))
+
+    def __len__(self) -> int:
+        return 3
 
     def is_bidirectional(self) -> bool:
         """Check if this is part of a feedback loop"""
@@ -149,6 +167,27 @@ class TimeLaggedPAG:
         """Get optimal lag for each directed edge"""
         return {(e.source, e.target): e.lag for e in self.edges
                 if e.is_directed()}
+
+    # Published V5.0 compatibility: `discover_temporal_causal_structure` used
+    # to return a plain dict, and existing scripts call `.get('temporal_edges')`
+    # on the result. Returning an object without mapping access broke them all.
+    def get(self, key: str, default=None):
+        """Mapping-style access to this graph, for the published dict API."""
+        if key == 'temporal_edges':
+            return list(self.edges)
+        return self.to_dict().get(key, default)
+
+    def __getitem__(self, key: str):
+        value = self.get(key, _MISSING)
+        if value is _MISSING:
+            raise KeyError(key)
+        return value
+
+    def __contains__(self, key: str) -> bool:
+        return self.get(key, _MISSING) is not _MISSING
+
+    def keys(self):
+        return list(self.to_dict().keys()) + ['temporal_edges']
 
     def to_dict(self) -> Dict:
         return {
@@ -256,7 +295,8 @@ class TemporalFCIDiscovery:
         self,
         data: np.ndarray,
         variable_names: List[str],
-        detect_feedback_loops: bool = True
+        detect_feedback_loops: bool = True,
+        max_lag: Optional[int] = None
     ) -> TimeLaggedPAG:
         """
         Discover time-lagged causal structure.
@@ -265,10 +305,17 @@ class TemporalFCIDiscovery:
             data: (T, N) array - T time points, N variables
             variable_names: List of variable names
             detect_feedback_loops: Whether to detect feedback loops
+            max_lag: Optional override of the constructor's max_lag. This was a
+                parameter of this method in the published V5.0 API and is still
+                passed by existing analysis scripts, which previously died with
+                TypeError: unexpected keyword argument 'max_lag'.
 
         Returns:
             TimeLaggedPAG with discovered structure
         """
+        if max_lag is not None:
+            self.max_lag = int(max_lag)
+
         T, N = data.shape
 
         # Normalize data

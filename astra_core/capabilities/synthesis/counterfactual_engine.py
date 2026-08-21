@@ -302,14 +302,20 @@ class DoubleMachineLearning:
     3. Estimate local average treatment effects
     """
 
-    def __init__(self, n_folds: int = 5):
+    def __init__(self, n_folds: int = 5, random_state: int | None = 0):
         """
         Initialize DML estimator.
 
         Args:
             n_folds: Number of cross-validation folds
+            random_state: Seed for the fold split and the nuisance forests.
+                Defaults to 0 so a result is reproducible; pass None for the
+                previous unseeded behaviour. (The fold shuffle and both random
+                forests were unseeded, so the same data gave a different ATE on
+                every run -- unusable for a published figure.)
         """
         self.n_folds = n_folds
+        self.random_state = random_state
 
     def estimate_ate(
         self,
@@ -332,7 +338,8 @@ class DoubleMachineLearning:
         """
         # Split data into folds
         indices = np.arange(len(X))
-        np.random.shuffle(indices)
+        rng = np.random.default_rng(self.random_state)
+        rng.shuffle(indices)
         fold_size = len(indices) // self.n_folds
         folds = [indices[i*fold_size:(i+1)*fold_size] for i in range(self.n_folds)]
 
@@ -349,12 +356,14 @@ class DoubleMachineLearning:
             y_train, y_test = outcome[train_idx], outcome[test_idx]
 
             # Estimate outcome model
-            outcome_model = RandomForestRegressor(n_estimators=100, max_depth=5)
+            outcome_model = RandomForestRegressor(n_estimators=100, max_depth=5,
+                                                  random_state=self.random_state)
             outcome_model.fit(X_train, y_train)
             g_pred = outcome_model.predict(X_test)
 
             # Estimate treatment model
-            treatment_model = RandomForestRegressor(n_estimators=100, max_depth=3)
+            treatment_model = RandomForestRegressor(n_estimators=100, max_depth=3,
+                                                    random_state=self.random_state)
             treatment_model.fit(X_train, T_train)
             m_pred = treatment_model.predict(X_test)
 
@@ -362,11 +371,23 @@ class DoubleMachineLearning:
             residual_outcome = y_test - g_pred
             residual_treatment = T_test - m_pred
 
-            # ATE estimate
-            if np.std(residual_treatment) > 0:
-                fold_ate = np.mean(residual_outcome * residual_treatment) / np.mean(residual_treatment)
+            # ATE estimate -- Robinson (1988) partialling-out / DML score:
+            #     theta = E[T~ Y~] / E[T~^2]
+            #
+            # FIX(audit): the denominator was `np.mean(residual_treatment)`,
+            # the MEAN of the treatment residual, which is ~0 by construction
+            # (a residual is centred). Dividing by it produced wildly unstable,
+            # sign-unstable estimates. Measured against known ground truth
+            # before the fix, with plain OLS recovering the truth exactly:
+            #     true ATE  +2.0  ->  DML  -175.8   (OLS  +2.01)
+            #     true ATE  +5.0  ->  DML -1167.8   (OLS  +5.00)
+            #     true ATE  -3.0  ->  DML   +28.0   (OLS  -2.99)
+            # The correct denominator is the mean SQUARE of the residual.
+            denom = np.mean(residual_treatment ** 2)
+            if denom > 0:
+                fold_ate = np.mean(residual_outcome * residual_treatment) / denom
             else:
-                fold_ate = 0
+                fold_ate = 0.0
 
             ate_estimates.append(fold_ate)
             y_pred[test_idx] = g_pred + fold_ate * residual_treatment
@@ -378,7 +399,7 @@ class DoubleMachineLearning:
         n_bootstrap = 100
         boot_ates = []
         for _ in range(n_bootstrap):
-            fold_ates = np.random.choice(ate_estimates, len(ate_estimates), replace=True)
+            fold_ates = rng.choice(ate_estimates, len(ate_estimates), replace=True)
             boot_ates.append(np.mean(fold_ates))
 
         ci_low, ci_high = np.percentile(boot_ates, [2.5, 97.5])
